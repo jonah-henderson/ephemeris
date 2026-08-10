@@ -72,7 +72,7 @@ object Blaze3dSkyCanvas : SkyCanvas {
             u0 == sprite.u0 && v0 == sprite.v0 && u1 == sprite.u1 && v1 == sprite.v1
     }
 
-    private val bodyQuads = mutableMapOf<Identifier, BodyQuad>()
+    private val bodyQuads = mutableMapOf<Pair<Identifier, Kept>, BodyQuad>()
 
     /** A field's geometry and how many indices it takes to draw, keyed by the field that asked for it. */
     private data class Starfield(val buffer: GpuBuffer, val indexCount: Int)
@@ -294,8 +294,34 @@ object Blaze3dSkyCanvas : SkyCanvas {
         tint: Rgba,
         emitsOwnLight: Boolean,
     ) {
+        val kept = keptOf(shape)
+        // **A cropped body is drawn twice, because its two parts are different things.** Vanilla paints a
+        // glow around its moon, radially, out to three times the disc's own radius — light, which adds. The
+        // disc is a body, which covers. Cropping alone would throw the glow away and leave a small hard
+        // moon; adding alone cannot hide a sun behind it.
+        //
+        // The glow goes first and the disc lands on top, so the disc's own brightness is not counted twice
+        // and whatever was behind it — a sun, another moon — is hidden by the pass that covers.
+        if (!emitsOwnLight && kept != WHOLE_SPRITE) {
+            drawOneQuad(shape, WHOLE_SPRITE, orientation, distance, angularSize, tint.dimmed(GLOWS), true)
+        }
+        drawOneQuad(shape, kept, orientation, distance, angularSize, tint, emitsOwnLight)
+    }
+
+    /** How much of a cropped body's glow is added around it. Its own dimming, as a luminous body gets. */
+    private const val GLOWS = 0.55f
+
+    private fun drawOneQuad(
+        shape: Identifier,
+        kept: Kept,
+        orientation: Quaternionf,
+        distance: Float,
+        angularSize: Float,
+        tint: Rgba,
+        emitsOwnLight: Boolean,
+    ) {
         val atlas = celestialsAtlas()
-        val quad = bodyQuadOf(atlas, shape)
+        val quad = bodyQuadOf(atlas, shape, kept)
         val modelViewStack = RenderSystem.getModelViewStack()
         modelViewStack.pushMatrix()
         // Vanilla's own sequence for its sun. The quad lies in the XZ plane, so the scale leaves Y alone.
@@ -500,14 +526,12 @@ object Blaze3dSkyCanvas : SkyCanvas {
     /**
      * This shape's quad, built on first use and rebuilt if the atlas has re-stitched since.
      */
-    private fun bodyQuadOf(atlas: TextureAtlas, shape: Identifier): BodyQuad {
+    private fun bodyQuadOf(atlas: TextureAtlas, shape: Identifier, kept: Kept): BodyQuad {
         val sprite = atlas.getSprite(shape)
-        val cached = bodyQuads[shape]
+        val cached = bodyQuads[shape to kept]
         if (cached != null && cached.wasBakedFrom(sprite)) return cached
 
         cached?.buffer?.close()
-        // How much of the sprite is the body, and how much is scenery painted around it.
-        val kept = keptOf(shape)
         val u0 = Mth.lerp(kept.from, sprite.u0, sprite.u1)
         val u1 = Mth.lerp(kept.to, sprite.u0, sprite.u1)
         val v0 = Mth.lerp(kept.from, sprite.v0, sprite.v1)
@@ -529,7 +553,8 @@ object Blaze3dSkyCanvas : SkyCanvas {
                 RenderSystem.getDevice().createBuffer({ "Ephemeris sky body quad" }, GpuBuffer.USAGE_VERTEX, mesh.vertexBuffer())
             }
         }
-        return BodyQuad(built, sprite.u0, sprite.v0, sprite.u1, sprite.v1).also { bodyQuads[shape] = it }
+        return BodyQuad(built, sprite.u0, sprite.v0, sprite.u1, sprite.v1)
+            .also { bodyQuads[shape to kept] = it }
     }
 
     /**

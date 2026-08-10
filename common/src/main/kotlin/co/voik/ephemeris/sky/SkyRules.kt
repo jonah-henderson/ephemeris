@@ -21,6 +21,14 @@ data class SkyRules(
      */
     val primaryBody: Int = 0,
     val glow: HorizonGlow = HorizonGlow.BLENDED,
+    /**
+     * How thick the air is, for bodies seen through it — `0` for an airless level, `1` for one like ours.
+     *
+     * It pales a body by day and leaves it alone at night, which is what makes a daytime moon read as
+     * distant rather than as a sticker. A level with no atmosphere should say `0` and get hard-edged bodies
+     * at every hour; see [Airiness].
+     */
+    val airThickness: Float = 1.0f,
 ) {
     companion object {
         val DEFAULT = SkyRules()
@@ -30,6 +38,7 @@ data class SkyRules(
                 Daylight.CODEC.optionalFieldOf("daylight", Daylight.EVERY_SUN).forGetter(SkyRules::daylight),
                 Codec.INT.optionalFieldOf("primary_body", 0).forGetter(SkyRules::primaryBody),
                 HorizonGlow.CODEC.optionalFieldOf("glow", HorizonGlow.BLENDED).forGetter(SkyRules::glow),
+                Codec.FLOAT.optionalFieldOf("air_thickness", 1.0f).forGetter(SkyRules::airThickness),
             ).apply(instance, ::SkyRules)
         }
     }

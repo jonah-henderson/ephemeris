@@ -1,5 +1,6 @@
 package co.voik.ephemeris.client
 
+import co.voik.ephemeris.sky.Airiness
 import co.voik.ephemeris.sky.Appearance
 import co.voik.ephemeris.sky.Blending
 import co.voik.ephemeris.sky.CelestialBody
@@ -8,6 +9,7 @@ import co.voik.ephemeris.sky.LevelLook
 import co.voik.ephemeris.sky.LevelLooks
 import co.voik.ephemeris.sky.Facing
 import co.voik.ephemeris.sky.Orbit
+import co.voik.ephemeris.sky.SkyRules
 import co.voik.ephemeris.sky.VanillasBody
 import co.voik.ephemeris.sky.SkySpec
 import net.minecraft.client.Minecraft
@@ -66,7 +68,9 @@ object SkyPainter {
         if (spec.isOrdinary) return false
 
         val clockTime = level.defaultClockTime
-        drawBodies(canvas, spec, clockTime, sunAngle, moonAngle, moonPhase, rainBrightness)
+        // How lit the air is, which is the other half of how much it hides. One minus the night.
+        val skyLit = 1.0f - nightliness(look, clockTime, starBrightness)
+        drawBodies(canvas, spec, clockTime, sunAngle, moonAngle, moonPhase, rainBrightness, look.rules, skyLit)
 
         val stars = spec.stars
         // A reveal dims by where the viewer is, on top of the night curve.
@@ -127,6 +131,8 @@ object SkyPainter {
         moonAngle: Float,
         moonPhase: MoonPhase,
         rainBrightness: Float,
+        rules: SkyRules,
+        skyLit: Float,
     ) {
         // Sorted by where each body is *now*: a path that swells and shrinks changes which body is in
         // front, and the sky pass writes no depth, so order is the only thing that decides.
@@ -136,7 +142,15 @@ object SkyPainter {
             // Vanilla adds both its sun and its moon, and its sprites have no alpha to cover with — see
             // `Blending`, which is why this is the body's own choice and why the default is to add.
             val adds = body.blending == Blending.ADDS
-            val tint = if (adds) sprite.tint.dimmed(LUMINOUS_ADDS) else sprite.tint
+            val plain = if (adds) sprite.tint.dimmed(LUMINOUS_ADDS) else sprite.tint
+            // Air only hides what covers. A luminous body *adds* its light, and scattered sky cannot take
+            // light away — which is why the sun stays the sun at noon and the moon does not.
+            val tint = if (adds) {
+                plain
+            } else {
+                val altitude = body.path.altitudeAt(clockTime)
+                plain.copy(alpha = plain.alpha * Airiness.solidityAt(altitude, skyLit, rules.airThickness))
+            }
             canvas.drawBody(
                 shape = shape,
                 orientation = facingOf(body, clockTime, sunAngle, moonAngle),
