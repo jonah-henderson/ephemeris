@@ -16,8 +16,8 @@ class FacingCheck : FunSpec({
     fun bodyDirection(path: CelestialPath, dayTime: Long): Vector3f =
         path.orientationAt(dayTime).transform(Vector3f(0.0f, 1.0f, 0.0f))
 
-    fun uprightDirection(path: CelestialPath, dayTime: Long): Vector3f =
-        Facing.upright(path.orientationAt(dayTime)).transform(Vector3f(0.0f, 1.0f, 0.0f))
+    fun levelledDirection(path: CelestialPath, dayTime: Long): Vector3f =
+        Facing.levelled(path.orientationAt(dayTime)).transform(Vector3f(0.0f, 1.0f, 0.0f))
 
     test("standing a sprite upright never moves the body") {
         // The one thing facing must not do. Every path, every hour.
@@ -29,52 +29,85 @@ class FacingCheck : FunSpec({
         )
         for (path in paths) {
             for (tick in 0..<day step 250) {
-                val moved = bodyDirection(path, tick.toLong()).distance(uprightDirection(path, tick.toLong()))
-                check(moved < 0.001f) { "Standing $path upright at tick $tick moved the body by $moved" }
+                val moved = bodyDirection(path, tick.toLong()).distance(levelledDirection(path, tick.toLong()))
+                check(moved < 0.001f) { "Levelling $path at tick $tick moved the body by $moved" }
             }
         }
     }
 
-    test("vanilla's own sun comes out exactly as vanilla draws it") {
-        // Vanilla sweeps about the quad's own local X, so that axis never moves. If upright reproduces the
-        // whole frame, the default has changed nothing about the sky everyone already knows.
+    test("the default is the path's own frame, so vanilla's sky is untouched") {
+        // The default does nothing at all now, and that is the point: vanilla sweeps about its quad's own
+        // local X, so that axis never moves and its crescent never turns over. Anything cleverer fought it.
         for (tick in 0..<day step 100) {
-            val vanillas = Orbit.VANILLA_SUN.orientationAt(tick.toLong())
-            val stood = Facing.upright(vanillas)
-            // Overhead a body has no horizontal square to it and the frame is left alone by design.
-            if (Math.abs(Orbit.VANILLA_SUN.altitudeAt(tick.toLong())) > 88.0f) continue
-
-            for (axis in listOf(Vector3f(1.0f, 0.0f, 0.0f), Vector3f(0.0f, 1.0f, 0.0f), Vector3f(0.0f, 0.0f, 1.0f))) {
-                val fromVanilla = vanillas.transform(Vector3f(axis))
-                val fromUpright = stood.transform(Vector3f(axis))
-                check(fromVanilla.distance(fromUpright) < 0.01f) {
-                    "At tick $tick vanilla's frame put $axis at $fromVanilla and standing it upright put it " +
-                        "at $fromUpright — the default facing is not vanilla's"
-                }
-            }
+            val body = CelestialBody(Orbit.VANILLA_SUN, Appearance.Sprite(co.voik.ephemeris.Rgba.WHITE, 30.0f, Appearance.SUN_SHAPES))
+            check(body.facing == Facing.LIKE_VANILLA) { "The default facing is no longer vanilla's" }
         }
     }
 
-    test("a sprite held upright keeps its horns level, where the path would roll them") {
-        // What the option is *for*. A tilted path rolls its frame as it travels; upright does not, which is
-        // the difference between a crescent that stays a crescent and one that turns over during the night.
+    test("levelling really does level, where the path alone would lean") {
         val tilted = Orbit.VANILLA_SUN.copy(inclinationDegrees = 55.0f, ascendingNodeDegrees = 20.0f)
 
-        fun rightwardTilt(atTick: Long, upright: Boolean): Float {
+        fun rightwardLean(atTick: Long, levelled: Boolean): Float {
             val frame = tilted.orientationAt(atTick)
-            val turned = if (upright) Facing.upright(frame) else frame
+            val turned = if (levelled) Facing.levelled(frame) else frame
             return turned.transform(Vector3f(1.0f, 0.0f, 0.0f)).y
         }
 
-        val heldLevel = (0..<day step 250).map { Math.abs(rightwardTilt(it.toLong(), upright = true)) }.max()
-        check(heldLevel < 0.01f) {
-            "A sprite held upright leaned by $heldLevel, so its horns are not level"
-        }
+        val held = (0..<day step 250).map { Math.abs(rightwardLean(it.toLong(), levelled = true)) }.max()
+        check(held < 0.01f) { "A levelled sprite leaned by $held, so its horns are not flat" }
 
-        val rolledByThePath = (0..<day step 250).map { Math.abs(rightwardTilt(it.toLong(), upright = false)) }.max()
-        check(rolledByThePath > 0.1f) {
-            "A tilted path never rolled its frame at all (worst lean $rolledByThePath), so there is nothing " +
-                "for `LIKE_VANILLA` to correct and the whole option is pointless"
+        val leaning = (0..<day step 250).map { Math.abs(rightwardLean(it.toLong(), levelled = false)) }.max()
+        check(leaning > 0.1f) {
+            "A tilted path never leaned its frame at all (worst $leaning), so there is nothing for `LEVEL` " +
+                "to correct and the option is pointless"
+        }
+    }
+
+    test("the default never flips a sprite, on any path") {
+        // **Walked and found.** A moon on a flat polar path flickered between crescent-left and
+        // crescent-right every frame. The default used to level the sprite and then agree its *sign* with
+        // the path's own frame; that agreement is `-sin(sweep) * cos(inclination)`, which is identically
+        // zero for a flat path — so the sign came down to which way floating point rounded, and changed
+        // constantly. It is also zero at the top and bottom of *any* arc, so every path flipped once a turn.
+        //
+        // The default is the path's own frame now and turns nothing, which is what vanilla does.
+        val paths = mapOf(
+            "vanilla" to Orbit.VANILLA_SUN,
+            "tilted" to Orbit.VANILLA_SUN.copy(inclinationDegrees = 40.0f),
+            "flat and lifted" to Orbit.VANILLA_SUN.copy(inclinationDegrees = 90.0f, liftDegrees = 40.0f),
+            "flat and low" to Orbit.VANILLA_SUN.copy(inclinationDegrees = 90.0f, liftDegrees = 10.0f),
+            "nearly flat" to Orbit.VANILLA_SUN.copy(inclinationDegrees = 87.0f, liftDegrees = 30.0f),
+            "epicycling" to Motions(
+                listOf(
+                    Motion.Turn(net.minecraft.core.Direction.Axis.Y, Orbit.VANILLAS_NODE),
+                    Motion.Sweep(net.minecraft.core.Direction.Axis.X, day, pacing = Pacing.EVEN),
+                    Motion.Sweep(net.minecraft.core.Direction.Axis.Z, day / 3, pacing = Pacing.EVEN),
+                ),
+            ),
+        )
+        val step = 20
+
+        for ((name, path) in paths) {
+            fun rightwardAt(tick: Long): Vector3f =
+                path.orientationAt(tick).transform(Vector3f(1.0f, 0.0f, 0.0f))
+
+            var worst = 0.0f
+            var worstAt = 0L
+            var previous = rightwardAt(0)
+            for (tick in step..<day step step) {
+                val now = rightwardAt(tick.toLong())
+                val moved = previous.distance(now)
+                if (moved > worst) {
+                    worst = moved
+                    worstAt = tick.toLong()
+                }
+                previous = now
+            }
+            // A flip is a jump of about two — the axis reversing outright. Ordinary travel moves it a little.
+            check(worst < 0.5f) {
+                "'$name' turned its sprite by $worst in $step ticks, at tick $worstAt. Near two means the " +
+                    "sprite flipped end for end, which reads as a crescent snapping to the other side"
+            }
         }
     }
 

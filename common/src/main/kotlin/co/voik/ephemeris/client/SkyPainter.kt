@@ -68,17 +68,19 @@ object SkyPainter {
         if (spec.isOrdinary) return false
 
         val clockTime = level.defaultClockTime
-        // How lit the air is, which is the other half of how much it hides. One minus the night.
-        val skyLit = 1.0f - nightliness(look, clockTime, starBrightness)
-        drawBodies(canvas, spec, clockTime, sunAngle, moonAngle, moonPhase, rainBrightness, look.rules, skyLit)
-
         val stars = spec.stars
-        // A reveal dims by where the viewer is, on top of the night curve.
+        // **Stars first, because everything else is in front of them.** Vanilla draws them last and gets
+        // away with it: all of its bodies add, so stars laid over a moon merely brighten it. A body that
+        // *covers* is painted over by anything drawn after — which is how stars came to shine through a full
+        // moon. The sky pass writes no depth, so order is the whole of what decides.
         val revealed = stars.reveal?.visibilityAt(eyeHeight()) ?: 1.0f
         val visibility = nightliness(look, clockTime, starBrightness) * revealed
         if (stars.count > 0 && visibility > STARS_WORTH_DRAWING) {
             canvas.drawStarfield(stars.seed, stars.count, aroundVanillasAxis(starAngle), visibility, clockTime)
         }
+
+        val skyLit = 1.0f - nightliness(look, clockTime, starBrightness)
+        drawBodies(canvas, spec, clockTime, sunAngle, moonAngle, moonPhase, rainBrightness, look.rules, skyLit)
         return true
     }
 
@@ -200,8 +202,8 @@ object SkyPainter {
     ): Quaternionf {
         val alongPath = orientationOf(body, clockTime, sunAngle, moonAngle)
         return when (body.facing) {
-            Facing.ALONG_PATH -> alongPath
-            Facing.LIKE_VANILLA -> Facing.upright(alongPath)
+            Facing.LIKE_VANILLA -> alongPath
+            Facing.LEVEL -> Facing.levelled(alongPath)
         }
     }
 
