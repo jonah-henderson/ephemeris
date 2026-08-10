@@ -9,11 +9,16 @@ layout(std140) uniform DeckInfo {
     vec4 Extent;
 };
 
+uniform sampler2D Sampler0;
+
 in float faceBrightness;
 in vec2 worldSample;
 in vec2 acrossTheSlab;
 
 out vec4 fragColor;
+
+// A pixel this faint is sky. Vanilla's own test on its cloud picture is `alpha < 10` of 255.
+const float SOLID_ENOUGH = 10.0 / 255.0;
 
 // The four sine amplitudes below, summed — what the total is divided by to land back in -1..1. Derived,
 // so it must be updated with them; the frequencies themselves are free.
@@ -22,9 +27,10 @@ const float SINE_AMPLITUDE_SUM = 1.0 + 0.7 + 0.5 + 0.4;
 // Where the deck starts thinning. Far enough out that the fade reads as distance rather than as a ring.
 const float RIM_BEGINS = 0.72;
 
-// Cheap value noise: a sum of drifting sines, in 0..1. Evaluated per fragment, which is the change from
-// the renderer this replaces — that one could only afford it once per 32-block vertex, so the roil was a
-// coarse interpolated wash. The maths is unchanged; only where it runs is.
+// The roil: a sum of drifting sines, in 0..1. **Shading, never coverage** — it picks a tone between the
+// deck's two, and cuts nothing away. Evaluated per fragment, which is the change from the renderer this
+// replaces: that one could only afford it once per 32-block vertex, so the roil was a coarse interpolated
+// wash.
 float roilAt(vec2 world, float drifted) {
     float value = sin(world.x * 0.018 + drifted);
     value += 0.7 * sin(world.y * 0.021 - drifted * 0.9);
@@ -36,13 +42,27 @@ float roilAt(vec2 world, float drifted) {
 void main() {
     float drifted = SampleAndRoil.z;
     float contrast = SampleAndRoil.w;
+    float cellBlocks = Extent.y;
+    float cutFromTexture = Extent.z;
+    float scroll = Extent.w;
 
-    float density = roilAt(worldSample, drifted);
-    float toned = clamp((density - 0.5) * contrast + 0.5, 0.0, 1.0);
+    // **Where the deck has cloud and where it has sky** — nothing to do with the roil below, which only
+    // decides the tone of the cloud that is here. Vanilla's own grid: the picture is read a cell at a time
+    // rather than smoothly, which is what gives clouds their blocky edge instead of an airbrushed one.
+    // Wrapping is the sampler's, so the picture tiles across the world the way vanilla's does.
+    if (cutFromTexture > 0.5) {
+        vec2 cell = floor(vec2(worldSample.x + scroll, worldSample.y) / cellBlocks);
+        // Asked of the texture rather than passed in, so a consumer's own picture may be any size it likes
+        // and still tile correctly. Wrapping is the sampler's.
+        if (texture(Sampler0, cell / vec2(textureSize(Sampler0, 0))).a < SOLID_ENOUGH) discard;
+    }
+
+    float roil = roilAt(worldSample, drifted);
+    float toned = clamp((roil - 0.5) * contrast + 0.5, 0.0, 1.0);
 
     vec3 tone = mix(LowTone.rgb, HighTone.rgb, toned) * faceBrightness;
-    // Near-opaque, and a touch more so where the deck is dense.
-    float alpha = 0.92 + 0.08 * density;
+    // Near-opaque, and a touch more so where the roil is thick.
+    float alpha = 0.92 + 0.08 * roil;
 
     // **Faded to a disc**, the way vanilla's clouds go: the slab is square, so without this its corners
     // reach half again as far as its edges and the deck ends on four straight lines with a horizon behind

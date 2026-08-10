@@ -16,6 +16,8 @@ layout(std140) uniform DeckInfo {
     // z: the already-drifted time it reads at.  w: how hard the roil is pushed toward its extremes.
     vec4 SampleAndRoil;
     // x: half the slab's width in blocks, which turns a unit corner back into a world distance.
+    // y: how wide one cell of the cloud picture is, in blocks.  z: whether to cut holes at all.
+    // w: how far the picture has scrolled, in blocks.
     vec4 Extent;
 };
 

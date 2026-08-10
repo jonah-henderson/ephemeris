@@ -145,6 +145,9 @@ object Blaze3dSkyCanvas : SkyCanvas {
         .withUniform("DynamicTransforms", UniformType.UNIFORM_BUFFER)
         .withUniform("Projection", UniformType.UNIFORM_BUFFER)
         .withUniform("DeckInfo", UniformType.UNIFORM_BUFFER)
+        // The picture the deck is cut from. Declared even though a solid deck ignores it — one pipeline
+        // that sometimes skips a sample beats two that each carry their own copy of the roil.
+        .withSampler("Sampler0")
         .withColorTargetState(ColorTargetState(BlendFunction.TRANSLUCENT))
         .withDepthStencilState(DepthStencilState.DEFAULT)
         // The viewer stands inside the slab as often as outside it, so neither face may be dropped.
@@ -372,11 +375,16 @@ object Blaze3dSkyCanvas : SkyCanvas {
         writeDeckInfo(deck, eye, timeTicks)
         val quadIndices = RenderSystem.getSequentialBuffer(VertexFormat.Mode.QUADS)
 
+        // **Bound whether or not it is read.** A pipeline declaring a sampler needs one, so a solid deck
+        // binds vanilla's picture too and the shader is told to ignore it — which is cheaper than a second
+        // pipeline and a second copy of the roil to keep in step with this one.
+        val picture = cloudTexture(deck.texture ?: CloudDeck.VANILLA_CLOUDS) ?: return
         cloudPass()?.use { pass ->
             pass.setPipeline(CLOUD_DECK_PIPELINE)
             RenderSystem.bindDefaultUniforms(pass)
             pass.setUniform("DynamicTransforms", transforms)
             pass.setUniform("DeckInfo", deckInfo.currentBuffer())
+            pass.bindTexture("Sampler0", picture.textureView, picture.sampler)
             pass.setVertexBuffer(0, slab())
             pass.setIndexBuffer(quadIndices.getBuffer(SLAB_INDICES), quadIndices.type())
             pass.drawIndexed(0, 0, SLAB_INDICES, 1)
@@ -399,9 +407,39 @@ object Blaze3dSkyCanvas : SkyCanvas {
                     driftedTime(timeTicks, deck.driftSpeed),
                     deck.contrast,
                 )
-                .putVec4(DECK_RADIUS, 0.0f, 0.0f, 0.0f)
+                .putVec4(
+                    DECK_RADIUS,
+                    CloudDeck.CELL_BLOCKS,
+                    if (deck.texture == null) 0.0f else 1.0f,
+                    cloudScroll(timeTicks),
+                )
         }
     }
+
+    /**
+     * The picture a deck is cut from, or null if it has not loaded.
+     *
+     * Vanilla's texture manager owns it, so a resource pack that retextures the overworld's clouds
+     * retextures every deck cut from them — which is the right answer and costs nothing.
+     */
+    private fun cloudTexture(texture: Identifier) =
+        Minecraft.getInstance().textureManager.getTexture(texture)
+
+    /**
+     * How far the cloud picture has slid, in blocks, wrapped so the float never grows coarse.
+     *
+     * Vanilla's own rate. Kept separate from the roil's drift on purpose: one moves the *clouds* and the
+     * other stirs their *tone*, and a deck reading one number for both could not have a still sky with a
+     * churning surface, or racing clouds with an even one.
+     */
+    private fun cloudScroll(timeTicks: Float): Float =
+        wrapped(timeTicks.toDouble() * VANILLA_BLOCKS_PER_TICK, SCROLL_WRAP)
+
+    /** Vanilla's `BLOCKS_PER_SECOND = 0.6`, per tick. */
+    private const val VANILLA_BLOCKS_PER_TICK = 0.6 / 20.0
+
+    /** A whole number of vanilla cells, so the picture wraps where it repeats and the seam is invisible. */
+    private const val SCROLL_WRAP = 256.0 * 12.0
 
     /** How far the roil has drifted, wrapped at [ROIL_PERIOD]. */
     private fun driftedTime(timeTicks: Float, driftSpeed: Float): Float =

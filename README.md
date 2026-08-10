@@ -70,6 +70,14 @@ and no way for a client to disagree with the server about a place. Delivery is e
 stay that way for almost everyone; `lazily()` exists for the thousands-of-levels case, and comes with a
 watchdog that names any route which forgot to call `expecting` rather than letting the wrong sky be silent.
 
+Cloud decks are cut from a **texture**, read the way vanilla reads its own `clouds.png` — a grid of
+12-block cells, cloud wherever a pixel is opaque. So the silhouette is vanilla's, at any height you like,
+and a deck wanting thinner or thicker cover supplies a different picture rather than asking for a number.
+`CloudDeck.solid(...)` is the other kind: an unbroken ceiling, with the roil as its only relief.
+
+**The texture decides where there is cloud; the roil decides the tone of the cloud that is there.** Two
+separate things, and worth keeping separate — one moves the clouds, the other stirs their surface.
+
 **Keep the vocabulary, bring your own transport** — `LevelLooks.remember(dimension, look)` on the client,
 filled from your own packet, config, or rule.
 
