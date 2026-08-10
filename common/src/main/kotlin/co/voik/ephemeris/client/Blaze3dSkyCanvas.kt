@@ -3,6 +3,7 @@ package co.voik.ephemeris.client
 import co.voik.ephemeris.Rgba
 import co.voik.ephemeris.Sphere
 import co.voik.ephemeris.sky.CloudDeck
+import co.voik.ephemeris.sky.HorizonFan
 import com.mojang.blaze3d.buffers.GpuBuffer
 import com.mojang.blaze3d.buffers.Std140Builder
 import com.mojang.blaze3d.pipeline.BlendFunction
@@ -211,12 +212,14 @@ object Blaze3dSkyCanvas : SkyCanvas {
 
         val modelViewStack = RenderSystem.getModelViewStack()
         modelViewStack.pushMatrix()
-        // Vanilla's own sequence, with one substitution. It stands the fan up out of the ground and then
-        // turns it to face the light; vanilla's second turn is `(sin(sunAngle) < 0 ? 180 : 0) + 90`, which
-        // is east or west and nothing else, and this is the same turn taken from a real bearing. The two
-        // agree exactly where vanilla's own sun is, which is the only place vanilla's answer was ever right.
-        modelViewStack.rotate(Quaternionf().rotateX(Math.toRadians(STAND_IT_UP).toFloat()))
-        modelViewStack.rotate(Quaternionf().rotateZ(Math.toRadians(bearingDegrees.toDouble()).toFloat()))
+        // Vanilla's own sequence, with one substitution: it stands the fan up out of the ground and then
+        // turns it to face the light. The turn is `HorizonFan.turnFor`, which is *not* the bearing — see
+        // there for why standing the fan up carries its centre to the far side, and what it looks like when
+        // that is missed.
+        modelViewStack.rotate(Quaternionf().rotateX(Math.toRadians(HorizonFan.STAND_IT_UP.toDouble()).toFloat()))
+        modelViewStack.rotate(
+            Quaternionf().rotateZ(Math.toRadians(HorizonFan.turnFor(bearingDegrees).toDouble()).toFloat()),
+        )
         // Vanilla flattens the fan by its own alpha so a weak glow is a thin band rather than a faint wide
         // one. Keeping that means a distant sun's light hugs the horizon instead of washing the whole sky.
         modelViewStack.scale(1.0f, 1.0f, tint.alpha)
@@ -274,8 +277,6 @@ object Blaze3dSkyCanvas : SkyCanvas {
     private const val GLOW_RADIUS = 120.0f
     private const val GLOW_DEPTH = 40.0f
 
-    /** Vanilla stands its fan up with a quarter turn about X before aiming it. */
-    private const val STAND_IT_UP = 90.0
 
     /** Below this a glow is not worth a draw call; vanilla declines at the same point. */
     private const val FAINTEST_GLOW = 0.001f

@@ -2,12 +2,15 @@ package co.voik.ephemeris.client
 
 import co.voik.ephemeris.sky.Appearance
 import co.voik.ephemeris.sky.CelestialBody
+import co.voik.ephemeris.sky.Daylight
+import co.voik.ephemeris.sky.LevelLook
 import co.voik.ephemeris.sky.LevelLooks
 import co.voik.ephemeris.sky.Facing
 import co.voik.ephemeris.sky.Orbit
 import co.voik.ephemeris.sky.VanillasBody
 import co.voik.ephemeris.sky.SkySpec
 import net.minecraft.client.Minecraft
+import net.minecraft.util.Mth
 import net.minecraft.world.level.MoonPhase
 import org.joml.Quaternionf
 
@@ -57,21 +60,50 @@ object SkyPainter {
         starBrightness: Float,
     ): Boolean {
         val level = Minecraft.getInstance().level ?: return false
-        val spec = LevelLooks.of(level.dimension())?.sky ?: return false
+        val look = LevelLooks.of(level.dimension()) ?: return false
+        val spec = look.sky
         if (spec.isOrdinary) return false
 
         val clockTime = level.defaultClockTime
         drawBodies(canvas, spec, clockTime, sunAngle, moonAngle, moonPhase, rainBrightness)
 
         val stars = spec.stars
-        // A reveal dims by where the viewer is, on top of vanilla's night curve.
+        // A reveal dims by where the viewer is, on top of the night curve.
         val revealed = stars.reveal?.visibilityAt(eyeHeight()) ?: 1.0f
-        val visibility = starBrightness * revealed
+        val visibility = nightliness(look, clockTime, starBrightness) * revealed
         if (stars.count > 0 && visibility > STARS_WORTH_DRAWING) {
             canvas.drawStarfield(stars.seed, stars.count, aroundVanillasAxis(starAngle), visibility, clockTime)
         }
         return true
     }
+
+    /**
+     * How far into night it is, `0..1` — **from the level's own suns, not from vanilla's clock**.
+     *
+     * The one vanilla hands us is `EnvironmentAttributes.STAR_BRIGHTNESS`, keyframed on
+     * `Timelines.OVERWORLD_DAY` against the world clock. That is right for the overworld and useless here: a
+     * level whose second sun is at its peak would still have its stars come out at the overworld's dusk,
+     * which is exactly what it did.
+     *
+     * Falls back to vanilla's where nothing better is known — a sky with no suns at all has nothing to
+     * derive a night from, and vanilla's curve is a better answer than darkness.
+     */
+    private fun nightliness(look: LevelLook, clockTime: Long, vanillas: Float): Float {
+        if (look.rules.daylight == Daylight.VANILLA_CLOCK) return vanillas
+        val highest = look.readAt(clockTime).suns.maxByOrNull { it.altitudeDegrees } ?: return vanillas
+        // The same band the light ramps over, so the stars arrive as the world darkens rather than before
+        // or after it — `LevelDaylight` is the other half of this and they must agree.
+        val lit = Mth.clamp(
+            Mth.inverseLerp(highest.altitudeDegrees, STARS_FULLY_OUT_BELOW, STARS_GONE_ABOVE),
+            0.0f,
+            1.0f,
+        )
+        return 1.0f - lit * lit * (3.0f - 2.0f * lit)
+    }
+
+    /** Where the stars come and go, in degrees of the highest sun's altitude. `LevelDaylight` matches. */
+    private const val STARS_GONE_ABOVE = 5.0f
+    private const val STARS_FULLY_OUT_BELOW = -11.0f
 
     /**
      * Where the viewer's eye is, for a [co.voik.ephemeris.sky.StarReveal] to read.
