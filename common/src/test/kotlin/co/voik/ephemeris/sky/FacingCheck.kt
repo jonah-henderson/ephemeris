@@ -4,14 +4,22 @@ import io.kotest.core.spec.style.FunSpec
 import org.joml.Vector3f
 
 /**
- * That standing a sprite upright leaves it where it was, and that vanilla's own bodies come out unchanged.
+ * That levelling a sprite leaves the body where it was, and that vanilla's own bodies come out unchanged.
  *
- * The second is the acceptance test for the whole idea: if [Facing.upright] does not reproduce vanilla's
- * frame on vanilla's path, then the default has quietly changed how the overworld's sun and moon look.
+ * The second is the acceptance test for the whole idea: if [Facing.LIKE_VANILLA] does not hand back vanilla's
+ * own frame on vanilla's path, then the default has quietly changed how the overworld's sun and moon look.
  */
 class FacingCheck : FunSpec({
 
     val day = Orbit.TICKS_PER_VANILLA_DAY
+
+    /**
+     * How near a pole a body may be before facing stops having an answer for it.
+     *
+     * Nothing is square to straight-up, so a levelled frame hands back to the path's own there and the two
+     * differ. Two degrees of sky, directly overhead and directly underfoot.
+     */
+    val VISIBLE_TO = 88.0f
 
     fun bodyDirection(path: CelestialPath, dayTime: Long): Vector3f =
         path.orientationAt(dayTime).transform(Vector3f(0.0f, 1.0f, 0.0f))
@@ -35,12 +43,45 @@ class FacingCheck : FunSpec({
         }
     }
 
-    test("the default is the path's own frame, so vanilla's sky is untouched") {
-        // The default does nothing at all now, and that is the point: vanilla sweeps about its quad's own
-        // local X, so that axis never moves and its crescent never turns over. Anything cleverer fought it.
+    test("the default hands vanilla's own path straight back, untouched") {
+        // The acceptance test: on vanilla's path the default must return the *same* frame, not one equal to
+        // it up to a mirror. Vanilla sweeps about its quad's local X and that axis is already horizontal, so
+        // there is nothing to level and levelling it would only risk disagreeing about which way round.
+        val body = CelestialBody(
+            Orbit.VANILLA_SUN,
+            Appearance.Sprite(co.voik.ephemeris.Rgba.WHITE, 30.0f, Appearance.SUN_SHAPES),
+        )
+        check(body.facing == Facing.LIKE_VANILLA) { "The default facing is no longer vanilla's" }
+        check(Orbit.VANILLA_SUN.framesAreLevel) { "Vanilla's own path no longer reads as level" }
         for (tick in 0..<day step 100) {
-            val body = CelestialBody(Orbit.VANILLA_SUN, Appearance.Sprite(co.voik.ephemeris.Rgba.WHITE, 30.0f, Appearance.SUN_SHAPES))
-            check(body.facing == Facing.LIKE_VANILLA) { "The default facing is no longer vanilla's" }
+            val own = Orbit.VANILLA_SUN.orientationAt(tick.toLong())
+            val turned = Facing.LIKE_VANILLA.turn(own, Orbit.VANILLA_SUN.framesAreLevel)
+            check(turned == own) { "The default changed vanilla's frame at tick $tick: $own became $turned" }
+        }
+    }
+
+    test("the default keeps every sprite level, on every path") {
+        // The other half of the bargain, and the one a walk noticed missing: a tilted orbit held its frame
+        // fixed in *world* space, which reads as the sprite slowly turning as the body crosses. Level means
+        // level from wherever you are watching.
+        val paths = mapOf(
+            "vanilla" to Orbit.VANILLA_SUN,
+            "tilted" to Orbit.VANILLA_SUN.copy(inclinationDegrees = 40.0f),
+            "steeply tilted" to Orbit.VANILLA_SUN.copy(inclinationDegrees = 70.0f, ascendingNodeDegrees = 30.0f),
+            "flat and lifted" to Orbit.VANILLA_SUN.copy(inclinationDegrees = 90.0f, liftDegrees = 40.0f),
+            "lifted vanilla" to Orbit.VANILLA_SUN.copy(liftDegrees = 45.0f),
+        )
+        for ((name, path) in paths) {
+            val worst = (0..<day step 100)
+                .filter { Math.abs(path.altitudeAt(it.toLong())) < VISIBLE_TO }
+                .map {
+                    val turned = Facing.LIKE_VANILLA.turn(path.orientationAt(it.toLong()), path.framesAreLevel)
+                    Math.abs(turned.transform(Vector3f(1.0f, 0.0f, 0.0f)).y)
+                }
+                .max()
+            check(worst < 0.01f) {
+                "'$name' leaned its sprite by $worst out of the horizontal, so it turns as it crosses the sky"
+            }
         }
     }
 
@@ -70,7 +111,11 @@ class FacingCheck : FunSpec({
         // zero for a flat path — so the sign came down to which way floating point rounded, and changed
         // constantly. It is also zero at the top and bottom of *any* arc, so every path flipped once a turn.
         //
-        // The default is the path's own frame now and turns nothing, which is what vanilla does.
+        // Levelling replaced it, and levelling has exactly one place it cannot answer: a body straight
+        // overhead or straight underfoot, where no horizontal direction is square to it. That is geometry
+        // rather than a defect — so this asks about the sky a player can see, which is where a flip would
+        // actually be watched. A circle reaching the zenith is vanilla's own case and keeps its frame; the
+        // nadir is below the world.
         val paths = mapOf(
             "vanilla" to Orbit.VANILLA_SUN,
             "tilted" to Orbit.VANILLA_SUN.copy(inclinationDegrees = 40.0f),
@@ -89,7 +134,9 @@ class FacingCheck : FunSpec({
 
         for ((name, path) in paths) {
             fun rightwardAt(tick: Long): Vector3f =
-                path.orientationAt(tick).transform(Vector3f(1.0f, 0.0f, 0.0f))
+                Facing.LIKE_VANILLA.turn(path.orientationAt(tick), path.framesAreLevel).transform(Vector3f(1.0f, 0.0f, 0.0f))
+
+            fun isOverhead(tick: Long) = Math.abs(path.altitudeAt(tick)) > VISIBLE_TO
 
             var worst = 0.0f
             var worstAt = 0L
@@ -97,7 +144,7 @@ class FacingCheck : FunSpec({
             for (tick in step..<day step step) {
                 val now = rightwardAt(tick.toLong())
                 val moved = previous.distance(now)
-                if (moved > worst) {
+                if (moved > worst && !isOverhead(tick.toLong()) && !isOverhead((tick - step).toLong())) {
                     worst = moved
                     worstAt = tick.toLong()
                 }
@@ -108,6 +155,24 @@ class FacingCheck : FunSpec({
                 "'$name' turned its sprite by $worst in $step ticks, at tick $worstAt. Near two means the " +
                     "sprite flipped end for end, which reads as a crescent snapping to the other side"
             }
+        }
+    }
+
+    test("the pole is the only place levelling gives up, and it is out of sight") {
+        // The exemption above is only honest if it is *narrow*. A body within a degree of straight up or
+        // straight down is the whole of it, and that is a sprite the size of the sky's centre point.
+        val steep = Motions(
+            listOf(
+                Motion.Turn(net.minecraft.core.Direction.Axis.Y, Orbit.VANILLAS_NODE),
+                Motion.Sweep(net.minecraft.core.Direction.Axis.X, day, pacing = Pacing.EVEN),
+                Motion.Sweep(net.minecraft.core.Direction.Axis.Z, day / 3, pacing = Pacing.EVEN),
+            ),
+        )
+        val exempt = (0..<day step 20).count { Math.abs(steep.altitudeAt(it.toLong())) > VISIBLE_TO }
+        val ticks = (0..<day step 20).count()
+        check(exempt * 100 / ticks < 2) {
+            "$exempt of $ticks sampled ticks sit within ${90.0f - VISIBLE_TO}° of a pole, which is too much " +
+                "of the day to be waving through as unwatchable"
         }
     }
 

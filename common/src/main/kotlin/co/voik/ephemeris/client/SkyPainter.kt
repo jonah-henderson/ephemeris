@@ -4,7 +4,6 @@ import co.voik.ephemeris.sky.Airiness
 import co.voik.ephemeris.sky.Appearance
 import co.voik.ephemeris.sky.Blending
 import co.voik.ephemeris.sky.CelestialBody
-import co.voik.ephemeris.sky.Daylight
 import co.voik.ephemeris.sky.LevelLook
 import co.voik.ephemeris.sky.LevelLooks
 import co.voik.ephemeris.sky.Facing
@@ -13,7 +12,6 @@ import co.voik.ephemeris.sky.SkyRules
 import co.voik.ephemeris.sky.VanillasBody
 import co.voik.ephemeris.sky.SkySpec
 import net.minecraft.client.Minecraft
-import net.minecraft.util.Mth
 import net.minecraft.world.level.MoonPhase
 import org.joml.Quaternionf
 
@@ -74,43 +72,19 @@ object SkyPainter {
         // *covers* is painted over by anything drawn after — which is how stars came to shine through a full
         // moon. The sky pass writes no depth, so order is the whole of what decides.
         val revealed = stars.reveal?.visibilityAt(eyeHeight()) ?: 1.0f
-        val visibility = nightliness(look, clockTime, starBrightness) * revealed
+        // **Vanilla's own answer, and it is already ours.** `STAR_BRIGHTNESS` is a timeline track, and
+        // `LevelClock` maps the hour the timelines read to the one this level's suns put it at — so what we
+        // are handed already follows them. Working it out a second time here, as this did before the clock
+        // was mapped, meant two ramps with different numbers disagreeing: stars out over a blue sky.
+        val visibility = starBrightness * revealed
         if (stars.count > 0 && visibility > STARS_WORTH_DRAWING) {
             canvas.drawStarfield(stars.seed, stars.count, aroundVanillasAxis(starAngle), visibility, clockTime)
         }
 
-        val skyLit = 1.0f - nightliness(look, clockTime, starBrightness)
+        val skyLit = 1.0f - starBrightness
         drawBodies(canvas, spec, clockTime, sunAngle, moonAngle, moonPhase, rainBrightness, look.rules, skyLit)
         return true
     }
-
-    /**
-     * How far into night it is, `0..1` — **from the level's own suns, not from vanilla's clock**.
-     *
-     * The one vanilla hands us is `EnvironmentAttributes.STAR_BRIGHTNESS`, keyframed on
-     * `Timelines.OVERWORLD_DAY` against the world clock. That is right for the overworld and useless here: a
-     * level whose second sun is at its peak would still have its stars come out at the overworld's dusk,
-     * which is exactly what it did.
-     *
-     * Falls back to vanilla's where nothing better is known — a sky with no suns at all has nothing to
-     * derive a night from, and vanilla's curve is a better answer than darkness.
-     */
-    private fun nightliness(look: LevelLook, clockTime: Long, vanillas: Float): Float {
-        if (look.rules.daylight == Daylight.VANILLA_CLOCK) return vanillas
-        val highest = look.readAt(clockTime).suns.maxByOrNull { it.altitudeDegrees } ?: return vanillas
-        // The same band the light ramps over, so the stars arrive as the world darkens rather than before
-        // or after it — `LevelDaylight` is the other half of this and they must agree.
-        val lit = Mth.clamp(
-            Mth.inverseLerp(highest.altitudeDegrees, STARS_FULLY_OUT_BELOW, STARS_GONE_ABOVE),
-            0.0f,
-            1.0f,
-        )
-        return 1.0f - lit * lit * (3.0f - 2.0f * lit)
-    }
-
-    /** Where the stars come and go, in degrees of the highest sun's altitude. `LevelDaylight` matches. */
-    private const val STARS_GONE_ABOVE = 5.0f
-    private const val STARS_FULLY_OUT_BELOW = -11.0f
 
     /**
      * Where the viewer's eye is, for a [co.voik.ephemeris.sky.StarReveal] to read.
@@ -201,10 +175,7 @@ object SkyPainter {
         moonAngle: Float,
     ): Quaternionf {
         val alongPath = orientationOf(body, clockTime, sunAngle, moonAngle)
-        return when (body.facing) {
-            Facing.LIKE_VANILLA -> alongPath
-            Facing.LEVEL -> Facing.levelled(alongPath)
-        }
+        return body.facing.turn(alongPath, body.path.framesAreLevel)
     }
 
     private fun orientationOf(

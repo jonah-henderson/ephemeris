@@ -116,6 +116,8 @@ data class Orbit(
 
     override fun swing(): CelestialPath.Swing = stack.swing()
 
+    override fun levelness(): Boolean = stack.levelness()
+
     override fun distanceAt(dayTime: Long): Float {
         if (swell == 0.0f) return distance
         val around = progressAt(dayTime) * Math.PI.toFloat() * 2.0f

@@ -83,6 +83,19 @@ sealed interface CelestialPath {
      */
     val vanillas: VanillasBody? get() = null
 
+    /**
+     * Whether this path's frame is level the whole way round — **vanilla's case, and only vanilla's**.
+     *
+     * Vanilla sweeps about its quad's sideways axis and that axis is horizontal, so its sprite is level
+     * without anything being done to it. A path like that is left exactly alone; any other is levelled by
+     * [co.voik.ephemeris.sky.Facing].
+     *
+     * **Asked of the path and not of an instant.** A stack of motions tilts and untilts as it travels, so an
+     * instant-by-instant test flickers between the two answers — and they differ, so the sprite jumps. This
+     * is one decision per path, which is what makes the choice stable.
+     */
+    val framesAreLevel: Boolean get() = levelness()
+
     /** Never dips below the horizon — a polar day. */
     val staysUp: Boolean get() = swing().lowest >= -GRAZING
 
@@ -104,6 +117,9 @@ sealed interface CelestialPath {
      * caller looping over bodies would otherwise pay a full walk per body per look.
      */
     fun swing(): Swing
+
+    /** Whether the frame is level throughout, memoised alongside [swing] for the same reason. */
+    fun levelness(): Boolean
 
     /** The extremes of a path, in degrees of altitude. */
     data class Swing(val lowest: Float, val highest: Float)
@@ -133,6 +149,21 @@ sealed interface CelestialPath {
         fun bearingOf(direction: Vector3f): Float {
             val degrees = Math.toDegrees(Math.atan2(direction.x.toDouble(), -direction.z.toDouble())).toFloat()
             return (degrees % FULL_TURN + FULL_TURN) % FULL_TURN
+        }
+
+        /** How far a frame's sideways axis may leave the horizon and still count as level. */
+        const val ALREADY_LEVEL = 0.001f
+
+        /** Walks one period of [path], asking whether its frame ever leaves the horizontal. */
+        fun levelnessOf(path: CelestialPath): Boolean {
+            val step = (path.periodTicks.toDouble() / SAMPLES_AROUND).coerceAtLeast(1.0)
+            var tick = 0.0
+            while (tick < path.periodTicks) {
+                val sideways = path.orientationAt(tick.toLong()).transform(Vector3f(1.0f, 0.0f, 0.0f))
+                if (Math.abs(sideways.y) > ALREADY_LEVEL) return false
+                tick += step
+            }
+            return true
         }
 
         /** Walks one period of [path], which is what every implementation's [swing] should memoise. */
@@ -208,6 +239,10 @@ data class Motions(
 
     override fun swing(): CelestialPath.Swing = walked
 
+    private val level: Boolean by lazy { CelestialPath.levelnessOf(this) }
+
+    override fun levelness(): Boolean = level
+
     companion object {
         const val VANILLA_DISTANCE = 100.0f
 
@@ -244,6 +279,8 @@ data class Named(val id: Identifier) : CelestialPath {
     override fun orientationAt(dayTime: Long): Quaternionf = resolved.orientationAt(dayTime)
 
     override fun swing(): CelestialPath.Swing = resolved.swing()
+
+    override fun levelness(): Boolean = resolved.levelness()
 
     companion object {
         val MAP_CODEC: MapCodec<Named> = RecordCodecBuilder.mapCodec { instance ->

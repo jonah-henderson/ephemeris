@@ -14,26 +14,43 @@ import org.joml.Vector3f
  */
 enum class Facing(private val key: String) {
     /**
-     * The path's own frame — **what vanilla does, and the default**.
+     * Level with the horizon, and steady — **the default, and what vanilla looks like**.
      *
-     * For any circle this holds the sprite's sideways axis fixed in world space, exactly as vanilla holds
-     * its own: steady, never flipping, whatever the path is doing. A path tipped out of vanilla's plane
-     * carries its sprite tipped with it, which is a lean rather than a spin and reads as a body on a tilted
-     * orbit should.
+     * Vanilla's own sprite never turns, because it sweeps about its quad's sideways axis and that axis is
+     * horizontal: level, and left alone. A path tipped out of vanilla's plane has a sideways axis that is
+     * *not* horizontal, and keeping it fixed makes the sprite appear to turn as the body crosses the sky —
+     * which is what a walk saw. So a path whose frame is already level keeps it, exactly reproducing
+     * vanilla, and any other path is levelled.
+     *
+     * **Decided per path, not per instant** — see [CelestialPath.framesAreLevel]. Levelling has one place it
+     * cannot answer, a body straight overhead or straight underfoot, where no horizontal direction is square
+     * to it; a circle reaching the zenith is vanilla's own case and keeps its frame, and the nadir is below
+     * the world.
      */
     LIKE_VANILLA("like_vanilla"),
 
     /**
-     * Held level to the horizon — horns flat whatever the path.
+     * Rolled by the path itself, so the sprite turns as the body travels.
      *
-     * **Offer it knowing what it costs.** Levelling means turning the sprite about the line of sight, and at
-     * the very top and bottom of an arc there is no shortest way round: the body is momentarily at the
-     * extreme of its climb, both turns are equally short, and the sprite flips end for end. On a *flat* path
-     * — one circling at a constant height — that is true at every instant, and the sprite flickers every
-     * frame. Right for a body that never goes high, wrong for anything that does.
+     * A thing vanilla cannot do at all, and so ours to offer rather than to match. On a tilted circle it
+     * holds the sprite fixed in *world* space, which reads as a slow turn against the horizon.
      */
-    LEVEL("level"),
+    ALONG_PATH("along_path"),
     ;
+
+    /**
+     * [alongPath] turned the way this asks.
+     *
+     * [pathIsLevel] is asked of the whole path rather than of this instant — see
+     * [CelestialPath.framesAreLevel]. A path that tilts and untilts as it travels would otherwise toggle
+     * between two different answers and the sprite would jump.
+     */
+    fun turn(alongPath: Quaternionf, pathIsLevel: Boolean): Quaternionf = when (this) {
+        ALONG_PATH -> alongPath
+        // A path already level is vanilla's own case, and there its frame *is* the answer — reproduced
+        // exactly rather than rebuilt into something equal to it.
+        LIKE_VANILLA -> if (pathIsLevel) alongPath else levelled(alongPath)
+    }
 
     companion object {
         val CODEC: Codec<Facing> = Codec.STRING.xmap(
@@ -49,8 +66,8 @@ enum class Facing(private val key: String) {
          * frame is kept instead.
          *
          * **Continuous everywhere it is defined, and that is the most that can be said.** It does not agree
-         * with the path's frame about which way round is which, so [LEVEL] and [LIKE_VANILLA] are genuinely
-         * different answers rather than one being a tidied version of the other.
+         * with the path's frame about which way round is which, which is why a path that is already level
+         * keeps its own rather than being handed an equal-but-mirrored one.
          */
         fun levelled(alongPath: Quaternionf): Quaternionf {
             val up = alongPath.transform(Vector3f(0.0f, 1.0f, 0.0f))

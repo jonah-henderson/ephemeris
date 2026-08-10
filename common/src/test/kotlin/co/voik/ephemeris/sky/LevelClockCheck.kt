@@ -2,6 +2,7 @@ package co.voik.ephemeris.sky
 
 import co.voik.ephemeris.Rgba
 import io.kotest.core.spec.style.FunSpec
+import net.minecraft.core.Direction
 
 /**
  * That the hour we hand the timeline is the hour whose sky matches ours.
@@ -14,7 +15,7 @@ class LevelClockCheck : FunSpec({
 
     val day = Orbit.TICKS_PER_VANILLA_DAY
 
-    fun sun(orbit: Orbit) = CelestialBody(orbit, Appearance.Sprite(Rgba.WHITE, 30.0f, Appearance.SUN_SHAPES))
+    fun sun(path: CelestialPath) = CelestialBody(path, Appearance.Sprite(Rgba.WHITE, 30.0f, Appearance.SUN_SHAPES))
     fun lookOf(vararg bodies: CelestialBody, rules: SkyRules = SkyRules.DEFAULT) =
         LevelLook(SkySpec(bodies.toList(), StarField(1500, 0L)), rules = rules)
 
@@ -69,6 +70,34 @@ class LevelClockCheck : FunSpec({
             check(litLike > -12.0f) {
                 "At tick $tick a sky with two opposed suns was to be lit like hour ${hour % day}, where " +
                     "vanilla's sun stands ${litLike}° — that is night, and one of the two suns is up"
+            }
+        }
+    }
+
+    test("a sun on a stack of motions is followed like any other") {
+        // **Walked and found: an epicycling sun stood in a blue sky with the stars out.** The cause was a
+        // second ramp — the painter worked out its own nightliness from the suns and vanilla worked out star
+        // brightness from the mapped hour, with different numbers, so they disagreed. The painter's copy is
+        // gone and vanilla's is the only one; this pins the half that decides it.
+        //
+        // Every track reads the mapped hour, so agreeing about the *hour* is agreeing about stars, sky
+        // colour, fog and light together. A stack is the case that had never been driven through here.
+        val epicycling = Motions(
+            listOf(
+                Motion.Turn(Direction.Axis.Y, Orbit.VANILLAS_NODE),
+                Motion.Sweep(Direction.Axis.X, day, pacing = Pacing.EVEN),
+                Motion.Sweep(Direction.Axis.Z, day / 3, pacing = Pacing.EVEN),
+            ),
+        )
+        val look = lookOf(sun(epicycling))
+        for (tick in 0..<day step 100) {
+            val ours = epicycling.altitudeAt(tick.toLong())
+            val hour = LevelClock.vanillaEquivalent(look, tick.toLong()) ?: error("no mapping at $tick")
+            val litLike = Orbit.VANILLA_SUN.altitudeAt(Math.floorMod(hour, day.toLong()))
+            check(Math.abs(ours - litLike) < 1.0f) {
+                "At tick $tick an epicycling sun stood ${ours}° up, but the sky was lit like hour " +
+                    "${Math.floorMod(hour, day.toLong())}, where vanilla's sun stands ${litLike}° — so the " +
+                    "stars come out over a lit sky"
             }
         }
     }
