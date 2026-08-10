@@ -90,11 +90,13 @@ and a deck wanting thinner or thicker cover supplies a different picture rather 
 separate things, and worth keeping separate — one moves the clouds, the other stirs their surface.
 
 A body **adds** to the sky or **covers** it — `Blending`. Vanilla adds both its sun and its moon, because
-its celestial sprites carry no alpha at all: they are indexed colour with no `tRNS`, and what surrounds the
-body is a night-sky gradient for a moon and a yellow glow for the sun. Ephemeris cuts that away by luminance
-so a body can cover, which is how a moon eclipses a sun — something vanilla cannot do. The cut applies to
-**vanilla's own sprites only**; a texture of yours is assumed to carry its own transparency, and
-`SpriteCuts.register(shape, pipeline)` is there if it needs a rule of its own.
+its celestial sprites carry no alpha at all: they are indexed colour with no `tRNS`, and vanilla's moon has
+a night-sky gradient painted around it. Ephemeris crops that away — a moon sprite is 32 by 32 with the moon
+in the middle 8 by 8 — so a body can cover, which is how a moon eclipses a sun, something vanilla cannot do.
+
+The crop is **vanilla's moon only**. Its sun is left whole, because what surrounds *it* is not sky but its
+own corona; and a texture of yours is left whole because it is presumed drawn as you want it seen.
+`SpriteCuts.register(shape, pipeline)` is there for one that needs a rule of its own.
 
 **Keep the vocabulary, bring your own transport** — `LevelLooks.remember(dimension, look)` on the client,
 filled from your own packet, config, or rule.

@@ -25,6 +25,7 @@ import net.minecraft.client.renderer.texture.TextureAtlas
 import net.minecraft.client.renderer.texture.TextureAtlasSprite
 import net.minecraft.data.AtlasIds
 import net.minecraft.resources.Identifier
+import net.minecraft.util.Mth
 import net.minecraft.world.phys.Vec3
 import org.joml.Matrix4f
 import org.joml.Quaternionf
@@ -170,23 +171,6 @@ object Blaze3dSkyCanvas : SkyCanvas {
         .withLocation(Identifier.fromNamespaceAndPath(NAMESPACE, "pipeline/occluding_body"))
         .withVertexShader(Identifier.withDefaultNamespace("core/position_tex"))
         .withFragmentShader(Identifier.withDefaultNamespace("core/position_tex"))
-        .withSampler("Sampler0")
-        .withUniform("DynamicTransforms", UniformType.UNIFORM_BUFFER)
-        .withUniform("Projection", UniformType.UNIFORM_BUFFER)
-        .withColorTargetState(ColorTargetState(BlendFunction.TRANSLUCENT))
-        .withVertexFormat(DefaultVertexFormat.POSITION_TEX, VertexFormat.Mode.QUADS)
-        .build()
-
-    /**
-     * The covering pipeline for a sprite that carries no transparency of its own — **vanilla's own**.
-     *
-     * Vanilla's vertex shader with a fragment shader of ours that cuts the sky out by luminance. Only the
-     * fragment stage differs, so nothing about how the quad is placed is restated.
-     */
-    private val CUT_BODY_PIPELINE: RenderPipeline = RenderPipeline.builder()
-        .withLocation(Identifier.fromNamespaceAndPath(NAMESPACE, "pipeline/celestial_cut"))
-        .withVertexShader(Identifier.withDefaultNamespace("core/position_tex"))
-        .withFragmentShader(Identifier.fromNamespaceAndPath(NAMESPACE, "celestial_cut"))
         .withSampler("Sampler0")
         .withUniform("DynamicTransforms", UniformType.UNIFORM_BUFFER)
         .withUniform("Projection", UniformType.UNIFORM_BUFFER)
@@ -343,17 +327,16 @@ object Blaze3dSkyCanvas : SkyCanvas {
     /**
      * Which pipeline draws [shape].
      *
-     * Adding needs no cut — dark contributes nothing to a sum, which is exactly why vanilla's sprites can
-     * get away with having no alpha. Covering does, and **only vanilla's own sprites are cut**: a consumer's
-     * texture is presumed to carry the transparency it needs, and quietly discarding the dark parts of
-     * somebody's carefully drawn moon would be a surprise nobody asked for. One that wants the treatment
-     * anyway, or a different one, registers its own through [SpriteCuts].
+     * Adding needs nothing special — dark contributes nothing to a sum, which is exactly why vanilla's
+     * sprites can get away with having no alpha. Covering is drawn plainly, the sky painted around vanilla's
+     * moon having already been cropped away by [keptOf] rather than shaded away here.
+     *
+     * A texture that needs a rule of its own — a chroma key, a mask in another channel, a rim that should
+     * glow — registers a pipeline through [SpriteCuts].
      */
     private fun pipelineFor(shape: Identifier, emitsOwnLight: Boolean): RenderPipeline {
         if (emitsOwnLight) return RenderPipelines.CELESTIAL
-        SpriteCuts.of(shape)?.let { return it }
-        val isVanillas = shape.namespace == Identifier.DEFAULT_NAMESPACE
-        return if (isVanillas) CUT_BODY_PIPELINE else OCCLUDING_BODY_PIPELINE
+        return SpriteCuts.of(shape) ?: OCCLUDING_BODY_PIPELINE
     }
 
     override fun drawStarfield(seed: Long, count: Int, orientation: Quaternionf, brightness: Float, timeTicks: Long) {
@@ -523,21 +506,66 @@ object Blaze3dSkyCanvas : SkyCanvas {
         if (cached != null && cached.wasBakedFrom(sprite)) return cached
 
         cached?.buffer?.close()
+        // How much of the sprite is the body, and how much is scenery painted around it.
+        val kept = keptOf(shape)
+        val u0 = Mth.lerp(kept.from, sprite.u0, sprite.u1)
+        val u1 = Mth.lerp(kept.to, sprite.u0, sprite.u1)
+        val v0 = Mth.lerp(kept.from, sprite.v0, sprite.v1)
+        val v1 = Mth.lerp(kept.to, sprite.v0, sprite.v1)
+        // The quad shrinks with the window, so cropping changes what is drawn and not how big it looks:
+        // `angularSize` still means what it meant when the whole sprite was drawn.
+        val reach = kept.to - kept.from
+
         val format = DefaultVertexFormat.POSITION_TEX
         val built = ByteBufferBuilder.exactlySized(QUAD_VERTICES * format.vertexSize).use { bytes ->
             val builder = BufferBuilder(bytes, VertexFormat.Mode.QUADS, format)
             // Vanilla's own corner and UV order, so a body on a one-day orbit is indistinguishable from
             // vanilla's sun rather than mirrored or upside down.
-            builder.addVertex(-1.0f, 0.0f, -1.0f).setUv(sprite.u0, sprite.v0)
-            builder.addVertex(1.0f, 0.0f, -1.0f).setUv(sprite.u1, sprite.v0)
-            builder.addVertex(1.0f, 0.0f, 1.0f).setUv(sprite.u1, sprite.v1)
-            builder.addVertex(-1.0f, 0.0f, 1.0f).setUv(sprite.u0, sprite.v1)
+            builder.addVertex(-reach, 0.0f, -reach).setUv(u0, v0)
+            builder.addVertex(reach, 0.0f, -reach).setUv(u1, v0)
+            builder.addVertex(reach, 0.0f, reach).setUv(u1, v1)
+            builder.addVertex(-reach, 0.0f, reach).setUv(u0, v1)
             builder.buildOrThrow().use { mesh ->
                 RenderSystem.getDevice().createBuffer({ "Ephemeris sky body quad" }, GpuBuffer.USAGE_VERTEX, mesh.vertexBuffer())
             }
         }
         return BodyQuad(built, sprite.u0, sprite.v0, sprite.u1, sprite.v1).also { bodyQuads[shape] = it }
     }
+
+    /**
+     * Which part of [shape] is the body — **all of it, unless we know better**.
+     *
+     * Vanilla's moon sprites have the sky painted around them: a 32 by 32 picture whose moon occupies the
+     * middle 8 by 8 and whose surround is a dark blue night-sky gradient. That is invisible drawn additively,
+     * where dark adds nothing, and an enormous dark square drawn covering. Cropping to the middle is exact —
+     * every phase, including the new moon's faint disc, lies inside it, and nothing else does — where any
+     * test on the *colours* has to guess where scenery stops and the body starts, and gets the new moon
+     * wrong.
+     *
+     * **Vanilla's sun is deliberately not cropped.** What surrounds it is not sky but its own glow, a yellow
+     * ramp reaching the sprite's edges, and cropping that would throw the corona away.
+     *
+     * A consumer's own texture is never cropped either: it is presumed to be drawn as it wants to be seen.
+     */
+    private fun keptOf(shape: Identifier): Kept =
+        if (shape.namespace == Identifier.DEFAULT_NAMESPACE && shape.path.startsWith(VANILLAS_MOON_FOLDER)) {
+            VANILLAS_MOON
+        } else {
+            WHOLE_SPRITE
+        }
+
+    /** A window into a sprite, as a fraction of it in both axes. */
+    private data class Kept(val from: Float, val to: Float)
+
+    private val WHOLE_SPRITE = Kept(0.0f, 1.0f)
+
+    /**
+     * The middle 8 by 8 of vanilla's 32 by 32 moon sprites — measured, not guessed. Every phase's content
+     * lies within `x 12..19, y 12..19` and none outside it; `CelestialTextureCheck` holds that.
+     */
+    private val VANILLAS_MOON = Kept(12.0f / 32.0f, 20.0f / 32.0f)
+
+    private const val VANILLAS_MOON_FOLDER = "moon/"
 
     /**
      * The unit slab every deck is drawn from, built once and shared. Corners are `±1`; [drawCloudDeck]

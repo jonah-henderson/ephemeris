@@ -35,8 +35,9 @@ class CelestialTextureCheck : FunSpec({
 
     val shapes = Appearance.MOON_SHAPES + Appearance.SUN_SHAPES
 
-    /** Must match `BODY_ABOVE` in `celestial_cut.fsh`, which is where the number does its work. */
-    val cutAt = 42.0
+    /** Must match `VANILLAS_MOON` in `Blaze3dSkyCanvas`, which crops to exactly this. */
+    val moonFrom = 12
+    val moonTo = 19
 
     fun spriteBytes(shape: net.minecraft.resources.Identifier): ByteArray? =
         javaClass.getResourceAsStream(
@@ -63,38 +64,35 @@ class CelestialTextureCheck : FunSpec({
     }
 
 
-    test("the gap the cut sits in is still there") {
-        // The shader's one constant has to fall in a *gap* — a luminance nothing in the sprite occupies — or
-        // it clips something. Rather than split background from body by hand, this finds each sprite's own
-        // widest empty band and asks whether the cut is inside it. That way a repaint moves the evidence
-        // instead of quietly moving the picture.
+    test("every phase of the moon lies inside the window we crop to") {
+        // **The crop is exact, and this is what keeps it exact.** Vanilla's moon sprites are 32 by 32 with
+        // the moon in the middle 8 by 8 and a dark blue night-sky gradient painted all round it. Cropping to
+        // that window throws away the sky and keeps every phase whole — including the new moon, whose faint
+        // disc a test on *colour* would have hollowed out, since its middle is darker than its rim.
+        //
+        // If a repaint ever moves the moon or makes it bigger, this says so. Nothing else would: the sky
+        // would simply reappear at the edges, or the moon would lose its limb, and both read as "the sky
+        // renderer is broken".
         var checked = 0
-        for (shape in shapes) {
+        for (shape in Appearance.MOON_SHAPES) {
             val bytes = spriteBytes(shape) ?: continue
             checked++
             val palette = paletteOf(bytes)
-            val greys = colourCounts(bytes, palette.size / 3).keys
-                .map { luminanceOf(palette, it) }
-                .distinct()
-                .sorted()
-            check(greys.size > 1) { "${shape.path} has one colour in it" }
+            val moon = pixelsBrighterThan(bytes, palette, SURROUND_TOPS_OUT_AT)
+            check(moon.isNotEmpty()) { "${shape.path} has nothing in it brighter than its surround" }
 
-            // Not the *widest* band — that is often between two bright colours and says nothing. What
-            // matters is that nothing sits near the cut on either side, so no pixel is a rounding error away
-            // from changing which side of it it falls on.
-            val nearestBelow = greys.filter { it < cutAt }.maxOrNull()
-            val nearestAbove = greys.filter { it > cutAt }.minOrNull()
-            check(nearestAbove != null) {
-                "${shape.path} is entirely below the cut at $cutAt — it would vanish altogether"
+            val outside = moon.filter { (x, y) ->
+                x < moonFrom || x > moonTo || y < moonFrom || y > moonTo
             }
-            val room = Math.min(cutAt - (nearestBelow ?: 0.0), nearestAbove - cutAt)
-            check(room > 3.0) {
-                "${shape.path} has a colour within $room of the cut at $cutAt (nearest below $nearestBelow, " +
-                    "nearest above $nearestAbove). The cut has to fall in a band nothing occupies, or it " +
-                    "clips part of the picture"
+            check(outside.isEmpty()) {
+                "${shape.path} has ${outside.size} pixel(s) of moon outside the window $moonFrom..$moonTo, " +
+                    "the first at ${outside.first()}. Cropping there would cut the moon itself"
             }
         }
-        check(checked > 0) { "No sprites were read, so the gap is unwatched" }
+        check(checked == Appearance.MOON_SHAPES.size) {
+            "Only $checked of ${Appearance.MOON_SHAPES.size} moon sprites were read, so the window is " +
+                "half-watched"
+        }
     }
 })
 
@@ -126,7 +124,27 @@ private fun luminanceOf(palette: ByteArray, index: Int): Double {
  * them as though they were says every sprite is one dark colour — which is exactly what the first attempt
  * here claimed, and why this does the work instead of assuming.
  */
-private fun colourCounts(bytes: ByteArray, paletteEntries: Int): Map<Int, Int> {
+/** The surround is a gradient topping out here; anything above it is the moon. */
+private const val SURROUND_TOPS_OUT_AT = 23.0
+
+/** Where in the picture anything brighter than [brighterThan] sits. */
+private fun pixelsBrighterThan(bytes: ByteArray, palette: ByteArray, brighterThan: Double): List<Pair<Int, Int>> {
+    val found = mutableListOf<Pair<Int, Int>>()
+    forEachPixel(bytes, palette.size / 3) { x, y, index ->
+        if (luminanceOf(palette, index) > brighterThan) found += x to y
+    }
+    return found
+}
+
+/**
+ * Walks the picture, handing each pixel's palette index to [each].
+ *
+ * The rows have to be **un-filtered** to read: a PNG row carries a filter byte and its pixels as deltas
+ * against the row above or the pixel to the left, so the raw bytes are not palette indices at all. Reading
+ * them as though they were says every sprite is one dark colour — which is exactly what the first attempt
+ * here claimed, and why this does the work instead of assuming.
+ */
+private fun forEachPixel(bytes: ByteArray, paletteEntries: Int, each: (Int, Int, Int) -> Unit) {
     var at = 8
     var width = 0
     var height = 0
@@ -149,10 +167,9 @@ private fun colourCounts(bytes: ByteArray, paletteEntries: Int): Map<Int, Int> {
         java.io.ByteArrayInputStream(compressed.toByteArray()),
     ).readBytes()
 
-    val counts = mutableMapOf<Int, Int>()
     var above = ByteArray(width)
     var read = 0
-    repeat(height) {
+    for (y in 0..<height) {
         val filter = raw[read].toInt() and 0xFF
         read++
         val row = raw.copyOfRange(read, read + width)
@@ -172,11 +189,10 @@ private fun colourCounts(bytes: ByteArray, paletteEntries: Int): Map<Int, Int> {
                 else -> here
             } and 0xFF
             row[x] = restored.toByte()
-            if (restored < paletteEntries) counts[restored] = (counts[restored] ?: 0) + 1
+            if (restored < paletteEntries) each(x, y, restored)
         }
         above = row
     }
-    return counts
 }
 
 /** PNG's own predictor: whichever of left, above or above-left the gradient points nearest. */
