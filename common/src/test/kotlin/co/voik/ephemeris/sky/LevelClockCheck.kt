@@ -95,6 +95,71 @@ class LevelClockCheck : FunSpec({
         }
     }
 
+    test("the sky never jumps, however many suns and however the hour does") {
+        // **The hour is allowed to leap and the sky is not**, and telling those apart is the whole of getting
+        // several suns right. When the brightest sun changes, the mapped hour flips from the dusk side of
+        // noon to the dawn side — thousands of ticks at once — but it does so at equal heights, so the sky is
+        // lit identically either side. Checking the *hour* for continuity would condemn correct behaviour and
+        // push toward keeping dusk colours while the sky brightens.
+        val skies = mapOf(
+            "one sun" to lookOf(sun(Orbit.VANILLA_SUN)),
+            "two opposed" to lookOf(sun(Orbit.VANILLA_SUN), sun(Orbit.VANILLA_SUN.copy(phaseDegrees = 180.0f))),
+            "two a quarter apart" to
+                lookOf(sun(Orbit.VANILLA_SUN), sun(Orbit.VANILLA_SUN.copy(phaseDegrees = 90.0f))),
+            "two on different planes" to lookOf(
+                sun(Orbit.VANILLA_SUN),
+                sun(Orbit.VANILLA_SUN.copy(inclinationDegrees = 50.0f, phaseDegrees = 140.0f)),
+            ),
+            "three" to lookOf(
+                sun(Orbit.VANILLA_SUN),
+                sun(Orbit.VANILLA_SUN.copy(phaseDegrees = 120.0f, inclinationDegrees = 25.0f)),
+                sun(Orbit.VANILLA_SUN.copy(phaseDegrees = 240.0f, inclinationDegrees = 60.0f)),
+            ),
+        )
+        val step = 20
+
+        for ((name, look) in skies) {
+            fun litAsAt(tick: Long): Float {
+                val hour = LevelClock.vanillaEquivalent(look, tick) ?: error("$name had no mapping at $tick")
+                return Orbit.VANILLA_SUN.altitudeAt(Math.floorMod(hour, day.toLong()))
+            }
+
+            var worst = 0.0f
+            var worstAt = 0L
+            var previous = litAsAt(0)
+            for (tick in step..<day step step) {
+                val lit = litAsAt(tick.toLong())
+                val moved = Math.abs(lit - previous)
+                if (moved > worst) {
+                    worst = moved
+                    worstAt = tick.toLong()
+                }
+                previous = lit
+            }
+            // A step of 20 ticks moves vanilla's own sun about this far at its quickest, so anything near it
+            // is the sampling rather than a seam.
+            check(worst < 1.0f) {
+                "'$name' was lit as ${worst}° of sun movement in $step ticks, at tick $worstAt. A single sun " +
+                    "shows about 0.4°, so this is a seam in the mapping rather than the sampling"
+            }
+        }
+    }
+
+    test("two opposed suns give two days rather than one") {
+        // The semantic worth stating: a sky whose second sun rises as the first sets should run through dawn,
+        // noon and dusk twice, and never reach night at all.
+        val opposed = lookOf(sun(Orbit.VANILLA_SUN), sun(Orbit.VANILLA_SUN.copy(phaseDegrees = 180.0f)))
+        val litAs = (0..<day step 200).map {
+            val hour = LevelClock.vanillaEquivalent(opposed, it.toLong()) ?: error("no mapping")
+            Orbit.VANILLA_SUN.altitudeAt(Math.floorMod(hour, day.toLong()))
+        }
+        val noons = litAs.indices.count { at ->
+            at > 0 && at < litAs.size - 1 && litAs[at] > litAs[at - 1] && litAs[at] >= litAs[at + 1] &&
+                litAs[at] > 60.0f
+        }
+        check(noons == 2) { "A sky with two opposed suns reached its brightest $noons time(s), not twice" }
+    }
+
     test("an ordinary single sun maps to about the hour it already is") {
         // The sanity anchor: a sky that is vanilla's in all but name should be lit at nearly the real hour.
         //

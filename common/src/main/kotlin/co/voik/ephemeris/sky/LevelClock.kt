@@ -22,6 +22,14 @@ import net.minecraft.world.level.Level
  * **Matched on the deciding sun's height, because height is what vanilla's own curves are keyed to.** Not on
  * its progress around its path: a sun that never sets goes right round its circle while staying up, and
  * matching progress would march the sky through a night it never has.
+ *
+ * **The hour is allowed to leap, and the sky is not.** When the brightest sun changes, the answer flips from
+ * the dusk side of noon to the dawn side — thousands of ticks at once — because the sky has stopped dimming
+ * and started brightening, and those are different parts of vanilla's curve. It happens at equal heights, so
+ * what the sky is *lit as* does not move at all: measured across one, two and three suns, never more than a
+ * third of a degree of sun movement, which is the sampling rather than a seam. `LevelClockCheck` holds the
+ * second property and deliberately not the first — smoothing the hour would mean keeping dusk colours while
+ * the sky brightened.
  */
 object LevelClock {
 
