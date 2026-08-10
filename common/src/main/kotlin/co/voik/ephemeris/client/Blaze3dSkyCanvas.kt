@@ -1,0 +1,469 @@
+package co.voik.ephemeris.client
+
+import co.voik.ephemeris.Rgba
+import co.voik.ephemeris.Sphere
+import co.voik.ephemeris.sky.CloudDeck
+import com.mojang.blaze3d.buffers.GpuBuffer
+import com.mojang.blaze3d.buffers.Std140Builder
+import com.mojang.blaze3d.pipeline.BlendFunction
+import com.mojang.blaze3d.pipeline.ColorTargetState
+import com.mojang.blaze3d.pipeline.DepthStencilState
+import com.mojang.blaze3d.pipeline.RenderPipeline
+import com.mojang.blaze3d.pipeline.RenderTarget
+import com.mojang.blaze3d.shaders.UniformType
+import com.mojang.blaze3d.systems.RenderPass
+import com.mojang.blaze3d.systems.RenderSystem
+import com.mojang.blaze3d.vertex.BufferBuilder
+import com.mojang.blaze3d.vertex.ByteBufferBuilder
+import com.mojang.blaze3d.vertex.DefaultVertexFormat
+import com.mojang.blaze3d.vertex.VertexFormat
+import net.minecraft.client.Minecraft
+import net.minecraft.client.renderer.MappableRingBuffer
+import net.minecraft.client.renderer.RenderPipelines
+import net.minecraft.client.renderer.texture.TextureAtlas
+import net.minecraft.client.renderer.texture.TextureAtlasSprite
+import net.minecraft.data.AtlasIds
+import net.minecraft.resources.Identifier
+import net.minecraft.world.phys.Vec3
+import org.joml.Matrix4f
+import org.joml.Quaternionf
+import org.joml.Vector3f
+import org.joml.Vector4f
+import java.util.OptionalDouble
+import java.util.OptionalInt
+import java.util.Random
+
+/**
+ * The one implementation of [SkyCanvas], drawing through Blaze3D. In `common` rather than per loader,
+ * because Blaze3D is vanilla's; nothing server-side may reach this class.
+ *
+ * Geometry is built once into a [GpuBuffer] and a draw is a [RenderPass] whose pipeline carries the blend
+ * and depth state, so each shape here is one static buffer drawn under a per-instance transform.
+ *
+ * Bodies borrow vanilla's `CELESTIAL`, whose `BlendFunction.OVERLAY` is what makes a sun read as light
+ * rather than a pasted circle. Stars and cloud decks have pipelines of ours — see [STARFIELD_PIPELINE]
+ * and [CLOUD_DECK_PIPELINE] for what each buys.
+ */
+object Blaze3dSkyCanvas : SkyCanvas {
+
+    /**
+     * The namespace the pipelines and shaders are registered under — **the library's own, not a consumer's**.
+     *
+     * Ephemeris ships these four shaders and nothing else. Every *texture* it draws is vanilla's, so a
+     * consumer that supplies none still gets a sun and a moon, and one that supplies its own names them in
+     * `Appearance.Sprite.shapes` without this file knowing.
+     */
+    private const val NAMESPACE = "ephemeris"
+
+
+    /** A body is one quad: four corners, drawn as two triangles off the shared quad index buffer. */
+    private const val QUAD_VERTICES = 4
+    private const val QUAD_INDICES = 6
+
+    /**
+     * A body's quad, with the sprite's atlas coordinates baked in — and remembered, because a resource
+     * reload re-stitches the atlas and a sprite that moved would otherwise keep drawing from where it used
+     * to be.
+     */
+    private data class BodyQuad(val buffer: GpuBuffer, val u0: Float, val v0: Float, val u1: Float, val v1: Float) {
+        fun wasBakedFrom(sprite: TextureAtlasSprite): Boolean =
+            u0 == sprite.u0 && v0 == sprite.v0 && u1 == sprite.u1 && v1 == sprite.v1
+    }
+
+    private val bodyQuads = mutableMapOf<Identifier, BodyQuad>()
+
+    /** A field's geometry and how many indices it takes to draw, keyed by the field that asked for it. */
+    private data class Starfield(val buffer: GpuBuffer, val indexCount: Int)
+
+    /**
+     * Built star fields, keyed by seed and count so two Ages that asked for the same field share one.
+     * Never cleared: a field is one buffer and a player visits a bounded number of Ages, so eviction
+     * bookkeeping would cost more than the memory it saves.
+     */
+    private val starfields = mutableMapOf<Pair<Long, Int>, Starfield>()
+
+    private const val STAR_DISTANCE = 100.0
+    private const val MIN_STAR_SIZE = 0.20
+    private const val STAR_SIZE_VARIATION = 0.15
+    private const val FULL_CIRCLE_RADIANS = 2.0 * Math.PI
+
+    /** Stars vary along a warm→cool axis, each twinkling at its own phase and rate. */
+    private val WARM_STAR = Rgba(0.95f, 0.87f, 0.76f)
+    private val COOL_STAR = Rgba(0.78f, 0.85f, 1.0f)
+    private const val STAR_TWINKLE_DIP = 0.35f
+    private const val SLOWEST_TWINKLE_RATE = 0.04f
+
+    /**
+     * Rates are whole multiples of [SLOWEST_TWINKLE_RATE] rather than anything in a range, so that one
+     * period exists at which every star completes a whole number of cycles and the time can be wrapped.
+     * Phases stay continuous, and they are what the eye reads anyway.
+     */
+    private const val TWINKLE_RATES = 3
+
+    /**
+     * The stars have a pipeline of ours rather than borrowing `RenderPipelines.STARS`, which is
+     * `POSITION`-only and whose shader writes one flat colour for the whole field — no per-star tint and
+     * no twinkle. Blend and depth match vanilla's.
+     */
+    private val STARFIELD_PIPELINE: RenderPipeline = RenderPipeline.builder()
+        .withLocation(Identifier.fromNamespaceAndPath(NAMESPACE, "pipeline/starfield"))
+        .withVertexShader(Identifier.fromNamespaceAndPath(NAMESPACE, "starfield"))
+        .withFragmentShader(Identifier.fromNamespaceAndPath(NAMESPACE, "starfield"))
+        .withUniform("DynamicTransforms", UniformType.UNIFORM_BUFFER)
+        .withUniform("Projection", UniformType.UNIFORM_BUFFER)
+        .withUniform("StarfieldInfo", UniformType.UNIFORM_BUFFER)
+        .withColorTargetState(ColorTargetState(BlendFunction.OVERLAY))
+        // Culling defaults to on, and `Sphere.tangentQuad` does not promise a winding.
+        .withCull(false)
+        .withVertexFormat(DefaultVertexFormat.POSITION_TEX_COLOR, VertexFormat.Mode.QUADS)
+        .build()
+
+    /** Where the twinkle may wrap without jumping — see [TWINKLE_RATES]. */
+    private const val TWINKLE_PERIOD = FULL_CIRCLE_RADIANS / SLOWEST_TWINKLE_RATE
+
+    private val starfieldInfo: MappableRingBuffer by lazy {
+        MappableRingBuffer(
+            { "Ephemeris starfield UBO" },
+            GpuBuffer.USAGE_UNIFORM or GpuBuffer.USAGE_MAP_WRITE,
+            STARFIELD_INFO_BYTES,
+        )
+    }
+
+    /** One `vec4`, matching `StarfieldInfo` in the shaders. */
+    private const val STARFIELD_INFO_BYTES = 4 * Float.SIZE_BYTES
+
+    /**
+     * Needs no registration: Blaze3D compiles a pipeline on first use, reading shaders through
+     * `ShaderManager`, which scans `shaders/` across every namespace. Registering would only buy preloading.
+     *
+     * Depth is written, or looking down through the upper deck shows everything below it.
+     */
+    private val CLOUD_DECK_PIPELINE: RenderPipeline = RenderPipeline.builder()
+        .withLocation(Identifier.fromNamespaceAndPath(NAMESPACE, "pipeline/cloud_deck"))
+        .withVertexShader(Identifier.fromNamespaceAndPath(NAMESPACE, "cloud_deck"))
+        .withFragmentShader(Identifier.fromNamespaceAndPath(NAMESPACE, "cloud_deck"))
+        .withUniform("DynamicTransforms", UniformType.UNIFORM_BUFFER)
+        .withUniform("Projection", UniformType.UNIFORM_BUFFER)
+        .withUniform("DeckInfo", UniformType.UNIFORM_BUFFER)
+        .withColorTargetState(ColorTargetState(BlendFunction.TRANSLUCENT))
+        .withDepthStencilState(DepthStencilState.DEFAULT)
+        // The viewer stands inside the slab as often as outside it, so neither face may be dropped.
+        .withCull(false)
+        .withVertexFormat(DefaultVertexFormat.POSITION_COLOR, VertexFormat.Mode.QUADS)
+        .build()
+
+    /**
+     * For a body that is lit rather than luminous. Vanilla's `CELESTIAL` blends additively, so an overlap
+     * brightens instead of covering; this is the same pipeline with a translucent blend, which lets a moon
+     * hide the sun behind it. A sprite's transparent parts stay transparent, so a crescent still reads as
+     * a crescent rather than a disc.
+     */
+    private val OCCLUDING_BODY_PIPELINE: RenderPipeline = RenderPipeline.builder()
+        .withLocation(Identifier.fromNamespaceAndPath(NAMESPACE, "pipeline/occluding_body"))
+        .withVertexShader(Identifier.withDefaultNamespace("core/position_tex"))
+        .withFragmentShader(Identifier.withDefaultNamespace("core/position_tex"))
+        .withSampler("Sampler0")
+        .withUniform("DynamicTransforms", UniformType.UNIFORM_BUFFER)
+        .withUniform("Projection", UniformType.UNIFORM_BUFFER)
+        .withColorTargetState(ColorTargetState(BlendFunction.TRANSLUCENT))
+        .withVertexFormat(DefaultVertexFormat.POSITION_TEX, VertexFormat.Mode.QUADS)
+        .build()
+
+    /** Half the slab's width. Beyond this the deck simply ends, which is why it is walled. */
+    private const val DECK_RADIUS = 512.0f
+
+    /** See the note in [drawCloudDeck]: half a block, to keep a deck out of a block face's plane. */
+    private const val DECK_LIFT = 0.5
+
+    /**
+     * Where the drift may wrap without jumping: the roil's four sines have time coefficients 1, 0.9, 1.4
+     * and 0.7, and `20π` is the smallest period all of them complete together.
+     */
+    private const val ROIL_PERIOD = 20.0 * Math.PI
+
+    /** Six faces, so the slab is closed rather than a pair of floating sheets. */
+    private const val SLAB_QUADS = 6
+    private const val SLAB_INDICES = SLAB_QUADS * QUAD_INDICES
+
+    /** Vanilla's own cloud shading: the top lit, the underside darkest, the walls between. */
+    private const val TOP_BRIGHTNESS = 1.0f
+    private const val BOTTOM_BRIGHTNESS = 0.72f
+    private const val SIDE_BRIGHTNESS = 0.84f
+
+    private val deckInfo: MappableRingBuffer by lazy {
+        MappableRingBuffer(
+            { "Ephemeris cloud deck UBO" },
+            GpuBuffer.USAGE_UNIFORM or GpuBuffer.USAGE_MAP_WRITE,
+            DECK_INFO_BYTES,
+        )
+    }
+
+    /** Four `vec4`s, matching `DeckInfo` in the shaders. */
+    private const val DECK_INFO_BYTES = 4 * 4 * Float.SIZE_BYTES
+
+    private var slabBuffer: GpuBuffer? = null
+
+    override fun drawBody(
+        shape: Identifier,
+        orientation: Quaternionf,
+        distance: Float,
+        angularSize: Float,
+        tint: Rgba,
+        emitsOwnLight: Boolean,
+    ) {
+        val atlas = celestialsAtlas()
+        val quad = bodyQuadOf(atlas, shape)
+        val modelViewStack = RenderSystem.getModelViewStack()
+        modelViewStack.pushMatrix()
+        // Vanilla's own sequence for its sun. The quad lies in the XZ plane, so the scale leaves Y alone.
+        modelViewStack.rotate(orientation)
+        modelViewStack.translate(0.0f, distance, 0.0f)
+        modelViewStack.scale(angularSize, 1.0f, angularSize)
+
+        val transforms = RenderSystem.getDynamicUniforms().writeTransform(
+            modelViewStack,
+            Vector4f(tint.red, tint.green, tint.blue, tint.alpha),
+            Vector3f(),
+            Matrix4f(),
+        )
+        val quadIndices = RenderSystem.getSequentialBuffer(VertexFormat.Mode.QUADS)
+
+        renderPass("Ephemeris sky body")?.use { pass ->
+            pass.setPipeline(if (emitsOwnLight) RenderPipelines.CELESTIAL else OCCLUDING_BODY_PIPELINE)
+            RenderSystem.bindDefaultUniforms(pass)
+            pass.setUniform("DynamicTransforms", transforms)
+            pass.bindTexture("Sampler0", atlas.textureView, atlas.sampler)
+            pass.setVertexBuffer(0, quad.buffer)
+            pass.setIndexBuffer(quadIndices.getBuffer(QUAD_INDICES), quadIndices.type())
+            pass.drawIndexed(0, 0, QUAD_INDICES, 1)
+        }
+
+        modelViewStack.popMatrix()
+    }
+
+    override fun drawStarfield(seed: Long, count: Int, orientation: Quaternionf, brightness: Float, timeTicks: Long) {
+        if (count <= 0) return
+        val field = starfieldOf(seed, count)
+        if (field.indexCount == 0) return
+
+        val modelViewStack = RenderSystem.getModelViewStack()
+        modelViewStack.pushMatrix()
+        modelViewStack.rotate(orientation)
+
+        // The field's overall brightness; each star's own tint and twinkle ride on its vertices.
+        val transforms = RenderSystem.getDynamicUniforms().writeTransform(
+            modelViewStack,
+            Vector4f(brightness, brightness, brightness, brightness),
+            Vector3f(),
+            Matrix4f(),
+        )
+        writeStarfieldInfo(timeTicks)
+        val quadIndices = RenderSystem.getSequentialBuffer(VertexFormat.Mode.QUADS)
+
+        renderPass("Ephemeris sky stars")?.use { pass ->
+            pass.setPipeline(STARFIELD_PIPELINE)
+            RenderSystem.bindDefaultUniforms(pass)
+            pass.setUniform("DynamicTransforms", transforms)
+            pass.setUniform("StarfieldInfo", starfieldInfo.currentBuffer())
+            pass.setVertexBuffer(0, field.buffer)
+            pass.setIndexBuffer(quadIndices.getBuffer(field.indexCount), quadIndices.type())
+            pass.drawIndexed(0, 0, field.indexCount, 1)
+        }
+        starfieldInfo.rotate()
+
+        modelViewStack.popMatrix()
+    }
+
+    private fun writeStarfieldInfo(timeTicks: Long) {
+        RenderSystem.getDevice().createCommandEncoder().mapBuffer(starfieldInfo.currentBuffer(), false, true)
+            .use { view ->
+                Std140Builder.intoBuffer(view.data())
+                    .putVec4(wrapped(timeTicks.toDouble(), TWINKLE_PERIOD), STAR_TWINKLE_DIP, 0.0f, 0.0f)
+            }
+    }
+
+    override fun drawCloudDeck(deck: CloudDeck, eye: Vec3, timeTicks: Float) {
+        val modelViewStack = RenderSystem.getModelViewStack()
+        modelViewStack.pushMatrix()
+        // Half a block up: a deck at a whole Y is coplanar with that block's face and z-fights as you move.
+        modelViewStack.translate(0.0f, (deck.height + DECK_LIFT - eye.y).toFloat(), 0.0f)
+        modelViewStack.scale(DECK_RADIUS, deck.halfThickness, DECK_RADIUS)
+
+        val transforms = RenderSystem.getDynamicUniforms().writeTransform(
+            modelViewStack,
+            Vector4f(1.0f, 1.0f, 1.0f, 1.0f),
+            Vector3f(),
+            Matrix4f(),
+        )
+        writeDeckInfo(deck, eye, timeTicks)
+        val quadIndices = RenderSystem.getSequentialBuffer(VertexFormat.Mode.QUADS)
+
+        cloudPass()?.use { pass ->
+            pass.setPipeline(CLOUD_DECK_PIPELINE)
+            RenderSystem.bindDefaultUniforms(pass)
+            pass.setUniform("DynamicTransforms", transforms)
+            pass.setUniform("DeckInfo", deckInfo.currentBuffer())
+            pass.setVertexBuffer(0, slab())
+            pass.setIndexBuffer(quadIndices.getBuffer(SLAB_INDICES), quadIndices.type())
+            pass.drawIndexed(0, 0, SLAB_INDICES, 1)
+        }
+        // Per deck, not per frame: each draw needs its own copy of the uniforms to survive until it runs.
+        deckInfo.rotate()
+
+        modelViewStack.popMatrix()
+    }
+
+    /** The deck's parameters, laid out to match `DeckInfo` in the shaders. */
+    private fun writeDeckInfo(deck: CloudDeck, eye: Vec3, timeTicks: Float) {
+        RenderSystem.getDevice().createCommandEncoder().mapBuffer(deckInfo.currentBuffer(), false, true).use { view ->
+            Std140Builder.intoBuffer(view.data())
+                .putVec4(deck.low.red, deck.low.green, deck.low.blue, deck.low.alpha)
+                .putVec4(deck.high.red, deck.high.green, deck.high.blue, deck.high.alpha)
+                .putVec4(
+                    (eye.x + deck.noiseOffsetX).toFloat(),
+                    (eye.z + deck.noiseOffsetZ).toFloat(),
+                    driftedTime(timeTicks, deck.driftSpeed),
+                    deck.contrast,
+                )
+                .putVec4(DECK_RADIUS, 0.0f, 0.0f, 0.0f)
+        }
+    }
+
+    /** How far the roil has drifted, wrapped at [ROIL_PERIOD]. */
+    private fun driftedTime(timeTicks: Float, driftSpeed: Float): Float =
+        wrapped(timeTicks.toDouble() * driftSpeed, ROIL_PERIOD)
+
+    /**
+     * [value] brought back into `0..period`. The shaders read time as a float and game time does not stop,
+     * so an unwrapped one eventually quantises the animation into visible steps.
+     */
+    private fun wrapped(value: Double, period: Double): Float =
+        (value - Math.floor(value / period) * period).toFloat()
+
+    /** A pass onto the main render target, which is where the sky pass is already drawing. */
+    private fun renderPass(label: String): RenderPass? = passOnto(label, Minecraft.getInstance().mainRenderTarget)
+
+    /** The target vanilla's clouds use, which has its own when the setting calls for one. */
+    private fun cloudPass(): RenderPass? {
+        val minecraft = Minecraft.getInstance()
+        return passOnto("Ephemeris cloud deck", minecraft.levelRenderer.cloudsTarget ?: minecraft.mainRenderTarget)
+    }
+
+    /** Null when the target has no colour attachment, which nothing can be drawn into. */
+    private fun passOnto(label: String, target: RenderTarget): RenderPass? {
+        val colorAttachment = target.colorTextureView ?: return null
+        return RenderSystem.getDevice().createCommandEncoder().createRenderPass(
+            { label },
+            colorAttachment,
+            OptionalInt.empty(),
+            target.depthTextureView,
+            OptionalDouble.empty(),
+        )
+    }
+
+    private fun celestialsAtlas(): TextureAtlas =
+        Minecraft.getInstance().atlasManager.getAtlasOrThrow(AtlasIds.CELESTIALS)
+
+    /**
+     * This shape's quad, built on first use and rebuilt if the atlas has re-stitched since.
+     */
+    private fun bodyQuadOf(atlas: TextureAtlas, shape: Identifier): BodyQuad {
+        val sprite = atlas.getSprite(shape)
+        val cached = bodyQuads[shape]
+        if (cached != null && cached.wasBakedFrom(sprite)) return cached
+
+        cached?.buffer?.close()
+        val format = DefaultVertexFormat.POSITION_TEX
+        val built = ByteBufferBuilder.exactlySized(QUAD_VERTICES * format.vertexSize).use { bytes ->
+            val builder = BufferBuilder(bytes, VertexFormat.Mode.QUADS, format)
+            // Vanilla's own corner and UV order, so a body on a one-day orbit is indistinguishable from
+            // vanilla's sun rather than mirrored or upside down.
+            builder.addVertex(-1.0f, 0.0f, -1.0f).setUv(sprite.u0, sprite.v0)
+            builder.addVertex(1.0f, 0.0f, -1.0f).setUv(sprite.u1, sprite.v0)
+            builder.addVertex(1.0f, 0.0f, 1.0f).setUv(sprite.u1, sprite.v1)
+            builder.addVertex(-1.0f, 0.0f, 1.0f).setUv(sprite.u0, sprite.v1)
+            builder.buildOrThrow().use { mesh ->
+                RenderSystem.getDevice().createBuffer({ "Ephemeris sky body quad" }, GpuBuffer.USAGE_VERTEX, mesh.vertexBuffer())
+            }
+        }
+        return BodyQuad(built, sprite.u0, sprite.v0, sprite.u1, sprite.v1).also { bodyQuads[shape] = it }
+    }
+
+    /**
+     * The unit slab every deck is drawn from, built once and shared. Corners are `±1`; [drawCloudDeck]
+     * scales them to the deck's width and thickness, and the only per-vertex datum is a face brightness
+     * in the colour's red channel.
+     *
+     * No interior subdivision, because the roil is read per fragment rather than per vertex.
+     */
+    private fun slab(): GpuBuffer = slabBuffer ?: buildSlab().also { slabBuffer = it }
+
+    private fun buildSlab(): GpuBuffer {
+        val format = DefaultVertexFormat.POSITION_COLOR
+        return ByteBufferBuilder.exactlySized(SLAB_QUADS * QUAD_VERTICES * format.vertexSize).use { bytes ->
+            val builder = BufferBuilder(bytes, VertexFormat.Mode.QUADS, format)
+
+            fun corner(x: Float, y: Float, z: Float, brightness: Float) {
+                builder.addVertex(x, y, z).setColor(brightness, brightness, brightness, 1.0f)
+            }
+
+            fun quad(brightness: Float, corners: List<Triple<Float, Float, Float>>) {
+                for ((x, y, z) in corners) corner(x, y, z, brightness)
+            }
+
+            // Winding is irrelevant; the pipeline draws both faces.
+            quad(TOP_BRIGHTNESS, listOf(t(-1, 1, -1), t(-1, 1, 1), t(1, 1, 1), t(1, 1, -1)))
+            quad(BOTTOM_BRIGHTNESS, listOf(t(-1, -1, -1), t(1, -1, -1), t(1, -1, 1), t(-1, -1, 1)))
+            quad(SIDE_BRIGHTNESS, listOf(t(1, 1, -1), t(1, 1, 1), t(1, -1, 1), t(1, -1, -1)))
+            quad(SIDE_BRIGHTNESS, listOf(t(-1, 1, 1), t(-1, 1, -1), t(-1, -1, -1), t(-1, -1, 1)))
+            quad(SIDE_BRIGHTNESS, listOf(t(1, 1, 1), t(-1, 1, 1), t(-1, -1, 1), t(1, -1, 1)))
+            quad(SIDE_BRIGHTNESS, listOf(t(-1, 1, -1), t(1, 1, -1), t(1, -1, -1), t(-1, -1, -1)))
+
+            builder.buildOrThrow().use { mesh ->
+                RenderSystem.getDevice().createBuffer({ "Ephemeris cloud slab" }, GpuBuffer.USAGE_VERTEX, mesh.vertexBuffer())
+            }
+        }
+    }
+
+    /** Just to keep the corner tables above readable as coordinates rather than as float noise. */
+    private fun t(x: Int, y: Int, z: Int) = Triple(x.toFloat(), y.toFloat(), z.toFloat())
+
+    /** This level's stars, built once and kept. */
+    private fun starfieldOf(seed: Long, count: Int): Starfield = starfields.getOrPut(seed to count) {
+        buildStarfield(seed, count)
+    }
+
+    /**
+     * Places [count] stars on the sky sphere, each a small quad lying flat against it, carrying its own
+     * tint and twinkle.
+     *
+     * Placed rather than rejected, unlike vanilla's — it samples a cube and drops what falls outside, so
+     * "1500" is an attempt rather than a count. A writer asking for a number of stars should get it.
+     */
+    private fun buildStarfield(seed: Long, count: Int): Starfield {
+        val random = Random(seed)
+        val starSphere = Sphere(STAR_DISTANCE)
+        val format = DefaultVertexFormat.POSITION_TEX_COLOR
+        return ByteBufferBuilder.exactlySized(count * QUAD_VERTICES * format.vertexSize).use { bytes ->
+            val builder = BufferBuilder(bytes, VertexFormat.Mode.QUADS, format)
+            repeat(count) {
+                val center = starSphere.randomSurfacePoint(random)
+                val halfSize = MIN_STAR_SIZE + random.nextDouble() * STAR_SIZE_VARIATION
+                val spin = random.nextDouble() * FULL_CIRCLE_RADIANS
+                val tint = WARM_STAR.lerp(COOL_STAR, random.nextFloat())
+                val phase = (random.nextDouble() * FULL_CIRCLE_RADIANS).toFloat()
+                val rate = SLOWEST_TWINKLE_RATE * (1 + random.nextInt(TWINKLE_RATES))
+                for (corner in starSphere.tangentQuad(center, halfSize, spin)) {
+                    builder.addVertex(corner.x.toFloat(), corner.y.toFloat(), corner.z.toFloat())
+                        .setUv(phase, rate)
+                        .setColor(tint.red, tint.green, tint.blue, tint.alpha)
+                }
+            }
+            builder.buildOrThrow().use { mesh ->
+                val buffer = RenderSystem.getDevice()
+                    .createBuffer({ "Ephemeris starfield" }, GpuBuffer.USAGE_VERTEX, mesh.vertexBuffer())
+                Starfield(buffer, mesh.drawState().indexCount())
+            }
+        }
+    }
+}
