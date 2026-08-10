@@ -70,6 +70,17 @@ and no way for a client to disagree with the server about a place. Delivery is e
 stay that way for almost everyone; `lazily()` exists for the thousands-of-levels case, and comes with a
 watchdog that names any route which forgot to call `expecting` rather than letting the wrong sky be silent.
 
+`SkyRules`, carried in the same object, decides two things vanilla never had to answer. **When is it day**
+in a sky with several suns — while any is up, while one named one is, or leave vanilla's clock alone and let
+the visuals disagree. And **how the horizon is painted** when more than one sun is near it: each paints its
+own band at its own bearing in its own colour, added, shared out, or nearest only. Under `auto`, whatever
+day and night settle to reaches hostile spawning, phantoms, sleeping, daylight sensors and the block
+lighting, because 26.1 derives all of them from one number.
+
+`Orbit.liftDegrees` carries a body off its great circle so it can stop setting at all. A great circle
+centred on the observer is half above the horizon by construction, so nothing else can produce a midnight
+sun; lay a path flat and lift it, and the sun circles at exactly that height all day.
+
 Cloud decks are cut from a **texture**, read the way vanilla reads its own `clouds.png` — a grid of
 12-block cells, cloud wherever a pixel is opaque. So the silhouette is vanilla's, at any height you like,
 and a deck wanting thinner or thicker cover supplies a different picture rather than asking for a number.
@@ -81,7 +92,8 @@ separate things, and worth keeping separate — one moves the clouds, the other 
 **Keep the vocabulary, bring your own transport** — `LevelLooks.remember(dimension, look)` on the client,
 filled from your own packet, config, or rule.
 
-**Or draw it yourself.** `LevelRendering.sky { moment -> … }`, `.clouds { … }`, `.environment { … }`. A
+**Or draw it yourself.** `LevelRendering.sky { moment -> … }`, `.clouds { … }`, `.horizon { … }`,
+`.environment { … }`. A
 renderer decides for itself whether it applies, because the interesting cases are dynamic and a
 registration keyed by dimension cannot express them. Return `false` and the next renderer is asked; if none
 claims it, vanilla draws its own.
