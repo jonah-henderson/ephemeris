@@ -66,6 +66,15 @@ sealed interface CelestialPath {
 
     fun isUpAt(dayTime: Long): Boolean = altitudeAt(dayTime) >= 0.0f
 
+    /**
+     * Which of vanilla's own bodies this path *is*, so a renderer can turn it by vanilla's own angle rather
+     * than by a reconstruction of it — exact, and immune to vanilla moving its day curve, which it has.
+     *
+     * Asked as a property rather than by comparing against a constant, so a body on vanilla's path at some
+     * other radius still gets vanilla's angle. Null for every other path.
+     */
+    val vanillas: VanillasBody? get() = null
+
     /** Never dips below the horizon — a polar day. */
     val staysUp: Boolean get() = swing().lowest >= -GRAZING
 
@@ -162,6 +171,9 @@ sealed interface CelestialPath {
 
     val kindKey: String
 }
+
+/** One of vanilla's own two bodies, for a path that is exactly its path. */
+enum class VanillasBody { SUN, MOON }
 
 /**
  * A path built straight from a stack of motions — **the general case, and what every other kind evaluates

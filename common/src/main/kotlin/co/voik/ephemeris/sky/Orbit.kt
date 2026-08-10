@@ -62,6 +62,32 @@ data class Orbit(
     override val kindKey: String get() = CelestialPath.ORBIT
 
     /**
+     * **Compared on the sweep, not on the whole record** — everything that decides *where* the body is at a
+     * given tick, which is what taking vanilla's angle needs to be safe. The radius is deliberately not part
+     * of it: vanilla's own moon sits nearer than its sun and is still on vanilla's path.
+     */
+    override val vanillas: VanillasBody?
+        get() {
+            val sweepsAsVanillaDoes = inclinationDegrees == 0.0f &&
+                ascendingNodeDegrees == VANILLAS_NODE &&
+                periodTicks == TICKS_PER_VANILLA_DAY &&
+                !retrograde &&
+                liftDegrees == 0.0f &&
+                pacing == Pacing.VANILLAS
+            if (!sweepsAsVanillaDoes) return null
+            return when (phaseDegrees) {
+                0.0f -> VanillasBody.SUN
+                HALF_TURN -> VanillasBody.MOON
+                else -> null
+            }
+        }
+
+    /** Built once: `progressAt` would otherwise mint a sweep on every call, and it is asked per frame. */
+    private val sweep: Motion.Sweep by lazy {
+        Motion.Sweep(Direction.Axis.X, periodTicks, phaseDegrees, retrograde, pacing)
+    }
+
+    /**
      * The four motions this circle is, outermost first.
      *
      * The lift comes **last**, and that ordering is the whole of what makes a polar day possible: a body
@@ -72,7 +98,7 @@ data class Orbit(
         get() = listOf(
             Motion.Turn(Direction.Axis.Y, ascendingNodeDegrees),
             Motion.Turn(Direction.Axis.Z, inclinationDegrees),
-            Motion.Sweep(Direction.Axis.X, periodTicks, phaseDegrees, retrograde, pacing),
+            sweep,
             Motion.Turn(Direction.Axis.Z, -liftDegrees),
         )
 
@@ -83,8 +109,7 @@ data class Orbit(
     override fun swing(): CelestialPath.Swing = stack.swing()
 
     /** How far along its circle the body is at [dayTime], in `0.0..1.0`. */
-    fun progressAt(dayTime: Long): Float =
-        Motion.Sweep(Direction.Axis.X, periodTicks, phaseDegrees, retrograde, pacing).progressAt(dayTime)
+    fun progressAt(dayTime: Long): Float = sweep.progressAt(dayTime)
 
     /**
      * The frame, [progress] of the way around the circle.
@@ -109,7 +134,7 @@ data class Orbit(
         /** Vanilla's own sun, spelled out — the thing every other path is a departure from. */
         val VANILLA_SUN = Orbit(
             inclinationDegrees = 0.0f,
-            ascendingNodeDegrees = -90.0f,
+            ascendingNodeDegrees = VANILLAS_NODE,
             phaseDegrees = 0.0f,
             periodTicks = TICKS_PER_VANILLA_DAY,
             retrograde = false,
@@ -142,6 +167,9 @@ data class Orbit(
             from.copy(ascendingNodeDegrees = -bearingDegrees)
 
         private const val HALF_TURN = 180.0f
+
+        /** Where vanilla's own sun leans, and the one node that means "vanilla's path". */
+        const val VANILLAS_NODE = -90.0f
 
         /** Inside every sun's radius. See `SkySpec.MOON_BAND`, which this sits in the middle of. */
         const val MOON_DISTANCE = 92.0f

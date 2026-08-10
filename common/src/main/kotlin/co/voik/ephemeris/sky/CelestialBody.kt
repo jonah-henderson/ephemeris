@@ -21,6 +21,8 @@ data class CelestialBody(
     val appearance: Appearance,
     /** Null for a body that never changes, which is every sun. */
     val phase: PhaseCycle? = null,
+    /** How the sprite is turned. Vanilla's way by default, which is upright whatever the path. */
+    val facing: Facing = Facing.LIKE_VANILLA,
 ) {
     companion object {
         val CODEC: Codec<CelestialBody> = RecordCodecBuilder.create { instance ->
@@ -28,7 +30,10 @@ data class CelestialBody(
                 CelestialPath.CODEC.fieldOf("orbit").forGetter(CelestialBody::path),
                 Appearance.CODEC.fieldOf("appearance").forGetter(CelestialBody::appearance),
                 PhaseCycle.CODEC.optionalFieldOf("phase").forGetter { body -> java.util.Optional.ofNullable(body.phase) },
-            ).apply(instance) { path, appearance, phase -> CelestialBody(path, appearance, phase.orElse(null)) }
+                Facing.CODEC.optionalFieldOf("facing", Facing.LIKE_VANILLA).forGetter(CelestialBody::facing),
+            ).apply(instance) { path, appearance, phase, facing ->
+                CelestialBody(path, appearance, phase.orElse(null), facing)
+            }
         }
     }
 }

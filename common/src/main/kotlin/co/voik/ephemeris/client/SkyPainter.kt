@@ -3,7 +3,9 @@ package co.voik.ephemeris.client
 import co.voik.ephemeris.sky.Appearance
 import co.voik.ephemeris.sky.CelestialBody
 import co.voik.ephemeris.sky.LevelLooks
+import co.voik.ephemeris.sky.Facing
 import co.voik.ephemeris.sky.Orbit
+import co.voik.ephemeris.sky.VanillasBody
 import co.voik.ephemeris.sky.SkySpec
 import net.minecraft.client.Minecraft
 import net.minecraft.world.level.MoonPhase
@@ -101,7 +103,7 @@ object SkyPainter {
             val tint = if (luminous) sprite.tint.dimmed(LUMINOUS_ADDS) else sprite.tint
             canvas.drawBody(
                 shape = shape,
-                orientation = orientationOf(body, clockTime, sunAngle, moonAngle),
+                orientation = facingOf(body, clockTime, sunAngle, moonAngle),
                 distance = body.path.distance,
                 angularSize = sprite.angularSize,
                 tint = tint.copy(alpha = tint.alpha * rainBrightness),
@@ -139,6 +141,20 @@ object SkyPainter {
      * day curve would only be close, and it survives vanilla changing that curve — which it has, the sun's
      * schedule now being a timeline rather than a formula. Everything else turns on the level's clock.
      */
+    /** Where the body is, turned the way the body asks to be turned. */
+    private fun facingOf(
+        body: CelestialBody,
+        clockTime: Long,
+        sunAngle: Float,
+        moonAngle: Float,
+    ): Quaternionf {
+        val alongPath = orientationOf(body, clockTime, sunAngle, moonAngle)
+        return when (body.facing) {
+            Facing.ALONG_PATH -> alongPath
+            Facing.LIKE_VANILLA -> Facing.upright(alongPath)
+        }
+    }
+
     private fun orientationOf(
         body: CelestialBody,
         clockTime: Long,
@@ -146,15 +162,14 @@ object SkyPainter {
         moonAngle: Float,
     ): Quaternionf {
         val path = body.path
-        // Named rather than smart-cast: an equality branch against a constant tells Kotlin nothing about
-        // the type, and reaching for the constants directly says plainly which angle belongs to which.
-        if (path == Orbit.VANILLA_SUN) {
-            return Orbit.VANILLA_SUN.orientationAtProgress(sunAngle / FULL_TURN_RADIANS)
+        val vanillasAngle = when (path.vanillas) {
+            VanillasBody.SUN -> sunAngle
+            VanillasBody.MOON -> moonAngle
+            null -> return path.orientationAt(clockTime)
         }
-        if (path == Orbit.VANILLA_MOON) {
-            return Orbit.VANILLA_MOON.orientationAtProgress(moonAngle / FULL_TURN_RADIANS)
-        }
-        return path.orientationAt(clockTime)
+        // Only an Orbit ever answers `vanillas`, and only its progress form can take vanilla's own angle.
+        val circle = path as? Orbit ?: return path.orientationAt(clockTime)
+        return circle.orientationAtProgress(vanillasAngle / FULL_TURN_RADIANS)
     }
 
     /**
