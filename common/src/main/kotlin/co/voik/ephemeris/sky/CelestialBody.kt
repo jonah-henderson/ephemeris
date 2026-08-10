@@ -23,6 +23,8 @@ data class CelestialBody(
     val phase: PhaseCycle? = null,
     /** How the sprite is turned. Vanilla's way by default, which is upright whatever the path. */
     val facing: Facing = Facing.LIKE_VANILLA,
+    /** How the sprite meets the sky behind it. Vanilla's way by default — see [Blending]. */
+    val blending: Blending = Blending.ADDS,
 ) {
     companion object {
         val CODEC: Codec<CelestialBody> = RecordCodecBuilder.create { instance ->
@@ -31,8 +33,9 @@ data class CelestialBody(
                 Appearance.CODEC.fieldOf("appearance").forGetter(CelestialBody::appearance),
                 PhaseCycle.CODEC.optionalFieldOf("phase").forGetter { body -> java.util.Optional.ofNullable(body.phase) },
                 Facing.CODEC.optionalFieldOf("facing", Facing.LIKE_VANILLA).forGetter(CelestialBody::facing),
-            ).apply(instance) { path, appearance, phase, facing ->
-                CelestialBody(path, appearance, phase.orElse(null), facing)
+                Blending.CODEC.optionalFieldOf("blending", Blending.ADDS).forGetter(CelestialBody::blending),
+            ).apply(instance) { path, appearance, phase, facing, blending ->
+                CelestialBody(path, appearance, phase.orElse(null), facing, blending)
             }
         }
     }
@@ -146,5 +149,41 @@ data class PhaseCycle(val periodTicks: Int, val offsetTicks: Int, val steps: Int
                 Codec.INT.optionalFieldOf("steps", VANILLA_PHASES).forGetter(PhaseCycle::steps),
             ).apply(instance, ::PhaseCycle)
         }
+    }
+}
+
+/**
+ * How a body's sprite meets the sky behind it.
+ *
+ * **[COVERS] needs a sprite with real transparency, and vanilla's have none.** Every texture in the
+ * celestials atlas — the sun and all eight moon shapes — is indexed colour with no `tRNS` chunk, so every
+ * pixel is fully opaque, and about two thirds of each is near-black. Vanilla never notices because it draws
+ * both bodies additively, where black contributes nothing. Draw one of them covering and that black square
+ * is painted over the sky: a moon in daylight with an enormous dark blob around it, which is exactly what it
+ * looked like. `CelestialTextureCheck` holds the fact the default rests on.
+ */
+enum class Blending(private val key: String) {
+    /**
+     * Added to the sky, so the sprite reads as a light source and its dark parts are simply not there.
+     *
+     * **Vanilla's way for both its sun and its moon**, and the only one that works with vanilla's own
+     * sprites. The default for that reason.
+     */
+    ADDS("adds"),
+
+    /**
+     * Painted over the sky, so the body hides whatever is behind it — one moon eclipsing another, or a sun.
+     *
+     * Only worth asking for with a sprite that has an alpha channel. With one of vanilla's, this paints the
+     * texture's opaque black background across the sky.
+     */
+    COVERS("covers"),
+    ;
+
+    companion object {
+        val CODEC: com.mojang.serialization.Codec<Blending> = com.mojang.serialization.Codec.STRING.xmap(
+            { key -> entries.firstOrNull { it.key == key } ?: ADDS },
+            { it.key },
+        )
     }
 }

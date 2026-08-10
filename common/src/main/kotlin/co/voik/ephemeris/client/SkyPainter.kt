@@ -1,6 +1,7 @@
 package co.voik.ephemeris.client
 
 import co.voik.ephemeris.sky.Appearance
+import co.voik.ephemeris.sky.Blending
 import co.voik.ephemeris.sky.CelestialBody
 import co.voik.ephemeris.sky.Daylight
 import co.voik.ephemeris.sky.LevelLook
@@ -132,16 +133,17 @@ object SkyPainter {
         for (body in spec.bodies.sortedByDescending { it.path.distanceAt(clockTime) }) {
             val sprite = body.appearance as? Appearance.Sprite ?: continue
             val shape = sprite.shapes[shapeIndexOf(body, sprite, clockTime, moonPhase)]
-            // A body that waxes and wanes is lit rather than luminous, and so covers rather than glows.
-            val luminous = body.phase == null
-            val tint = if (luminous) sprite.tint.dimmed(LUMINOUS_ADDS) else sprite.tint
+            // Vanilla adds both its sun and its moon, and its sprites have no alpha to cover with — see
+            // `Blending`, which is why this is the body's own choice and why the default is to add.
+            val adds = body.blending == Blending.ADDS
+            val tint = if (adds) sprite.tint.dimmed(LUMINOUS_ADDS) else sprite.tint
             canvas.drawBody(
                 shape = shape,
                 orientation = facingOf(body, clockTime, sunAngle, moonAngle),
                 distance = body.path.distanceAt(clockTime),
                 angularSize = sprite.angularSize,
                 tint = tint.copy(alpha = tint.alpha * rainBrightness),
-                emitsOwnLight = luminous,
+                emitsOwnLight = adds,
             )
         }
     }

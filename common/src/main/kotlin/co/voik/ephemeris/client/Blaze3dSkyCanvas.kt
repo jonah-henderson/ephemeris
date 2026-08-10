@@ -157,10 +157,14 @@ object Blaze3dSkyCanvas : SkyCanvas {
         .build()
 
     /**
-     * For a body that is lit rather than luminous. Vanilla's `CELESTIAL` blends additively, so an overlap
-     * brightens instead of covering; this is the same pipeline with a translucent blend, which lets a moon
-     * hide the sun behind it. A sprite's transparent parts stay transparent, so a crescent still reads as
-     * a crescent rather than a disc.
+     * For a body asking to **cover** rather than add — `Blending.COVERS`.
+     *
+     * Vanilla's `CELESTIAL` blends additively, so an overlap brightens instead of hiding; this is the same
+     * pipeline with a translucent blend, which lets one body hide another behind it.
+     *
+     * **It needs a sprite with an alpha channel, and vanilla's have none** — theirs are indexed with no
+     * `tRNS`, two thirds opaque near-black, which additive blending never reveals and this paints straight
+     * over the sky. That is why nothing reaches this by default; see `Blending`.
      */
     private val OCCLUDING_BODY_PIPELINE: RenderPipeline = RenderPipeline.builder()
         .withLocation(Identifier.fromNamespaceAndPath(NAMESPACE, "pipeline/occluding_body"))
