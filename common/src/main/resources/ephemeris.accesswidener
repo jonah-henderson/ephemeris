@@ -1,0 +1,24 @@
+accessWidener v2 official
+
+# `official` rather than `named`, and there is no longer a difference: Minecraft is unobfuscated from 26.1,
+# so there is one namespace and Loom expects it to be called this. It says so plainly if it is not —
+# "Expected official namespace for access widener entry, found: named".
+
+# So a level can be built after the server has started.
+#
+# **These four are the whole toll for runtime dimensions**, and they are the ingredients of vanilla's own
+# `createLevels` loop rather than a novel liberty: it builds a secondary level from exactly
+# `(executor, storageSource, DerivedLevelData(worldData, …), dimension, stem)` and puts it in `levels`. We do
+# the same thing later, which is the only difference.
+#
+# **A widener rather than a Mixin, deliberately.** The alternative is an accessor Mixin per field, four more
+# entries in the Mixin config, and the same access granted less legibly. Nothing is overridden and no
+# behaviour is replaced — these are reads of state the server already keeps.
+#
+# **Do not reach for the NeoForge equivalents.** The patched jar carries `forgeGetWorldMap()` and
+# `markWorldsDirty()`, and `common` compiles against *vanilla* (NeoForm), where neither exists — code written
+# against them compiles and then dies on Fabric. See `notes/neoforge-dimensions-research.md`.
+accessible	field	net/minecraft/server/MinecraftServer	levels	Ljava/util/Map;
+accessible	field	net/minecraft/server/MinecraftServer	executor	Ljava/util/concurrent/Executor;
+accessible	field	net/minecraft/server/MinecraftServer	storageSource	Lnet/minecraft/world/level/storage/LevelStorageSource$LevelStorageAccess;
+accessible	field	net/minecraft/server/MinecraftServer	worldData	Lnet/minecraft/world/level/storage/WorldData;

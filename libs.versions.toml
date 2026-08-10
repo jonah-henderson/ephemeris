@@ -1,0 +1,53 @@
+[versions]
+java = "25"
+kotlin = "2.4.0"
+moddev = "2.0.143"
+loom = "1.17.17"
+# Dokka 2 is not optional at this Java level: 1.9.20 embeds a Kotlin compiler whose `isAtLeastJava9`
+# cannot parse a "25.0.4" version string and throws, so `dokkaJavadoc` fails on Java 25 before it reads a
+# line of source. 2.x is also a different plugin — see the two ids in `multiloader-common.gradle`.
+dokka = "2.2.0"
+
+minecraft = "26.1.2"
+minecraftRange = "[26.1.2, 26.2)"
+
+# NO PARCHMENT, and none is needed: Mojang removed obfuscation from Java Edition, 1.21.11 being the last
+# obfuscated release and 26.1 the first unobfuscated one. There is nothing left for it to deobfuscate.
+
+neoforge = "26.1.2.93"
+neoforgeRange = "[26.1, 26.2)"
+neoForm = "26.1.2-1"
+kff = "6.3.0"
+kffRange = "[6.3, )"
+
+fabricLoader = "0.19.3"
+fabricApi = "0.155.2+26.1.2"
+flk = "1.13.13+kotlin.2.4.10"
+
+mixin = "0.8.5"
+
+# Kotest brings its own JUnit Platform engine, so the platform is deliberately not versioned here — see
+# the note beside the test dependencies in common/build.gradle.kts.
+kotest = "6.2.3"
+
+[libraries]
+minecraft = { group = "com.mojang", name = "minecraft", version.ref = "minecraft" }
+fabricLoader = { group = "net.fabricmc", name = "fabric-loader", version.ref = "fabricLoader" }
+fabricApi = { group = "net.fabricmc.fabric-api", name = "fabric-api", version.ref = "fabricApi" }
+flk = { group = "net.fabricmc", name = "fabric-language-kotlin", version.ref = "flk" }
+kff = { group = "thedarkcolour", name = "kotlinforforge-neoforge", version.ref = "kff" }
+mixin = { group = "org.spongepowered", name = "mixin", version.ref = "mixin" }
+
+kotestRunner = { group = "io.kotest", name = "kotest-runner-junit5", version.ref = "kotest" }
+kotestAssertions = { group = "io.kotest", name = "kotest-assertions-core", version.ref = "kotest" }
+kotestProperty = { group = "io.kotest", name = "kotest-property", version.ref = "kotest" }
+
+[plugins]
+kotlin = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
+# Ships with the Kotlin compiler, so it is versioned with it rather than on its own.
+powerAssert = { id = "org.jetbrains.kotlin.plugin.power-assert", version.ref = "kotlin" }
+dokka = { id = "org.jetbrains.dokka", version.ref = "dokka" }
+moddev = { id = "net.neoforged.moddev", version.ref = "moddev" }
+# The NON-REMAPPING Loom plugin, which is a different id from the old `fabric-loom`. Minecraft is
+# unobfuscated from 26.1, so there is nothing to remap and this plugin does not try.
+loom = { id = "net.fabricmc.fabric-loom", version.ref = "loom" }

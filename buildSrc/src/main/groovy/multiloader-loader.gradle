@@ -1,0 +1,81 @@
+plugins {
+    id 'multiloader-common'
+    id "org.jetbrains.kotlin.jvm"
+}
+
+configurations {
+    commonJava {
+        canBeResolved = true
+    }
+    commonKotlin {
+        canBeResolved = true
+    }
+    commonResources {
+        canBeResolved = true
+    }
+}
+
+/**
+ * This mod's own `common`, which is the sibling project of that name.
+ *
+ * Derived rather than written down, so the convention serves any mod in the build: `:fabric` finds
+ * `:common`, and `:ephemeris:fabric` finds `:ephemeris:common`.
+ */
+def commonProject = (project.parent.path == ':' ? '' : project.parent.path) + ':common'
+
+dependencies {
+    compileOnly(project(commonProject)) {
+        capabilities {
+            requireCapability "$modGroup:$modId"
+        }
+    }
+    commonJava project(path: commonProject, configuration: 'commonJava')
+    commonKotlin project(path: commonProject, configuration: 'commonKotlin')
+    commonResources project(path: commonProject, configuration: 'commonResources')
+}
+
+tasks.named('compileJava', JavaCompile) {
+    dependsOn(configurations.commonJava)
+    source(configurations.commonJava)
+}
+
+tasks.named('compileKotlin') {
+    dependsOn(configurations.commonKotlin)
+    dependsOn(configurations.commonJava)
+    source(configurations.commonJava)
+    source(configurations.commonKotlin)
+}
+
+processResources {
+    dependsOn(configurations.commonResources)
+    from(configurations.commonResources)
+}
+
+tasks.named('sourcesJar', Jar) {
+    dependsOn(configurations.commonJava)
+    from(configurations.commonJava)
+    dependsOn(configurations.commonKotlin)
+    from(configurations.commonKotlin)
+    dependsOn(configurations.commonResources)
+    from(configurations.commonResources)
+}
+
+// Use dokka to generate javadoc for both Java and Kotlin sources instead of using the builtin javadoc
+// tools. This allows mixing Kotlin and Java — and here it is also the only way a loader's docs can cover
+// `common`, whose sources are compiled *into* this jar rather than consumed as one.
+dokka {
+    dokkaSourceSets.configureEach {
+        // Only the roots that are actually there. A source directory that git cannot track — an empty one
+        // — is absent from a fresh clone, and Dokka refuses to walk a root that does not exist. Filtering
+        // here keeps "this directory must exist" from being an unwritten build requirement that only shows
+        // up after cloning.
+        sourceRoots.from((configurations.commonJava + configurations.commonKotlin).findAll { it.exists() })
+    }
+}
+
+// Resolving those configurations is what builds the generated sources they carry, so the task that reads
+// them has to wait for it.
+tasks.named("dokkaGenerateModuleJavadoc") {
+    dependsOn(configurations.commonJava)
+    dependsOn(configurations.commonKotlin)
+}

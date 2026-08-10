@@ -1,0 +1,16 @@
+{
+  "required": true,
+  "package": "co.voik.ephemeris.mixin",
+  "compatibilityLevel": "JAVA_${java_version}",
+  "mixins": [
+    "ServerLevelMixin"
+  ],
+  "client": [
+    "client.ClientLevelMixin",
+    "client.CloudRendererMixin",
+    "client.SkyRendererMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

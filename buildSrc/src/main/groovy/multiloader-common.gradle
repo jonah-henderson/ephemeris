@@ -1,0 +1,193 @@
+import org.jetbrains.dokka.gradle.engine.parameters.VisibilityModifier
+
+plugins {
+    id 'java-library'
+    id 'maven-publish'
+    id "org.jetbrains.kotlin.jvm"
+    // Two ids from one artifact: the second is what adds the Javadoc *format*, which in Dokka 1.x was a
+    // task the base plugin always registered.
+    id "org.jetbrains.dokka"
+    id "org.jetbrains.dokka-javadoc"
+}
+
+/**
+ * Which mod this project belongs to, found by walking up to the nearest `mod.properties`.
+ *
+ * **Gradle reads `gradle.properties` from the build root and from a project's own directory, and from
+ * nowhere else** — never from a parent project. So a mod spanning three modules either repeats its identity
+ * in three files that can drift, or its identity lives in a file of its own that the modules can be found
+ * *under*. This build carries two mods, so it is the second.
+ */
+def modIdentity = { Project owner ->
+    for (def directory = owner.projectDir; directory != null; directory = directory.parentFile) {
+        def file = new File(directory, 'mod.properties')
+        if (!file.exists()) continue
+        def found = new Properties()
+        file.withInputStream { found.load(it) }
+        return found
+    }
+    throw new GradleException("No mod.properties above ${owner.projectDir} — every module must sit under one.")
+}
+
+def mod = modIdentity(project)
+def modId = mod.modId
+def modName = mod.modName
+def modAuthor = mod.modAuthor
+def license = mod.license
+def credits = mod.credits
+
+group = mod.group
+version = mod.version
+description = mod.description
+
+// Build files and the loader convention read these by name, so they keep working as ordinary project
+// properties rather than having to know where the identity came from.
+//
+// `modGroup` is here rather than being read back off `project.group` because a nested project's group is
+// only what this plugin just set it to *after* this plugin has run — and the loader convention builds its
+// capability string while Gradle may still be part-way through configuring the project on demand, where
+// `group` is the derived default (`AgesAndTheArt.ephemeris`) and the request silently matches nothing.
+ext.modId = modId
+ext.modName = modName
+ext.modAuthor = modAuthor
+ext.modGroup = mod.group
+
+base {
+    archivesName = "${modId}-${project.name}-${libs.versions.minecraft.get()}"
+}
+
+java {
+    toolchain.languageVersion = JavaLanguageVersion.of(libs.versions.java.get())
+    withSourcesJar()
+    withJavadocJar()
+}
+
+kotlin {
+    jvmToolchain(Integer.parseInt(libs.versions.java.get()))
+}
+
+repositories {
+    mavenCentral()
+    // No ParchmentMC repository: Mojang stopped obfuscating Java Edition at 26.1, so there is nothing
+    // left for it to deobfuscate and it publishes nothing for this line.
+    maven {
+        name = "NeoForge"
+        url = 'https://maven.neoforged.net/releases'
+    }
+    maven {
+        name = 'BlameJared'
+        url = 'https://maven.blamejared.com'
+    }
+    maven {
+        name = "kotlinforforge"
+        url = uri("https://thedarkcolour.github.io/KotlinForForge/")
+    }
+}
+
+// Declare capabilities on the outgoing configurations.
+// Read more about capabilities here: https://docs.gradle.org/current/userguide/component_capabilities.html#sec:declaring-additional-capabilities-for-a-local-component
+['apiElements', 'runtimeElements', 'sourcesElements', 'javadocElements'].each { variant ->
+    configurations."$variant".outgoing {
+        // **Gradle's implicit `group:name` has to be restated once anything else is declared**, because
+        // declaring any capability removes it. Without it an ordinary dependency on one of these projects
+        // asks for a capability nothing here provides, every real variant is filtered out, and what is left
+        // are Dokka's internal ones — which then report each other as ambiguous, in an error that mentions
+        // neither capabilities nor the cure.
+        capability("$group:${project.name}:$version")
+        capability("$group:${base.archivesName.get()}:$version")
+        capability("$group:$modId-${project.name}-${libs.versions.minecraft.get()}:$version")
+        capability("$group:$modId:$version")
+    }
+    publishing.publications.configureEach {
+        suppressPomMetadataWarningsFor(variant)
+    }
+}
+
+sourcesJar {
+    from(rootProject.file('LICENSE')) {
+        rename { "${it}_${modId}" }
+    }
+}
+
+jar {
+    from(rootProject.file('LICENSE')) {
+        rename { "${it}_${modId}" }
+    }
+
+    manifest {
+        attributes([
+                'Specification-Title'   : modName,
+                'Specification-Vendor'  : modAuthor,
+                'Specification-Version' : project.jar.archiveVersion,
+                'Implementation-Title'  : project.name,
+                'Implementation-Version': project.jar.archiveVersion,
+                'Implementation-Vendor' : modAuthor,
+                'Built-On-Minecraft'    : libs.versions.minecraft.get()
+        ])
+    }
+}
+
+// Dokka 2 configures documentation through an extension rather than by reaching for the task, and every
+// setting is a lazy property. `documentedVisibilities` is what `includeNonPublic = false` used to say.
+dokka {
+    dokkaSourceSets.configureEach {
+        documentedVisibilities.set([VisibilityModifier.Public])
+        skipDeprecated.set(false)
+        reportUndocumented.set(false)
+        jdkVersion.set(Integer.parseInt(libs.versions.java.get()))
+    }
+}
+
+// Prevent the default javadoc task from running, as Dokka is
+// responsible for generating the docs now
+tasks.named("javadoc", Javadoc) {
+    enabled = false
+}
+
+// Make the javadoc jar take in the Dokka output. The task that produces it is
+// `dokkaGeneratePublicationJavadoc` in Dokka 2 — `dokkaJavadoc` no longer exists.
+tasks.named("javadocJar", Jar) {
+    from(tasks.named("dokkaGeneratePublicationJavadoc"))
+}
+
+processResources {
+    var expandProps = [
+            'version'                      : version,
+            'group'                        : project.group, //Else we target the task's group.
+            'minecraft_version'            : libs.versions.minecraft.get(),
+            'minecraft_version_range'      : libs.versions.minecraftRange.get(),
+            'fabric_version'               : libs.versions.fabricApi.get(),
+            'fabric_loader_version'        : libs.versions.fabricLoader.get(),
+            'flk_version'                  : libs.versions.flk.get(),
+            'mod_name'                     : modName,
+            'mod_author'                   : modAuthor,
+            'mod_id'                       : modId,
+            'license'                      : license,
+            'description'                  : project.description,
+            'neoforge_version'             : libs.versions.neoforge.get(),
+            'neoforge_range'               : libs.versions.neoforgeRange.get(),
+            'kff_version'                  : libs.versions.kff.get(),
+            'kff_version_range'            : libs.versions.kffRange.get(),
+            'credits'                      : credits,
+            'java_version'                 : libs.versions.java.get()
+    ]
+
+    filesMatching(['pack.mcmeta', 'fabric.mod.json', 'META-INF/neoforge.mods.toml', '*.mixins.json']) {
+        expand expandProps
+    }
+    inputs.properties(expandProps)
+}
+
+publishing {
+    publications {
+        register('mavenJava', MavenPublication) {
+            artifactId base.archivesName.get()
+            from components.java
+        }
+    }
+    repositories {
+        maven {
+            url System.getenv('local_maven_url')
+        }
+    }
+}

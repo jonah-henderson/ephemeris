@@ -1,0 +1,40 @@
+modLoader = "kotlinforforge"
+loaderVersion = "${kff_version_range}"
+license = "${license}"
+
+[[mixins]]
+config = "${mod_id}.mixins.json"
+
+[[accessTransformers]]
+file = "META-INF/accesstransformer.cfg"
+
+[[mods]]
+modId = "${mod_id}"
+version = "${version}"
+displayName = "${mod_name}"
+authors = "${mod_author}"
+description = '''${description}'''
+
+[[dependencies."${mod_id}"]]
+modId = "neoforge"
+type = "required"
+versionRange = "${neoforge_range}"
+ordering = "NONE"
+side = "BOTH"
+
+[[dependencies."${mod_id}"]]
+modId = "minecraft"
+type = "required"
+versionRange = "${minecraft_version_range}"
+ordering = "NONE"
+side = "BOTH"
+
+# Kotlin For Forge, which supplies the standard library as a mod. **This is why Ephemeris ships as a mod
+# rather than as a nested plain library**: a library jar lives outside NeoForge's game module layer, where
+# the stdlib KFF provides is not visible to it, and `kotlin.Pair` goes missing at runtime.
+[[dependencies."${mod_id}"]]
+modId = "kotlinforforge"
+type = "required"
+versionRange = "${kff_version_range}"
+ordering = "AFTER"
+side = "BOTH"
