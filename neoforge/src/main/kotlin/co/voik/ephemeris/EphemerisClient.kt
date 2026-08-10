@@ -2,6 +2,7 @@ package co.voik.ephemeris
 
 import co.voik.ephemeris.client.Blaze3dSkyCanvas
 import co.voik.ephemeris.client.CloudPainter
+import co.voik.ephemeris.client.HorizonPainter
 import co.voik.ephemeris.client.LevelRendering
 import co.voik.ephemeris.client.SkyPainter
 import co.voik.ephemeris.sky.LevelLooks
@@ -34,6 +35,7 @@ class EphemerisClient(eventBus: IEventBus) {
             )
         }
         LevelRendering.clouds { moment -> CloudPainter.draw(Blaze3dSkyCanvas, moment.cameraPosition, moment.time) }
+        LevelRendering.horizon { HorizonPainter.draw(Blaze3dSkyCanvas) }
 
         NeoForge.EVENT_BUS.addListener(::onLoggingOut)
     }

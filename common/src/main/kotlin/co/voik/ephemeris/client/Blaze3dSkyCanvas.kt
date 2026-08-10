@@ -203,6 +203,80 @@ object Blaze3dSkyCanvas : SkyCanvas {
 
     private var slabBuffer: GpuBuffer? = null
 
+    override fun drawHorizonGlow(bearingDegrees: Float, tint: Rgba) {
+        if (tint.alpha <= FAINTEST_GLOW) return
+
+        val modelViewStack = RenderSystem.getModelViewStack()
+        modelViewStack.pushMatrix()
+        // Vanilla's own sequence, with one substitution. It stands the fan up out of the ground and then
+        // turns it to face the light; vanilla's second turn is `(sin(sunAngle) < 0 ? 180 : 0) + 90`, which
+        // is east or west and nothing else, and this is the same turn taken from a real bearing. The two
+        // agree exactly where vanilla's own sun is, which is the only place vanilla's answer was ever right.
+        modelViewStack.rotate(Quaternionf().rotateX(Math.toRadians(STAND_IT_UP).toFloat()))
+        modelViewStack.rotate(Quaternionf().rotateZ(Math.toRadians(bearingDegrees.toDouble()).toFloat()))
+        // Vanilla flattens the fan by its own alpha so a weak glow is a thin band rather than a faint wide
+        // one. Keeping that means a distant sun's light hugs the horizon instead of washing the whole sky.
+        modelViewStack.scale(1.0f, 1.0f, tint.alpha)
+
+        val transforms = RenderSystem.getDynamicUniforms().writeTransform(
+            modelViewStack,
+            Vector4f(tint.red, tint.green, tint.blue, tint.alpha),
+            Vector3f(),
+            Matrix4f(),
+        )
+
+        renderPass("Ephemeris horizon glow")?.use { pass ->
+            pass.setPipeline(RenderPipelines.SUNRISE_SUNSET)
+            RenderSystem.bindDefaultUniforms(pass)
+            pass.setUniform("DynamicTransforms", transforms)
+            pass.setVertexBuffer(0, horizonFan())
+            pass.draw(0, GLOW_FAN_VERTICES)
+        }
+        modelViewStack.popMatrix()
+    }
+
+    /**
+     * The glow's mesh: a bright point overhead of the horizon with a ring of transparent vertices around it,
+     * as a triangle fan — vanilla's own shape, rebuilt because its buffer is private to its `SkyRenderer`.
+     *
+     * Built once and kept. The colour lives in the transform uniform rather than the vertices, which is what
+     * lets one buffer serve every sun in the sky.
+     */
+    private fun horizonFan(): GpuBuffer = glowFan ?: buildGlowFan().also { glowFan = it }
+
+    private fun buildGlowFan(): GpuBuffer {
+        val vertexSize = DefaultVertexFormat.POSITION_COLOR.vertexSize
+        ByteBufferBuilder.exactlySized(GLOW_FAN_VERTICES * vertexSize).use { bytes ->
+            val builder = BufferBuilder(bytes, VertexFormat.Mode.TRIANGLE_FAN, DefaultVertexFormat.POSITION_COLOR)
+            builder.addVertex(0.0f, GLOW_CENTRE_HEIGHT, 0.0f).setColor(-1)
+            for (step in 0..GLOW_FAN_STEPS) {
+                val angle = step * (Math.PI * 2.0).toFloat() / GLOW_FAN_STEPS
+                val sin = Math.sin(angle.toDouble()).toFloat()
+                val cos = Math.cos(angle.toDouble()).toFloat()
+                builder.addVertex(sin * GLOW_RADIUS, cos * GLOW_RADIUS, -cos * GLOW_DEPTH).setColor(0x00FFFFFF)
+            }
+            builder.buildOrThrow().use { mesh ->
+                return RenderSystem.getDevice()
+                    .createBuffer({ "Ephemeris horizon glow fan" }, GpuBuffer.USAGE_VERTEX, mesh.vertexBuffer())
+            }
+        }
+    }
+
+    private var glowFan: GpuBuffer? = null
+
+    /** Vanilla's own numbers for the fan, which is why they are not round. */
+    private const val GLOW_FAN_STEPS = 16
+    private const val GLOW_FAN_VERTICES = 18
+    private const val GLOW_CENTRE_HEIGHT = 100.0f
+    private const val GLOW_RADIUS = 120.0f
+    private const val GLOW_DEPTH = 40.0f
+
+    /** Vanilla stands its fan up with a quarter turn about X before aiming it. */
+    private const val STAND_IT_UP = 90.0
+
+    /** Below this a glow is not worth a draw call; vanilla declines at the same point. */
+    private const val FAINTEST_GLOW = 0.001f
+
     override fun drawBody(
         shape: Identifier,
         orientation: Quaternionf,

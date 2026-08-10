@@ -122,13 +122,49 @@ class OrbitCheck : FunSpec({
         }
     }
 
-    test("the sun's bearing sweeps the compass over a day") {
-        val bearings = acrossTheDay(Orbit.VANILLA_SUN).indices.map {
-            Orbit.VANILLA_SUN.azimuthAt(it * 10L)
+    test("the sun rises in the east and sets in the west") {
+        // The check that would have caught measuring the bearing from south: a sweep test passes either way,
+        // and a hundred and eighty degrees out puts every sunset in the wrong quarter of the sky.
+        fun bearingWhenCrossing(from: Long): Float {
+            val crossing = HorizonCrossing.next(Orbit.VANILLA_SUN, from) ?: error("vanilla's sun never crosses")
+            return Orbit.VANILLA_SUN.azimuthAt(crossing.dayTime)
         }
-        check(bearings.max() - bearings.min() > 180.0f) {
-            "The sun's bearing only covered ${bearings.max() - bearings.min()}° across a day, so a horizon " +
-                "glow placed by it would sit in roughly one spot"
+
+        val sunset = bearingWhenCrossing(noon)
+        check(sunset > 225.0f && sunset < 315.0f) {
+            "Vanilla's sun set at a bearing of $sunset°, which is not the west. 90 is east and 270 west; a " +
+                "reading 180° out means the bearing is being measured from south"
+        }
+
+        val sunrise = bearingWhenCrossing(midnight)
+        check(sunrise > 45.0f && sunrise < 135.0f) {
+            "Vanilla's sun rose at a bearing of $sunrise°, which is not the east"
+        }
+    }
+
+    test("vanilla's sun is only ever due east or due west, and a tilted one is not") {
+        // **This is why vanilla can place its sunrise glow with a coin toss.** Vanilla's sun goes through the
+        // zenith, so it has no bearing to sweep: it climbs due east, crosses the top, and descends due west,
+        // and `sin(sunAngle) < 0 ? 180 : 0` is a complete description of where its light comes from. Tip the
+        // path at all and that stops being true, which is the whole reason the glow needed taking over.
+        // Overhead is excluded because a bearing there is not merely unstable but undefined — `atan2` of two
+        // numbers that are both nearly zero. It costs nothing to skip: a body that near the zenith is far
+        // outside any glow's reach anyway.
+        val vanillas = (0..<Orbit.TICKS_PER_VANILLA_DAY step 10)
+            .filter { Math.abs(Orbit.VANILLA_SUN.altitudeAt(it.toLong())) < 85.0f }
+            .map { Orbit.VANILLA_SUN.azimuthAt(it.toLong()) }
+        val awayFromTheMeridian = vanillas.filter { Math.abs(it - 90.0f) > 1.0f && Math.abs(it - 270.0f) > 1.0f }
+        check(awayFromTheMeridian.isEmpty()) {
+            "Vanilla's sun was found at ${awayFromTheMeridian.size} bearings other than due east or due west, " +
+                "which it cannot be: it passes through the zenith"
+        }
+
+        val tilted = Orbit.VANILLA_SUN.copy(inclinationDegrees = 55.0f)
+        val swept = (0..<Orbit.TICKS_PER_VANILLA_DAY step 10).map { tilted.azimuthAt(it.toLong()) }
+        val distinctQuarters = swept.map { (it / 90.0f).toInt() }.distinct()
+        check(distinctQuarters.size >= 3) {
+            "A sun tilted 55° only ever appeared in ${distinctQuarters.size} quarter(s) of the compass. It " +
+                "should wander, and if it does not then a per-sun glow has nothing to place"
         }
     }
 })

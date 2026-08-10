@@ -28,6 +28,7 @@ object LevelRendering {
 
     private val skies = mutableListOf<LevelSkyRenderer>()
     private val clouds = mutableListOf<LevelCloudRenderer>()
+    private val horizons = mutableListOf<LevelHorizonRenderer>()
     private val environments = mutableListOf<LevelEnvironment>()
 
     /** Offer to draw suns, moons and stars. */
@@ -38,6 +39,17 @@ object LevelRendering {
     /** Offer to draw the overcast. */
     fun clouds(renderer: LevelCloudRenderer) {
         clouds += renderer
+    }
+
+    /**
+     * Offer to paint the light at the horizon — the sunrise and the sunset.
+     *
+     * A seam of its own because vanilla draws this separately from the bodies, and because neither half of
+     * what vanilla does survives a sky with suns of its own: the colour is keyframed against the world clock,
+     * and the position is a coin toss between east and west.
+     */
+    fun horizon(renderer: LevelHorizonRenderer) {
+        horizons += renderer
     }
 
     /**
@@ -59,6 +71,9 @@ object LevelRendering {
 
     /** Asked by the cloud Mixin. */
     fun drawClouds(moment: CloudMoment): Boolean = clouds.any { it.draw(moment) }
+
+    /** Asked by the sunrise Mixin. */
+    fun drawHorizon(moment: HorizonMoment): Boolean = horizons.any { it.draw(moment) }
 
     /** Asked by the client-level Mixin, once, as the level builds its attribute system. */
     fun paintEnvironment(
@@ -85,6 +100,26 @@ class SkyMoment(
 fun interface LevelSkyRenderer {
     /** **True** if this drew the sky; **false** to pass, leaving it to the next renderer or to vanilla. */
     fun draw(moment: SkyMoment): Boolean
+}
+
+/**
+ * Everything vanilla knows at the instant it is about to paint the horizon.
+ *
+ * [vanillaColour] is what vanilla would have used, packed ARGB, straight off
+ * `EnvironmentAttributes.SUNRISE_SUNSET_COLOR` — worth having even for a renderer that ignores it, because
+ * its alpha is vanilla's own judgement of how strong the moment is.
+ */
+class HorizonMoment(
+    val level: ClientLevel,
+    /** Vanilla's own sun angle, in radians. */
+    val sunAngle: Float,
+    val vanillaColour: Int,
+)
+
+/** Paints a level's sunrises and sunsets. */
+fun interface LevelHorizonRenderer {
+    /** **True** if this painted the horizon; **false** to pass, leaving vanilla's own glow to run. */
+    fun draw(moment: HorizonMoment): Boolean
 }
 
 /** Everything vanilla knows at the instant it is about to draw clouds. */

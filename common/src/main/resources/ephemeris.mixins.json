@@ -9,7 +9,8 @@
   "client": [
     "client.ClientLevelMixin",
     "client.CloudRendererMixin",
-    "client.SkyRendererMixin"
+    "client.SkyRendererMixin",
+    "client.SunriseSunsetMixin"
   ],
   "injectors": {
     "defaultRequire": 1

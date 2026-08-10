@@ -118,10 +118,19 @@ data class Orbit(
     fun altitudeAtProgress(progress: Float): Float =
         Math.toDegrees(Math.asin(directionAtProgress(progress).y.coerceIn(-1.0f, 1.0f).toDouble())).toFloat()
 
-    /** Which way it lies, in degrees clockwise from north — for a glow that has to know where to sit. */
-    fun azimuthAt(dayTime: Long): Float {
-        val direction = directionAt(dayTime)
-        val degrees = Math.toDegrees(Math.atan2(direction.x.toDouble(), direction.z.toDouble())).toFloat()
+    /**
+     * Which way it lies, as a compass bearing: degrees clockwise from **north**, so `90` is due east and
+     * `270` due west.
+     *
+     * The negated `z` is the whole of what makes it a bearing rather than something else: Minecraft's north
+     * is `-Z`, so `atan2(x, z)` would measure from *south* and read a hundred and eighty degrees out — which
+     * is invisible in a check that only looks at how far a body sweeps, and puts every sunset in the wrong
+     * quarter of the sky.
+     */
+    fun azimuthAt(dayTime: Long): Float = bearingOf(directionAt(dayTime))
+
+    fun bearingOf(direction: Vector3f): Float {
+        val degrees = Math.toDegrees(Math.atan2(direction.x.toDouble(), -direction.z.toDouble())).toFloat()
         return (degrees % FULL_TURN + FULL_TURN) % FULL_TURN
     }
 
