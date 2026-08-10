@@ -57,6 +57,8 @@ data class LevelLookPayload(val looks: List<Entry>) : CustomPacketPayload {
             LevelLook::air,
             ByteBufCodecs.fromCodec(Codec.unboundedMap(Identifier.CODEC, Look.CODEC)),
             LevelLook::corners,
+            ByteBufCodecs.fromCodec(SkyRules.CODEC),
+            LevelLook::rules,
             ::LevelLook,
         )
 

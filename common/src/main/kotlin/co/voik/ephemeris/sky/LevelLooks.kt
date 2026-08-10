@@ -55,6 +55,15 @@ object LevelLooks {
      * Keeping them would let one world's sky appear in another's.
      */
     fun forgetAll() = looks.clear()
+
+    /**
+     * How [dimension] looks, **from whichever side is asking**.
+     *
+     * A server fills `LevelAppearance` and never this; a client fills this and never that. So one call
+     * answers on both, and the shared code that needs an appearance — the day and night rules, which run on
+     * a server and are read on a client — needs no test for which side it is on.
+     */
+    fun anywhere(dimension: ResourceKey<Level>): LevelLook? = LevelAppearance.of(dimension) ?: of(dimension)
 }
 
 /**
@@ -69,7 +78,12 @@ data class LevelLook(
     val air: Look = Look.NOTHING,
     /** And any corner of it painted differently — keyed by biome. */
     val corners: Map<Identifier, Look> = emptyMap(),
+    /** What this sky is allowed to decide about the level under it, and how it paints the horizon. */
+    val rules: SkyRules = SkyRules.DEFAULT,
 ) {
+    /** Where everything stands at [dayTime]. Pure, so both sides get the same answer without asking. */
+    fun readAt(dayTime: Long): SkyReading = SkyReading.of(sky, dayTime)
+
     /** Whether this says anything at all, so a renderer can decline cheaply. */
     val saysNothing: Boolean
         get() = sky.isOrdinary && air.saysNothing && corners.isEmpty() && sky.decks.isEmpty()

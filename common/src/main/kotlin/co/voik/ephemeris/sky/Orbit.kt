@@ -4,6 +4,7 @@ import com.mojang.serialization.Codec
 import com.mojang.serialization.codecs.RecordCodecBuilder
 import net.minecraft.util.Mth
 import org.joml.Quaternionf
+import org.joml.Vector3f
 
 /**
  * The path one celestial body travels, as a great circle around the camera.
@@ -33,6 +34,30 @@ data class Orbit(
     val retrograde: Boolean,
     /** Radius of the circle. Only relative values matter — nothing here is depth-tested (see below). */
     val distance: Float,
+    /**
+     * How far the body's path is lifted off the great circle, toward the pole its path turns about.
+     *
+     * **Zero is a great circle, and a great circle is always half above the horizon and half below** — that
+     * is not a property of vanilla's sun but of every circle centred on the observer, so no arrangement of
+     * [inclinationDegrees] and [ascendingNodeDegrees] can ever produce a sun that does not set. A path that
+     * stays up is a *small* circle, and this is what makes one: the body is carried off the great circle by
+     * this much before being swept around, so it traces a cone rather than a disc.
+     *
+     * **It moves the body toward the pole its path turns about, and where that pole sits is the tilt's
+     * business** — so the same number does different things to differently tilted paths, and the two useful
+     * cases are worth spelling out because neither is guessable:
+     *
+     * - **Vanilla's path with `+90`** puts the sun *on the horizon, all day*. Vanilla's sun goes through the
+     *   zenith, so its pole is horizontal — east and west — and walking toward that pole walks toward the
+     *   horizon, not away from it.
+     * - **`inclinationDegrees = 90` with any lift `L`** puts the body at a constant altitude of `L` all day.
+     *   Tipping the path into the horizon plane puts its pole at the zenith, and then lift is simply height:
+     *   this is the midnight sun, and `L` is how high it circles.
+     *
+     * Negative sinks the path the same way, until a body never rises at all. Ask [staysUp] or [neverRises]
+     * rather than reading the number — what it means depends on the rest of the orbit.
+     */
+    val liftDegrees: Float = 0.0f,
 ) {
 
     /**
@@ -70,6 +95,65 @@ data class Orbit(
             .rotateY(Math.toRadians(ascendingNodeDegrees.toDouble()).toFloat())
             .rotateZ(Math.toRadians(inclinationDegrees.toDouble()).toFloat())
             .rotateX(progress * TWO_PI)
+            // Last, so the sweep carries it: a body pushed off the great circle *before* being swept traces
+            // a small circle about the same pole. Pushed after, it would only sit at an offset on the same
+            // great circle and would still set. The order is the whole of what makes a polar day possible.
+            .rotateZ(Math.toRadians(-liftDegrees.toDouble()).toFloat())
+
+    /** Where this body stands at [dayTime], as a unit direction: `+y` is up, and `y` alone decides day. */
+    fun directionAt(dayTime: Long): Vector3f = directionAtProgress(progressAt(dayTime))
+
+    fun directionAtProgress(progress: Float): Vector3f =
+        rotationAtProgress(progress).transform(Vector3f(0.0f, 1.0f, 0.0f))
+
+    /**
+     * How high the body stands at [dayTime], in degrees, `-90..90`. Negative is below the horizon.
+     *
+     * **Vanilla's own notion of above**, which is the horizon plane and nothing subtler — no refraction, no
+     * angular radius, no civil twilight. A body at exactly `0` is on the horizon and counts as up, matching
+     * the way `>= 0` reads everywhere else.
+     */
+    fun altitudeAt(dayTime: Long): Float = altitudeAtProgress(progressAt(dayTime))
+
+    fun altitudeAtProgress(progress: Float): Float =
+        Math.toDegrees(Math.asin(directionAtProgress(progress).y.coerceIn(-1.0f, 1.0f).toDouble())).toFloat()
+
+    /** Which way it lies, in degrees clockwise from north — for a glow that has to know where to sit. */
+    fun azimuthAt(dayTime: Long): Float {
+        val direction = directionAt(dayTime)
+        val degrees = Math.toDegrees(Math.atan2(direction.x.toDouble(), direction.z.toDouble())).toFloat()
+        return (degrees % FULL_TURN + FULL_TURN) % FULL_TURN
+    }
+
+    fun isUpAt(dayTime: Long): Boolean = altitudeAt(dayTime) >= 0.0f
+
+    /**
+     * Whether this path never dips below the horizon — a polar day — and whether it never reaches it.
+     *
+     * Answered by walking the circle rather than by solving it. The composition is three rotations deep and
+     * the closed form is a trigonometric identity that is easy to get subtly wrong and impossible to read;
+     * a circle sampled finely enough is exact for every purpose here and says plainly what it means. It is
+     * also computed once per orbit, not per frame.
+     */
+    val staysUp: Boolean get() = lowest >= -GRAZING
+
+    val neverRises: Boolean get() = highest < -GRAZING
+
+    /** The altitudes this path reaches at its lowest and highest, in degrees. */
+    val lowest: Float get() = swing().first
+
+    val highest: Float get() = swing().second
+
+    private fun swing(): Pair<Float, Float> {
+        var least = Float.MAX_VALUE
+        var most = -Float.MAX_VALUE
+        for (step in 0..<SAMPLES_AROUND) {
+            val altitude = altitudeAtProgress(step.toFloat() / SAMPLES_AROUND)
+            if (altitude < least) least = altitude
+            if (altitude > most) most = altitude
+        }
+        return least to most
+    }
 
     companion object {
         const val TICKS_PER_VANILLA_DAY = 24000
@@ -98,6 +182,24 @@ data class Orbit(
 
         private const val DEGREES_PER_TURN = 360.0
         private const val TWO_PI = (Math.PI * 2).toFloat()
+        private const val FULL_TURN = 360.0f
+
+        /**
+         * How finely a path is walked to find its lowest and highest points. A quarter of a degree of arc,
+         * which is far finer than any consequence reads — the coarsest is "does it graze the horizon", and
+         * a body moving a quarter degree per sample cannot hide a crossing inside one.
+         */
+        private const val SAMPLES_AROUND = 1440
+
+        /**
+         * How near the horizon still counts as touching it.
+         *
+         * A path that grazes the horizon exactly is one of the interesting cases rather than a pathological
+         * one — it is what vanilla's own orbit does at full lift — and it is reached by a chain of rotations
+         * whose exact zero lands a millionth of a degree either side. Without this the same orbit reports a
+         * polar day or a sunset depending on which way the last multiplication rounded.
+         */
+        private const val GRAZING = 0.001f
 
         /**
          * `timeOfDay` is offset a quarter turn so that day time 0 is *noon*, which is vanilla's convention
@@ -113,6 +215,7 @@ data class Orbit(
                 Codec.INT.fieldOf("period").forGetter(Orbit::periodTicks),
                 Codec.BOOL.optionalFieldOf("retrograde", false).forGetter(Orbit::retrograde),
                 Codec.FLOAT.fieldOf("distance").forGetter(Orbit::distance),
+                Codec.FLOAT.optionalFieldOf("lift", 0.0f).forGetter(Orbit::liftDegrees),
             ).apply(instance, ::Orbit)
         }
     }
