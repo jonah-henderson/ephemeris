@@ -43,24 +43,32 @@ data class SkySpec(
      * whoever is tuning a sky, not something a player is meant to read.
      */
     fun described(): List<String> = bodies.map { body ->
-        val orbit = body.orbit
         val sprite = body.appearance as? Appearance.Sprite
         val kind = if (body.phase == null) "sun " else "moon"
-        val direction = if (orbit.retrograde) " retrograde" else ""
-        val days = orbit.periodTicks.toFloat() / Orbit.TICKS_PER_VANILLA_DAY
-        // The node is drawn as a swing either side of vanilla's -90, so it can land outside a turn — `-208°`
-        // rather than the `152°` that means the same thing. Rotations are modular so the *value* is correct; only
-        // the read-out is confusing, so it is normalised here and left alone in the spec.
-        val node = ((orbit.ascendingNodeDegrees % FULL_TURN) + FULL_TURN) % FULL_TURN
-        "$kind tilt %+4.0f° node %3.0f° phase %3.0f° period %.2f days distance %.0f size %.0f%s".format(
-            orbit.inclinationDegrees,
-            node,
-            orbit.phaseDegrees,
-            days,
-            orbit.distance,
-            sprite?.angularSize ?: 0.0f,
-            direction,
-        )
+        val size = sprite?.angularSize ?: 0.0f
+        when (val path = body.path) {
+            // A circle can be read back in the angles it was written in. Anything else cannot, so it is
+            // described by what it *does* — which is what a reader wants of a shape they cannot picture.
+            is Orbit -> {
+                val direction = if (path.retrograde) " retrograde" else ""
+                val days = path.periodTicks.toFloat() / Orbit.TICKS_PER_VANILLA_DAY
+                // The node is drawn as a swing either side of vanilla's -90, so it can land outside a turn —
+                // `-208°` rather than the `152°` that means the same thing. Rotations are modular so the
+                // *value* is correct; only the read-out is confusing, so it is normalised here.
+                val node = ((path.ascendingNodeDegrees % FULL_TURN) + FULL_TURN) % FULL_TURN
+                "$kind tilt %+4.0f° node %3.0f° phase %3.0f° period %.2f days distance %.0f size %.0f%s".format(
+                    path.inclinationDegrees, node, path.phaseDegrees, days, path.distance, size, direction,
+                )
+            }
+
+            else -> {
+                val days = path.periodTicks.toFloat() / Orbit.TICKS_PER_VANILLA_DAY
+                val swing = path.swing()
+                "$kind %s reaching %+4.0f°..%+4.0f° period %.2f days distance %.0f size %.0f".format(
+                    path.kindKey, swing.lowest, swing.highest, days, path.distance, size,
+                )
+            }
+        }
     } + decks.map { deck ->
         "deck height %.0f drift %.3f thickness %.0f".format(deck.height, deck.driftSpeed, deck.halfThickness * 2)
     } + listOfNotNull(

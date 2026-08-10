@@ -127,7 +127,7 @@ class OrbitCheck : FunSpec({
         // and a hundred and eighty degrees out puts every sunset in the wrong quarter of the sky.
         fun bearingWhenCrossing(from: Long): Float {
             val crossing = HorizonCrossing.next(Orbit.VANILLA_SUN, from) ?: error("vanilla's sun never crosses")
-            return Orbit.VANILLA_SUN.azimuthAt(crossing.dayTime)
+            return Orbit.VANILLA_SUN.bearingAt(crossing.dayTime)
         }
 
         val sunset = bearingWhenCrossing(noon)
@@ -152,7 +152,7 @@ class OrbitCheck : FunSpec({
         // outside any glow's reach anyway.
         val vanillas = (0..<Orbit.TICKS_PER_VANILLA_DAY step 10)
             .filter { Math.abs(Orbit.VANILLA_SUN.altitudeAt(it.toLong())) < 85.0f }
-            .map { Orbit.VANILLA_SUN.azimuthAt(it.toLong()) }
+            .map { Orbit.VANILLA_SUN.bearingAt(it.toLong()) }
         val awayFromTheMeridian = vanillas.filter { Math.abs(it - 90.0f) > 1.0f && Math.abs(it - 270.0f) > 1.0f }
         check(awayFromTheMeridian.isEmpty()) {
             "Vanilla's sun was found at ${awayFromTheMeridian.size} bearings other than due east or due west, " +
@@ -160,7 +160,7 @@ class OrbitCheck : FunSpec({
         }
 
         val tilted = Orbit.VANILLA_SUN.copy(inclinationDegrees = 55.0f)
-        val swept = (0..<Orbit.TICKS_PER_VANILLA_DAY step 10).map { tilted.azimuthAt(it.toLong()) }
+        val swept = (0..<Orbit.TICKS_PER_VANILLA_DAY step 10).map { tilted.bearingAt(it.toLong()) }
         val distinctQuarters = swept.map { (it / 90.0f).toInt() }.distinct()
         check(distinctQuarters.size >= 3) {
             "A sun tilted 55° only ever appeared in ${distinctQuarters.size} quarter(s) of the compass. It " +

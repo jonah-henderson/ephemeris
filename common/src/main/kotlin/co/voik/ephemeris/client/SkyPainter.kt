@@ -93,17 +93,16 @@ object SkyPainter {
         moonPhase: MoonPhase,
         rainBrightness: Float,
     ) {
-        for (body in spec.bodies.sortedByDescending { it.orbit.distance }) {
+        for (body in spec.bodies.sortedByDescending { it.path.distance }) {
             val sprite = body.appearance as? Appearance.Sprite ?: continue
-            val progress = progressOf(body, clockTime, sunAngle, moonAngle)
             val shape = sprite.shapes[shapeIndexOf(body, sprite, clockTime, moonPhase)]
             // A body that waxes and wanes is lit rather than luminous, and so covers rather than glows.
             val luminous = body.phase == null
             val tint = if (luminous) sprite.tint.dimmed(LUMINOUS_ADDS) else sprite.tint
             canvas.drawBody(
                 shape = shape,
-                orientation = body.orbit.rotationAtProgress(progress),
-                distance = body.orbit.distance,
+                orientation = orientationOf(body, clockTime, sunAngle, moonAngle),
+                distance = body.path.distance,
                 angularSize = sprite.angularSize,
                 tint = tint.copy(alpha = tint.alpha * rainBrightness),
                 emitsOwnLight = luminous,
@@ -140,16 +139,27 @@ object SkyPainter {
      * day curve would only be close, and it survives vanilla changing that curve — which it has, the sun's
      * schedule now being a timeline rather than a formula. Everything else turns on the level's clock.
      */
-    private fun progressOf(body: CelestialBody, clockTime: Long, sunAngle: Float, moonAngle: Float): Float =
-        when (body.orbit) {
-            Orbit.VANILLA_SUN -> sunAngle / FULL_TURN_RADIANS
-            Orbit.VANILLA_MOON -> moonAngle / FULL_TURN_RADIANS
-            else -> body.orbit.progressAt(clockTime)
+    private fun orientationOf(
+        body: CelestialBody,
+        clockTime: Long,
+        sunAngle: Float,
+        moonAngle: Float,
+    ): Quaternionf {
+        val path = body.path
+        // Named rather than smart-cast: an equality branch against a constant tells Kotlin nothing about
+        // the type, and reaching for the constants directly says plainly which angle belongs to which.
+        if (path == Orbit.VANILLA_SUN) {
+            return Orbit.VANILLA_SUN.orientationAtProgress(sunAngle / FULL_TURN_RADIANS)
         }
+        if (path == Orbit.VANILLA_MOON) {
+            return Orbit.VANILLA_MOON.orientationAtProgress(moonAngle / FULL_TURN_RADIANS)
+        }
+        return path.orientationAt(clockTime)
+    }
 
     /**
      * Which of the body's shapes it is showing. A body with one shape never changes; vanilla's own moon
-     * takes vanilla's phase, for the same reason its orbit does.
+     * takes vanilla's phase, for the same reason its path does.
      */
     private fun shapeIndexOf(
         body: CelestialBody,
@@ -158,7 +168,7 @@ object SkyPainter {
         moonPhase: MoonPhase,
     ): Int {
         val step = when {
-            body.orbit == Orbit.VANILLA_MOON -> moonPhase.index()
+            body.path == Orbit.VANILLA_MOON -> moonPhase.index()
             else -> body.phase?.stepAt(clockTime) ?: 0
         }
         return step.coerceIn(0, sprite.shapes.size - 1)

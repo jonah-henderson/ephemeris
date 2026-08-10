@@ -9,7 +9,7 @@ import net.minecraft.util.Mth
 import net.minecraft.world.level.MoonPhase
 
 /**
- * One sun or moon: where it goes ([orbit]), what it looks like ([appearance]), and whether it waxes and wanes
+ * One sun or moon: where it goes ([path]), what it looks like ([appearance]), and whether it waxes and wanes
  * ([phase]).
  *
  * Separate on purpose: appearance is the part most likely to change when the mod grows a texture
@@ -17,7 +17,7 @@ import net.minecraft.world.level.MoonPhase
  * the orbital maths or the codec shape noticing.
  */
 data class CelestialBody(
-    val orbit: Orbit,
+    val path: CelestialPath,
     val appearance: Appearance,
     /** Null for a body that never changes, which is every sun. */
     val phase: PhaseCycle? = null,
@@ -25,10 +25,10 @@ data class CelestialBody(
     companion object {
         val CODEC: Codec<CelestialBody> = RecordCodecBuilder.create { instance ->
             instance.group(
-                Orbit.CODEC.fieldOf("orbit").forGetter(CelestialBody::orbit),
+                CelestialPath.CODEC.fieldOf("orbit").forGetter(CelestialBody::path),
                 Appearance.CODEC.fieldOf("appearance").forGetter(CelestialBody::appearance),
                 PhaseCycle.CODEC.optionalFieldOf("phase").forGetter { body -> java.util.Optional.ofNullable(body.phase) },
-            ).apply(instance) { orbit, appearance, phase -> CelestialBody(orbit, appearance, phase.orElse(null)) }
+            ).apply(instance) { path, appearance, phase -> CelestialBody(path, appearance, phase.orElse(null)) }
         }
     }
 }

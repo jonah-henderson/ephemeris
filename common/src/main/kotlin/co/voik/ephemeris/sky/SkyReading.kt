@@ -66,9 +66,9 @@ data class BodyReading(
     val isSun: Boolean get() = body.phase == null
 
     /** Never sets, so a level following it is in permanent day. */
-    val staysUp: Boolean get() = body.orbit.staysUp
+    val staysUp: Boolean get() = body.path.staysUp
 
-    val neverRises: Boolean get() = body.orbit.neverRises
+    val neverRises: Boolean get() = body.path.neverRises
 
     /**
      * How near the horizon this body is, `0..1`, for weighting a glow — 1 exactly on it, falling to 0 by
@@ -93,8 +93,8 @@ data class BodyReading(
         fun of(index: Int, body: CelestialBody, dayTime: Long): BodyReading = BodyReading(
             index,
             body,
-            body.orbit.altitudeAt(dayTime),
-            body.orbit.azimuthAt(dayTime),
+            body.path.altitudeAt(dayTime),
+            body.path.bearingAt(dayTime),
         )
     }
 }
@@ -113,16 +113,16 @@ data class HorizonCrossing(val dayTime: Long, val rising: Boolean) {
          * The next crossing strictly after [after], or **null** for a body that never crosses — one that
          * stays up, or one that never rises.
          */
-        fun next(orbit: Orbit, after: Long): HorizonCrossing? {
-            if (orbit.staysUp || orbit.neverRises) return null
+        fun next(path: CelestialPath, after: Long): HorizonCrossing? {
+            if (path.staysUp || path.neverRises) return null
             var previousTime = after
-            var previous = orbit.altitudeAt(previousTime) >= 0.0f
+            var previous = path.altitudeAt(previousTime) >= 0.0f
             // One full period is enough by definition: a path that crosses at all crosses within one turn.
-            val end = after + orbit.periodTicks
+            val end = after + path.periodTicks
             var time = after + STEP
             while (time <= end) {
-                val up = orbit.altitudeAt(time) >= 0.0f
-                if (up != previous) return HorizonCrossing(narrow(orbit, previousTime, time, previous), up)
+                val up = path.altitudeAt(time) >= 0.0f
+                if (up != previous) return HorizonCrossing(narrow(path, previousTime, time, previous), up)
                 previousTime = time
                 previous = up
                 time += STEP
@@ -131,12 +131,12 @@ data class HorizonCrossing(val dayTime: Long, val rising: Boolean) {
         }
 
         /** Bisect the step the crossing fell inside, down to the tick. */
-        private fun narrow(orbit: Orbit, before: Long, after: Long, wasUp: Boolean): Long {
+        private fun narrow(path: CelestialPath, before: Long, after: Long, wasUp: Boolean): Long {
             var low = before
             var high = after
             while (high - low > 1) {
                 val middle = low + (high - low) / 2
-                if ((orbit.altitudeAt(middle) >= 0.0f) == wasUp) low = middle else high = middle
+                if ((path.altitudeAt(middle) >= 0.0f) == wasUp) low = middle else high = middle
             }
             return high
         }
