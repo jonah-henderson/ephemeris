@@ -177,6 +177,23 @@ object Blaze3dSkyCanvas : SkyCanvas {
         .withVertexFormat(DefaultVertexFormat.POSITION_TEX, VertexFormat.Mode.QUADS)
         .build()
 
+    /**
+     * The covering pipeline for a sprite that carries no transparency of its own — **vanilla's own**.
+     *
+     * Vanilla's vertex shader with a fragment shader of ours that cuts the sky out by luminance. Only the
+     * fragment stage differs, so nothing about how the quad is placed is restated.
+     */
+    private val CUT_BODY_PIPELINE: RenderPipeline = RenderPipeline.builder()
+        .withLocation(Identifier.fromNamespaceAndPath(NAMESPACE, "pipeline/celestial_cut"))
+        .withVertexShader(Identifier.withDefaultNamespace("core/position_tex"))
+        .withFragmentShader(Identifier.fromNamespaceAndPath(NAMESPACE, "celestial_cut"))
+        .withSampler("Sampler0")
+        .withUniform("DynamicTransforms", UniformType.UNIFORM_BUFFER)
+        .withUniform("Projection", UniformType.UNIFORM_BUFFER)
+        .withColorTargetState(ColorTargetState(BlendFunction.TRANSLUCENT))
+        .withVertexFormat(DefaultVertexFormat.POSITION_TEX, VertexFormat.Mode.QUADS)
+        .build()
+
     /** Half the slab's width. Beyond this the deck simply ends, which is why it is walled. */
     private const val DECK_RADIUS = 512.0f
 
@@ -311,7 +328,7 @@ object Blaze3dSkyCanvas : SkyCanvas {
         val quadIndices = RenderSystem.getSequentialBuffer(VertexFormat.Mode.QUADS)
 
         renderPass("Ephemeris sky body")?.use { pass ->
-            pass.setPipeline(if (emitsOwnLight) RenderPipelines.CELESTIAL else OCCLUDING_BODY_PIPELINE)
+            pass.setPipeline(pipelineFor(shape, emitsOwnLight))
             RenderSystem.bindDefaultUniforms(pass)
             pass.setUniform("DynamicTransforms", transforms)
             pass.bindTexture("Sampler0", atlas.textureView, atlas.sampler)
@@ -321,6 +338,22 @@ object Blaze3dSkyCanvas : SkyCanvas {
         }
 
         modelViewStack.popMatrix()
+    }
+
+    /**
+     * Which pipeline draws [shape].
+     *
+     * Adding needs no cut — dark contributes nothing to a sum, which is exactly why vanilla's sprites can
+     * get away with having no alpha. Covering does, and **only vanilla's own sprites are cut**: a consumer's
+     * texture is presumed to carry the transparency it needs, and quietly discarding the dark parts of
+     * somebody's carefully drawn moon would be a surprise nobody asked for. One that wants the treatment
+     * anyway, or a different one, registers its own through [SpriteCuts].
+     */
+    private fun pipelineFor(shape: Identifier, emitsOwnLight: Boolean): RenderPipeline {
+        if (emitsOwnLight) return RenderPipelines.CELESTIAL
+        SpriteCuts.of(shape)?.let { return it }
+        val isVanillas = shape.namespace == Identifier.DEFAULT_NAMESPACE
+        return if (isVanillas) CUT_BODY_PIPELINE else OCCLUDING_BODY_PIPELINE
     }
 
     override fun drawStarfield(seed: Long, count: Int, orientation: Quaternionf, brightness: Float, timeTicks: Long) {

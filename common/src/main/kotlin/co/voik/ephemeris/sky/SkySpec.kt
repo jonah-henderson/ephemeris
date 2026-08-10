@@ -93,6 +93,9 @@ data class SkySpec(
                 offsetTicks = 0,
                 steps = Appearance.MOON_SHAPES.size,
             ),
+            // A moon is a body, not a light: it hides what is behind it. Safe now that the sky baked into
+            // vanilla's sprite is cut away — see `Blending.COVERS` and `celestial_cut.fsh`.
+            blending = Blending.COVERS,
         )
 
         /** An ordinary sky: one sun on vanilla's own orbit, one moon opposite it, vanilla's star count. */
@@ -167,6 +170,7 @@ data class SkySpec(
                         // `SkyCheck`, because a mismatch would index past the last sprite.
                         steps = Appearance.MOON_SHAPES.size,
                     ),
+                    blending = Blending.COVERS,
                 )
             }
 
