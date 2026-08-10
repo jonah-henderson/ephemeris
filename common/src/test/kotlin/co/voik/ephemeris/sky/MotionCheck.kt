@@ -133,6 +133,33 @@ class MotionCheck : FunSpec({
         }
     }
 
+    test("a swelling orbit comes nearer and goes further, and a plain one does not") {
+        val plain = Orbit.VANILLA_SUN
+        val swelling = Orbit.VANILLA_SUN.copy(swell = 0.4f)
+
+        val fixed = (0..<day step 250).map { plain.distanceAt(it.toLong()) }.distinct()
+        check(fixed.size == 1) { "A circle's distance varied across the day: $fixed" }
+
+        val varying = (0..<day step 250).map { swelling.distanceAt(it.toLong()) }
+        check(varying.min() < plain.distance * 0.7f) {
+            "A swelling orbit never came nearer than ${varying.min()}, so it would not read as an ellipse"
+        }
+        check(varying.max() > plain.distance * 1.3f) { "A swelling orbit never went further than ${varying.max()}" }
+        // Apparent size is the drawn size over the distance, so this is also how much bigger it looks.
+        check(varying.max() / varying.min() > 2.0f) {
+            "Nearest to furthest was only ${varying.max() / varying.min()}× — barely visible as a change of size"
+        }
+    }
+
+    test("a swell can never carry a body through the camera") {
+        val absurd = Orbit.VANILLA_SUN.copy(swell = 5.0f)
+        val nearest = (0..<day step 100).map { absurd.distanceAt(it.toLong()) }.min()
+        check(nearest > 0.0f) {
+            "An absurd swell brought a body to $nearest — at or past the camera, where it would fill the sky " +
+                "and then turn inside out"
+        }
+    }
+
     test("risingAt puts the sun where it says") {
         for (bearing in listOf(45.0f, 90.0f, 135.0f)) {
             val path = Orbit.risingAt(bearing)

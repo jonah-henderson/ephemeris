@@ -95,7 +95,9 @@ object SkyPainter {
         moonPhase: MoonPhase,
         rainBrightness: Float,
     ) {
-        for (body in spec.bodies.sortedByDescending { it.path.distance }) {
+        // Sorted by where each body is *now*: a path that swells and shrinks changes which body is in
+        // front, and the sky pass writes no depth, so order is the only thing that decides.
+        for (body in spec.bodies.sortedByDescending { it.path.distanceAt(clockTime) }) {
             val sprite = body.appearance as? Appearance.Sprite ?: continue
             val shape = sprite.shapes[shapeIndexOf(body, sprite, clockTime, moonPhase)]
             // A body that waxes and wanes is lit rather than luminous, and so covers rather than glows.
@@ -104,7 +106,7 @@ object SkyPainter {
             canvas.drawBody(
                 shape = shape,
                 orientation = facingOf(body, clockTime, sunAngle, moonAngle),
-                distance = body.path.distance,
+                distance = body.path.distanceAt(clockTime),
                 angularSize = sprite.angularSize,
                 tint = tint.copy(alpha = tint.alpha * rainBrightness),
                 emitsOwnLight = luminous,

@@ -57,6 +57,14 @@ data class Orbit(
     val liftDegrees: Float = 0.0f,
     /** How the sweep is paced. Vanilla's curve by default, so an ordinary orbit behaves as vanilla's does. */
     val pacing: Pacing = Pacing.VANILLAS,
+    /**
+     * How far the radius swells and shrinks over one revolution, as a fraction of [distance] — what turns a
+     * circle into something that reads as an ellipse.
+     *
+     * Nearest at the start of the sweep and furthest half a revolution later. Zero is a true circle, and
+     * anything at or past one would pass through the camera, so it is held short of that.
+     */
+    val swell: Float = 0.0f,
 ) : CelestialPath {
 
     override val kindKey: String get() = CelestialPath.ORBIT
@@ -107,6 +115,12 @@ data class Orbit(
     override fun orientationAt(dayTime: Long): Quaternionf = stack.orientationAt(dayTime)
 
     override fun swing(): CelestialPath.Swing = stack.swing()
+
+    override fun distanceAt(dayTime: Long): Float {
+        if (swell == 0.0f) return distance
+        val around = progressAt(dayTime) * Math.PI.toFloat() * 2.0f
+        return distance * (1.0f - swell.coerceIn(-MOST_SWELL, MOST_SWELL) * Math.cos(around.toDouble()).toFloat())
+    }
 
     /** How far along its circle the body is at [dayTime], in `0.0..1.0`. */
     fun progressAt(dayTime: Long): Float = sweep.progressAt(dayTime)
@@ -166,6 +180,9 @@ data class Orbit(
         fun risingAt(bearingDegrees: Float, from: Orbit = VANILLA_SUN): Orbit =
             from.copy(ascendingNodeDegrees = -bearingDegrees)
 
+        /** Short of one, which would carry a body through the camera. */
+        private const val MOST_SWELL = 0.9f
+
         private const val HALF_TURN = 180.0f
 
         /** Where vanilla's own sun leans, and the one node that means "vanilla's path". */
@@ -186,6 +203,7 @@ data class Orbit(
                 Codec.FLOAT.fieldOf("distance").forGetter(Orbit::distance),
                 Codec.FLOAT.optionalFieldOf("lift", 0.0f).forGetter(Orbit::liftDegrees),
                 Pacing.CODEC.optionalFieldOf("pacing", Pacing.VANILLAS).forGetter(Orbit::pacing),
+                Codec.FLOAT.optionalFieldOf("swell", 0.0f).forGetter(Orbit::swell),
             ).apply(instance, ::Orbit)
         }
 

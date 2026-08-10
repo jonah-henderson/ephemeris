@@ -30,8 +30,7 @@ sealed interface CelestialPath {
     fun orientationAt(dayTime: Long): Quaternionf
 
     /**
-     * Radius of the path. Only relative values matter — the sky pass writes no depth, so this decides draw
-     * order and nothing else.
+     * Radius of the path, where it does not vary. See [distanceAt], which is what a renderer should ask.
      */
     val distance: Float
 
@@ -63,6 +62,15 @@ sealed interface CelestialPath {
      * `atan2(x, z)` would measure from south and put every sunset in the wrong quarter of the sky.
      */
     fun bearingAt(dayTime: Long): Float = bearingOf(directionAt(dayTime))
+
+    /**
+     * How far away the body is at [dayTime]. Constant unless a path says otherwise.
+     *
+     * **Apparent size follows this for nothing.** The quad is drawn at this distance under a real
+     * projection, so a body that comes nearer is simply bigger on the screen — which is what makes an
+     * elliptical path read as one rather than as a body that merely changes draw order.
+     */
+    fun distanceAt(dayTime: Long): Float = distance
 
     fun isUpAt(dayTime: Long): Boolean = altitudeAt(dayTime) >= 0.0f
 
