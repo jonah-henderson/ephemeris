@@ -9,6 +9,7 @@ import net.minecraft.network.protocol.common.custom.CustomPacketPayload
 import net.minecraft.resources.Identifier
 import net.minecraft.resources.ResourceKey
 import net.minecraft.world.level.Level
+import java.util.Optional
 
 /**
  * What some levels look like, on its way to a client.
@@ -59,8 +60,11 @@ data class LevelLookPayload(val looks: List<Entry>) : CustomPacketPayload {
             LevelLook::corners,
             ByteBufCodecs.fromCodec(SkyRules.CODEC),
             LevelLook::rules,
-            ::LevelLook,
-        )
+            // A registry key by name, like the dimension key beside it, and for the same reason: the client
+            // has this registry even though it has none the runtime level itself is in.
+            ByteBufCodecs.optional(ResourceKey.streamCodec(Registries.DIMENSION_TYPE)),
+            { Optional.ofNullable(it.airFrom) },
+        ) { sky, air, corners, rules, airFrom -> LevelLook(sky, air, corners, rules, airFrom.orElse(null)) }
 
         private val ENTRY_STREAM_CODEC: StreamCodec<ByteBuf, Entry> = StreamCodec.composite(
             ResourceKey.streamCodec(Registries.DIMENSION),

@@ -3,6 +3,7 @@ package co.voik.ephemeris.sky
 import net.minecraft.resources.Identifier
 import net.minecraft.resources.ResourceKey
 import net.minecraft.world.level.Level
+import net.minecraft.world.level.dimension.DimensionType
 
 /**
  * What each level looks like, as this client has been told.
@@ -80,11 +81,23 @@ data class LevelLook(
     val corners: Map<Identifier, Look> = emptyMap(),
     /** What this sky is allowed to decide about the level under it, and how it paints the horizon. */
     val rules: SkyRules = SkyRules.DEFAULT,
+    /**
+     * **Another world's air, which this level's starts from** — null for a level that starts from its own.
+     *
+     * A runtime level wears a `DimensionType` written before it existed, so a level built to *feel* like
+     * one of vanilla's cannot wear that one's: our roofed type is worn by every roofed level, and baking
+     * the nether's fog distances into it would give them to all of them. Naming the world instead costs one
+     * identifier and keeps every number vanilla's own.
+     *
+     * **A floor under everything else here.** Whatever this look says wins; this fills what it leaves
+     * unsaid. Applying it is the consumer's — the library carries it because this is what crosses.
+     */
+    val airFrom: ResourceKey<DimensionType>? = null,
 ) {
     /** Where everything stands at [dayTime]. Pure, so both sides get the same answer without asking. */
     fun readAt(dayTime: Long): SkyReading = SkyReading.of(sky, dayTime)
 
     /** Whether this says anything at all, so a renderer can decline cheaply. */
     val saysNothing: Boolean
-        get() = sky.isOrdinary && air.saysNothing && corners.isEmpty() && sky.decks.isEmpty()
+        get() = sky.isOrdinary && air.saysNothing && corners.isEmpty() && sky.decks.isEmpty() && airFrom == null
 }
