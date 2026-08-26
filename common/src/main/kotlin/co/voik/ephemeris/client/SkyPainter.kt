@@ -5,6 +5,7 @@ import co.voik.ephemeris.sky.Appearance
 import co.voik.ephemeris.sky.Blending
 import co.voik.ephemeris.sky.CelestialBody
 import co.voik.ephemeris.sky.LevelLook
+import co.voik.ephemeris.sky.LevelDaylight
 import co.voik.ephemeris.sky.LevelLooks
 import co.voik.ephemeris.sky.Facing
 import co.voik.ephemeris.sky.Orbit
@@ -72,16 +73,22 @@ object SkyPainter {
         // *covers* is painted over by anything drawn after — which is how stars came to shine through a full
         // moon. The sky pass writes no depth, so order is the whole of what decides.
         val revealed = stars.reveal?.visibilityAt(eyeHeight()) ?: 1.0f
-        // **Vanilla's own answer, and it is already ours.** `STAR_BRIGHTNESS` is a timeline track, and
-        // `LevelClock` maps the hour the timelines read to the one this level's suns put it at — so what we
-        // are handed already follows them. Working it out a second time here, as this did before the clock
-        // was mapped, meant two ramps with different numbers disagreeing: stars out over a blue sky.
-        val visibility = starBrightness * revealed
+        // **The stars follow the light, not the hour.** `STAR_BRIGHTNESS` is a timeline track and
+        // `SKY_LIGHT_FACTOR` is another, and vanilla keeps them in antiphase by writing both — which is
+        // exact for one sun on vanilla's path and wrong for every sky it could not have drawn. An Age with
+        // no sun stood pitch dark and starless at noon, the track saying it was daytime (Jonah,
+        // 2026-08-25, walked). [LevelDaylight.starlitnessFor] is the same ramp off the same sun the level's
+        // own light already follows, so the two cannot disagree.
+        //
+        // **An authored brightness still wins.** A level that pins its stars means it — the Spire holds
+        // them on through its day, having been built around a reveal above the cloud decks.
+        val starlit = look.air.starBrightness ?: LevelDaylight.starlitnessFor(level) ?: starBrightness
+        val visibility = starlit * revealed
         if (stars.count > 0 && visibility > STARS_WORTH_DRAWING) {
             canvas.drawStarfield(stars.seed, stars.count, aroundVanillasAxis(starAngle), visibility, clockTime)
         }
 
-        val skyLit = 1.0f - starBrightness
+        val skyLit = 1.0f - starlit
         drawBodies(canvas, spec, clockTime, sunAngle, moonAngle, moonPhase, rainBrightness, look.rules, skyLit)
         return true
     }

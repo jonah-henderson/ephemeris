@@ -71,6 +71,47 @@ object LevelDaylight {
         return Math.round(Mth.lerp(eased, NIGHT_DARKENING.toFloat(), DAY_DARKENING.toFloat()))
     }
 
+    /**
+     * **How far the stars come through**, on the same ramp and from the same sun the light follows — or
+     * null where vanilla's own answer is the better one.
+     *
+     * Vanilla drives `STAR_BRIGHTNESS` and `SKY_LIGHT_FACTOR` as two independent keyframe tracks that
+     * happen to be in antiphase, so the stars are told what hour it is rather than how lit the sky is.
+     * That is exact for one sun on vanilla's path and wrong for every other sky: an Age with no sun at all
+     * still read "noon, stars off" and stood pitch dark under an empty sky (Jonah, 2026-08-25, walked).
+     *
+     * Following the light instead makes the three cases fall out of one rule rather than being written
+     * down: **no sun means the sky is never lit**, so the stars are always out; **several suns** keep one
+     * above the horizon most of the day, so they rarely are; and one sun on vanilla's path reproduces
+     * vanilla, that being what [darkeningFor] is a ramp of.
+     *
+     * **Only the fade.** Where the stars *are* is [co.voik.ephemeris.client.SkyPainter]'s business and
+     * turns on the level's clock, so they still wheel over a sunless Age at the rate its day runs at.
+     */
+    fun starlitnessFor(level: Level): Float? {
+        val look = LevelLooks.anywhere(level.dimension()) ?: return null
+        if (look.sky.isOrdinary) return null
+        if (look.rules.daylight == Daylight.VANILLA_CLOCK) return null
+
+        return starlitnessOf(look.readAt(level.defaultClockTime), look.rules)
+    }
+
+    /**
+     * The same, of a reading rather than a level — pure, so the three cases can be checked without a game.
+     *
+     * **A sky with no sun in it is never lit**, whatever hour the clock says, and that is the one case
+     * that cannot be read off an altitude because there is none to read. [skyDarkenFor] answers null to
+     * the same absence because it is asking a different question: what the *world* should do, where
+     * leaving vanilla's own curve alone is the safer silence.
+     */
+    fun starlitnessOf(reading: SkyReading, rules: SkyRules): Float {
+        val deciding = decidingSun(reading, rules) ?: return FULLY_STARLIT
+        return darkeningFor(deciding.altitudeDegrees) / NIGHT_DARKENING.toFloat()
+    }
+
+    /** Stars at their fullest — what a sky with nothing lighting it shows at every hour. */
+    private const val FULLY_STARLIT = 1.0f
+
     /** Where the ramp begins and ends, in degrees of altitude. */
     private const val FULLY_LIT_ABOVE = 5.0f
     private const val FULLY_DARK_BELOW = -11.0f
