@@ -45,6 +45,9 @@ object RuntimeLevels {
         val dimension = ResourceKey.create(Registries.DIMENSION, id)
         server.levels[dimension]?.let { return it }
 
+        // **Before the level is built, because its own chunk cache asks during construction.** See
+        // [RuntimeLevelSeeds] for why this is ours rather than `LevelStem`'s seed override.
+        RuntimeLevelSeeds.remember(dimension, config.seed)
         val stem = LevelStem(config.dimensionType, config.generator)
         val level = ServerLevel(
             server,
@@ -58,7 +61,7 @@ object RuntimeLevels {
             stem,
             false,
             BiomeManager.obfuscateSeed(config.seed),
-            ImmutableList.of(),
+            ImmutableList.copyOf(config.customSpawners),
             config.tickTime,
         )
 
@@ -101,6 +104,7 @@ object RuntimeLevels {
         server.levels[dimension]?.let { level ->
             RuntimeLevelEvents.closing(level)
             server.levels.remove(dimension)
+            RuntimeLevelSeeds.forget(dimension)
             RuntimeLevelPlatform.of().levelClosing(server, level)
             runCatching { level.close() }.onFailure {
                 RuntimeLevelLog.warn("Could not close $id cleanly; its files are left alone", it)

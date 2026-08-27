@@ -1,6 +1,7 @@
 package co.voik.ephemeris.mixin;
 
 import co.voik.ephemeris.LevelWeather;
+import co.voik.ephemeris.RuntimeLevelSeeds;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.saveddata.WeatherData;
 import org.spongepowered.asm.mixin.Mixin;
@@ -20,6 +21,27 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
  */
 @Mixin(ServerLevel.class)
 public abstract class ServerLevelMixin {
+
+    /**
+     * The seed a runtime level generates from, where it has one of its own.
+     *
+     * <p><b>Everything that decides terrain reads this one method.</b> The chunk cache builds its
+     * {@code RandomState} from it while this level's constructor is still running, and structure placement
+     * asks it ever afterwards — so two levels sharing a world share their terrain unless something answers
+     * differently. Vanilla has nowhere to put a second seed; NeoForge added {@code LevelStem}'s
+     * {@code neoforge:seed_override} and Fabric has no equivalent, so reaching for that would compile
+     * against the merged sources and fail on the loader that never had it.
+     *
+     * <p>Keyed by dimension because that is settled in {@code Level}'s own constructor, before the body
+     * that asks. See {@code RuntimeLevelSeeds}.
+     */
+    @Inject(method = "getSeed", at = @At("HEAD"), cancellable = true)
+    private void ephemeris$ownSeed(CallbackInfoReturnable<Long> callback) {
+        Long own = RuntimeLevelSeeds.INSTANCE.of(((ServerLevel) (Object) this).dimension());
+        if (own != null) {
+            callback.setReturnValue(own);
+        }
+    }
 
     @Inject(method = "getWeatherData", at = @At("HEAD"), cancellable = true)
     private void ephemeris$ownWeather(CallbackInfoReturnable<WeatherData> callback) {
