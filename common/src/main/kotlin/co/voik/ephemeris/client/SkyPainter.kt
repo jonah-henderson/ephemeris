@@ -36,6 +36,16 @@ object SkyPainter {
     /** Below this the stars are too faint to be worth the draw. */
     private const val STARS_WORTH_DRAWING = 0.01f
 
+    /**
+     * **How bright vanilla's own stars ever get, and it is half** — `Timelines.OVERWORLD_DAY` keyframes
+     * `STAR_BRIGHTNESS` to a midnight peak of `0.5`.
+     *
+     * Nightliness runs `0..1` and drawing at it directly burned every strange sky's stars at one, which the
+     * sky pass squares into four times vanilla's light. A field meant to blaze says so with its own
+     * [co.voik.ephemeris.sky.StarField.glow] rather than by being the default.
+     */
+    private const val VANILLAS_BRIGHTEST_STARS = 0.5f
+
     private const val FULL_TURN_RADIANS = (2.0 * Math.PI).toFloat()
 
     /** Vanilla reaches the axis it swings its sky about with this turn about the vertical. */
@@ -80,15 +90,20 @@ object SkyPainter {
         // 2026-08-25, walked). [LevelDaylight.starlitnessFor] is the same ramp off the same sun the level's
         // own light already follows, so the two cannot disagree.
         //
-        // **An authored brightness still wins.** A level that pins its stars means it — the Spire holds
+        // **An authored nightliness still wins.** A level that pins its stars means it — the Spire holds
         // them on through its day, having been built around a reveal above the cloud decks.
-        val starlit = look.air.starBrightness ?: LevelDaylight.starlitnessFor(level) ?: starBrightness
-        val visibility = starlit * revealed
+        //
+        // Vanilla's own track is the last resort and is read back onto this scale, so that a level keeping
+        // vanilla's clock and one following its own suns mean the same thing by the same number.
+        val nightliness = look.air.starBrightness
+            ?: LevelDaylight.starlitnessFor(level)
+            ?: (starBrightness / VANILLAS_BRIGHTEST_STARS)
+        val visibility = nightliness * VANILLAS_BRIGHTEST_STARS * stars.glow * revealed
         if (stars.count > 0 && visibility > STARS_WORTH_DRAWING) {
             canvas.drawStarfield(stars.seed, stars.count, aroundVanillasAxis(starAngle), visibility, clockTime)
         }
 
-        val skyLit = 1.0f - starlit
+        val skyLit = 1.0f - nightliness
         drawBodies(canvas, spec, clockTime, sunAngle, moonAngle, moonPhase, rainBrightness, look.rules, skyLit)
         return true
     }

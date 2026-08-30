@@ -34,7 +34,9 @@ data class SkySpec(
     val isOrdinary: Boolean
         get() {
             val bodiesAreVanillas = bodies == VANILLA.bodies
-            val starsAreVanillas = stars.count == VANILLA.stars.count && stars.reveal == null
+            val starsAreVanillas = stars.count == VANILLA.stars.count &&
+                stars.reveal == null &&
+                stars.glow == VANILLA.stars.glow
             return bodiesAreVanillas && starsAreVanillas
         }
 
@@ -134,6 +136,7 @@ data class SkySpec(
             seed: Long,
             sunSize: Float = VANILLA_SUN_SIZE,
             sunColour: Rgba? = null,
+            starGlow: Float = ORDINARY_STAR_GLOW,
         ): SkySpec {
             val random = XoroshiroRandomSource(seed xor SKY_SALT)
             val bodies = mutableListOf<CelestialBody>()
@@ -176,7 +179,7 @@ data class SkySpec(
 
             // Drawn even when the count is zero, so that "no stars" and "stars we happened to draw none of"
             // cannot be confused — the count is the statement, the seed is only how it is arranged.
-            val stars = StarField(starCount.coerceAtLeast(0), random.nextLong())
+            val stars = StarField(starCount.coerceAtLeast(0), random.nextLong(), glow = starGlow)
             return SkySpec(bodies, stars)
         }
 
@@ -243,8 +246,15 @@ data class SkySpec(
         const val VANILLA_SUN_SIZE = 30.0f
         const val VANILLA_MOON_SIZE = 20.0f
 
-        /** Vanilla attempts 1500 stars and keeps most of them; ours are placed rather than rejected. */
-        const val VANILLA_STAR_COUNT = 1500
+        /**
+         * How many stars vanilla actually shows, which is **not** the 1500 its code names: it samples a cube
+         * and drops every point outside the unit ball, so a little over half survive. Ours are placed rather
+         * than rejected, so asking for 1500 gave a sky twice as crowded as the one it was copying.
+         */
+        const val VANILLA_STAR_COUNT = 780
+
+        /** Vanilla's own, and what [StarField.glow] is a multiple of. */
+        const val ORDINARY_STAR_GLOW = 1.0f
 
         private const val FULL_TURN = 360.0f
         private const val WIDEST_INCLINATION = 85.0f
@@ -287,6 +297,17 @@ data class StarField(
      * Present only where a sky hides its stars behind something, such as an overcast you have to climb above.
      */
     val reveal: StarReveal? = null,
+    /**
+     * How brightly the field burns, against vanilla's own — [SkySpec.ORDINARY_STAR_GLOW] being vanilla's.
+     *
+     * A separate fact from how many there are and from how far into its night the level is: a sky may have
+     * vanilla's count at vanilla's hour and still be one whose stars blaze. **Not the way to make a field
+     * fainter** — a thin sky is a sparse one, and that is [count]'s to say.
+     *
+     * The sky pass blends `(SRC_ALPHA, ONE)`, so what is added goes as the *square* of the brightness a
+     * field is drawn at: doubling this quadruples the light it lays on the sky.
+     */
+    val glow: Float = SkySpec.ORDINARY_STAR_GLOW,
 ) {
     companion object {
         val CODEC: Codec<StarField> = RecordCodecBuilder.create { instance ->
@@ -295,7 +316,8 @@ data class StarField(
                 Codec.LONG.fieldOf("seed").forGetter(StarField::seed),
                 StarReveal.CODEC.optionalFieldOf("reveal")
                     .forGetter { field -> java.util.Optional.ofNullable(field.reveal) },
-            ).apply(instance) { count, seed, reveal -> StarField(count, seed, reveal.orElse(null)) }
+                Codec.FLOAT.optionalFieldOf("glow", SkySpec.ORDINARY_STAR_GLOW).forGetter(StarField::glow),
+            ).apply(instance) { count, seed, reveal, glow -> StarField(count, seed, reveal.orElse(null), glow) }
         }
     }
 }

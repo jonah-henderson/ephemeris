@@ -85,14 +85,21 @@ object Blaze3dSkyCanvas : SkyCanvas {
     private val starfields = mutableMapOf<Pair<Long, Int>, Starfield>()
 
     private const val STAR_DISTANCE = 100.0
-    private const val MIN_STAR_SIZE = 0.20
-    private const val STAR_SIZE_VARIATION = 0.15
+
+    /** Vanilla's own half-extents at its own distance, so a star reads as one of vanilla's. */
+    private const val MIN_STAR_SIZE = 0.15
+    private const val STAR_SIZE_VARIATION = 0.10
     private const val FULL_CIRCLE_RADIANS = 2.0 * Math.PI
 
-    /** Stars vary along a warm→cool axis, each twinkling at its own phase and rate. */
-    private val WARM_STAR = Rgba(0.95f, 0.87f, 0.76f)
-    private val COOL_STAR = Rgba(0.78f, 0.85f, 1.0f)
-    private const val STAR_TWINKLE_DIP = 0.35f
+    /**
+     * Stars vary along a warm→cool axis, each twinkling at its own phase and rate.
+     *
+     * Both ends sit near white and the dip is shallow, because vanilla's stars are white and undimmed and
+     * this is meant to be a colour a second look finds rather than one the sky is made of.
+     */
+    private val WARM_STAR = Rgba(1.0f, 0.94f, 0.86f)
+    private val COOL_STAR = Rgba(0.87f, 0.92f, 1.0f)
+    private const val STAR_TWINKLE_DIP = 0.55f
     private const val SLOWEST_TWINKLE_RATE = 0.04f
 
     /**
