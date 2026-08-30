@@ -23,6 +23,19 @@ import net.minecraft.world.phys.Vec3
 object AuroraPainter {
 
     /**
+     * How many curtains this client will draw at once, however many a level asks for.
+     *
+     * **The library draws what it is told, so the number belongs to whoever is doing the telling.** If a
+     * level asks for six curtains it is because a consumer decided six, and a consumer may have reasons for
+     * that even on a machine that struggles — theirs to weigh, not ours to second-guess. What Ephemeris
+     * owes them is the lever (Jonah, 2026-08-30).
+     *
+     * **A function rather than a number**, so a setting takes effect the moment it changes and neither side
+     * needs an event to keep the two in step. Nought draws none at all, which is a real thing to want.
+     */
+    var mostCurtainsDrawn: () -> Int = { Aurora.MOST_CURTAINS }
+
+    /**
      * Draws the level's aurora, if it has one and this is a night it comes.
      *
      * **Every path out of here says which one it took, and a declining path says which factor was at
@@ -62,8 +75,12 @@ object AuroraPainter {
 
         val strength = (tonight * nightliness * clearSky * aurora.glow * ground).coerceIn(NOTHING, 1.0f)
         if (strength <= WORTH_DRAWING) return sayIt("faint", "a curtain is up but too faint to draw")
-        sayIt("up", "a curtain is up, drawing at %.3f".format(strength))
-        canvas.drawAurora(aurora, strength, level.defaultClockTime.toFloat())
+
+        val budget = mostCurtainsDrawn()
+        if (budget <= NONE_DRAWN) return sayIt("budget", "a curtain is up, but this client is drawing none")
+        val within = aurora.copy(curtains = aurora.curtains.coerceAtMost(budget))
+        sayIt("up", "a curtain is up, drawing ${within.curtains} at %.3f".format(strength))
+        canvas.drawAurora(within, strength, level.defaultClockTime.toFloat())
     }
 
     /** How much of the ground around the viewer answers this curtain's rule, `1` where it asks for none. */
