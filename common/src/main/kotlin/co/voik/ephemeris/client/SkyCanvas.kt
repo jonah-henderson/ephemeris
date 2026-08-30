@@ -1,13 +1,14 @@
 package co.voik.ephemeris.client
 
 import co.voik.ephemeris.Rgba
+import co.voik.ephemeris.sky.Aurora
 import co.voik.ephemeris.sky.CloudDeck
 import net.minecraft.resources.Identifier
 import net.minecraft.world.phys.Vec3
 import org.joml.Quaternionf
 
 /**
- * Everything a sky can be drawn with — four verbs, so the painters can decide what a sky looks like
+ * Everything a sky can be drawn with — five verbs, so the painters can decide what a sky looks like
  * without knowing how a frame is drawn and the whole of Blaze3D stays behind [Blaze3dSkyCanvas].
  *
  * Building a sun or a moon does not belong here: what the resolver emits stays declarative data, because
@@ -63,4 +64,17 @@ interface SkyCanvas {
      * is read in world coordinates so the pattern stays put as the player moves through it.
      */
     fun drawCloudDeck(deck: CloudDeck, eye: Vec3, timeTicks: Float)
+
+    /**
+     * A curtain of light crossing the sky at [Aurora.bearingDegrees], burning [Aurora.colours] crown to hem.
+     *
+     * [strength] is the whole of how *present* it is this instant — the night it is having, how dark the sky
+     * has gone, and whatever the caller decides about the ground below, already multiplied together. Nought
+     * draws nothing. The split is deliberate: what an aurora *is* travels in the spec and what it is *doing*
+     * is decided per frame, so this verb needs to know nothing about either.
+     *
+     * [timeTicks] drives the fold and carries no partial tick, as [drawStarfield]'s does not — the motion is
+     * far slower than a frame and a fraction added to a counter that may not have moved ratchets.
+     */
+    fun drawAurora(aurora: Aurora, strength: Float, timeTicks: Float)
 }

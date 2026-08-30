@@ -2,6 +2,7 @@ package co.voik.ephemeris.client
 
 import co.voik.ephemeris.Rgba
 import co.voik.ephemeris.Sphere
+import co.voik.ephemeris.sky.Aurora
 import co.voik.ephemeris.sky.CloudDeck
 import co.voik.ephemeris.sky.HorizonFan
 import com.mojang.blaze3d.buffers.GpuBuffer
@@ -21,6 +22,8 @@ import com.mojang.blaze3d.vertex.VertexFormat
 import net.minecraft.client.Minecraft
 import net.minecraft.client.renderer.MappableRingBuffer
 import net.minecraft.client.renderer.RenderPipelines
+import com.mojang.blaze3d.platform.NativeImage
+import net.minecraft.client.renderer.texture.DynamicTexture
 import net.minecraft.client.renderer.texture.TextureAtlas
 import net.minecraft.client.renderer.texture.TextureAtlasSprite
 import net.minecraft.data.AtlasIds
@@ -184,6 +187,107 @@ object Blaze3dSkyCanvas : SkyCanvas {
         .withColorTargetState(ColorTargetState(BlendFunction.TRANSLUCENT))
         .withVertexFormat(DefaultVertexFormat.POSITION_TEX, VertexFormat.Mode.QUADS)
         .build()
+
+    /**
+     * The curtain's own pipeline. Additive, like the stars, because an aurora is light laid on the sky
+     * rather than a sheet hung in front of it; and depth is left alone, so it sits in the sky pass and the
+     * terrain drawn afterwards hides whatever stands in front of it.
+     */
+    private val AURORA_PIPELINE: RenderPipeline = RenderPipeline.builder()
+        .withLocation(Identifier.fromNamespaceAndPath(NAMESPACE, "pipeline/aurora"))
+        .withVertexShader(Identifier.fromNamespaceAndPath(NAMESPACE, "aurora"))
+        .withFragmentShader(Identifier.fromNamespaceAndPath(NAMESPACE, "aurora"))
+        .withUniform("DynamicTransforms", UniformType.UNIFORM_BUFFER)
+        .withUniform("Projection", UniformType.UNIFORM_BUFFER)
+        .withUniform("AuroraInfo", UniformType.UNIFORM_BUFFER)
+        // The colour ramp, built per ramp rather than shipped — see [rampOf].
+        .withSampler("Sampler0")
+        .withColorTargetState(ColorTargetState(BlendFunction.OVERLAY))
+        // The viewer is inside the band, and the grid below promises no winding.
+        .withCull(false)
+        .withVertexFormat(DefaultVertexFormat.POSITION_TEX, VertexFormat.Mode.QUADS)
+        .build()
+
+    /**
+     * The curtain's canvas: a band of sky, generous in both directions, with the curtain *carved out of it*
+     * by the fragment shader.
+     *
+     * **Generous geometry and a shader-carved silhouette**, which is the whole reason this is affordable.
+     * The alternative is a mesh that is the curtain — folds, taper, hem and all — rebuilt as it moves, which
+     * is a vertex buffer written every frame for a shape a handful of sines already describe. Here the mesh
+     * never changes and every fold is arithmetic.
+     *
+     * Wider than the widest curtain and taller than the tallest, so `breadth` and `height` crop rather than
+     * scale: a band that only ever showed as much sky as it was asked for would have nothing to taper into.
+     */
+    private const val AURORA_DISTANCE = 100.0f
+
+    /** Either side of the bearing, in degrees. Just short of a half-turn, so the ends can taper. */
+    private const val AURORA_HALF_SWEEP = 95.0f
+
+    /** The band of sky it may occupy, in degrees above the horizon. */
+    private const val AURORA_LOWEST = 6.0f
+    private const val AURORA_HIGHEST = 84.0f
+
+    /**
+     * How finely the band is divided. Enough that the arc reads as a curve rather than a chord, and no more:
+     * the detail is in the fragment stage, so these buy geometry and not appearance.
+     */
+    private const val AURORA_ACROSS = 64
+    private const val AURORA_UP = 12
+    private const val AURORA_QUADS = AURORA_ACROSS * AURORA_UP
+    private const val AURORA_INDICES = AURORA_QUADS * QUAD_INDICES
+
+    /**
+     * Where the fold may wrap without jumping.
+     *
+     * `aurora.fsh` moves its sines at 0.13, 0.21, 0.09 and 0.05 of the drifted time — all whole multiples of
+     * 0.01 — and `200π` completes a whole number of turns for every such multiple. Adding a coefficient that
+     * is not one breaks this, which is why they are all hundredths.
+     */
+    private const val AURORA_FOLD_PERIOD = 200.0 * Math.PI
+
+    /** How fast the fold travels. Slow: an aurora moves at the pace of something very far away. */
+    private const val AURORA_DRIFT = 0.05
+
+    /** How far the curtain's middle wanders from the band's, as a share of the band. */
+    private const val AURORA_WANDER = 1.0f
+
+    /** How fine the vertical rays are. Higher is more of them. */
+    private const val AURORA_RAY_FINENESS = 220.0f
+
+    /**
+     * How many steps the ramp is baked into.
+     *
+     * **Interpolated here rather than by the sampler**, which is what makes any number of colours free: the
+     * stops are blended into this many pixels on the way in, so the shader takes one fetch and never loops,
+     * and nothing depends on how a `GpuSampler` was configured. At this width one step is a fraction of a
+     * degree of sky, which is past anything an eye resolves.
+     */
+    private const val RAMP_STEPS = 128
+
+    /**
+     * Ramps already baked, keyed by the colours they were baked from.
+     *
+     * Never cleared, on the same argument as [starfields]: a ramp is one small texture, a player visits a
+     * bounded number of levels, and eviction bookkeeping would cost more than the memory it saves. Unlike
+     * [bodyQuads] there is nothing here to go stale — a ramp is built from the level's own data rather than
+     * cut from an atlas that a resource reload re-stitches.
+     */
+    private val ramps = mutableMapOf<List<Rgba>, DynamicTexture>()
+
+    private val auroraInfo: MappableRingBuffer by lazy {
+        MappableRingBuffer(
+            { "Ephemeris aurora UBO" },
+            GpuBuffer.USAGE_UNIFORM or GpuBuffer.USAGE_MAP_WRITE,
+            AURORA_INFO_BYTES,
+        )
+    }
+
+    /** Two `vec4`s, matching `AuroraInfo` in the shaders. */
+    private const val AURORA_INFO_BYTES = 2 * 4 * Float.SIZE_BYTES
+
+    private var curtainBuffer: GpuBuffer? = null
 
     /** Half the slab's width. Beyond this the deck simply ends, which is why it is walled. */
     private const val DECK_RADIUS = 512.0f
@@ -514,6 +618,144 @@ object Blaze3dSkyCanvas : SkyCanvas {
         deckInfo.rotate()
 
         modelViewStack.popMatrix()
+    }
+
+    override fun drawAurora(aurora: Aurora, strength: Float, timeTicks: Float) {
+        if (strength <= NOTHING_TO_DRAW) return
+        val ramp = rampOf(aurora.ramp)
+
+        val modelViewStack = RenderSystem.getModelViewStack()
+        modelViewStack.pushMatrix()
+        // **Negated, because a bearing and a turn about Y count opposite ways.** The band is built centred
+        // on north, and JOML's `rotateY` carries north toward the *west* as its angle grows where a bearing
+        // counts clockwise toward the east. Rotating by the bearing itself puts a north-crossing curtain in
+        // the south-west and looks, from inside, like a curtain that is merely somewhere else.
+        modelViewStack.rotate(
+            Quaternionf().rotateY(Math.toRadians(-aurora.bearingDegrees.toDouble()).toFloat()),
+        )
+
+        val transforms = RenderSystem.getDynamicUniforms().writeTransform(
+            modelViewStack,
+            Vector4f(1.0f, 1.0f, 1.0f, 1.0f),
+            Vector3f(),
+            Matrix4f(),
+        )
+        writeAuroraInfo(aurora, strength, timeTicks)
+        val quadIndices = RenderSystem.getSequentialBuffer(VertexFormat.Mode.QUADS)
+
+        renderPass("Ephemeris aurora")?.use { pass ->
+            pass.setPipeline(AURORA_PIPELINE)
+            RenderSystem.bindDefaultUniforms(pass)
+            pass.setUniform("DynamicTransforms", transforms)
+            pass.setUniform("AuroraInfo", auroraInfo.currentBuffer())
+            pass.bindTexture("Sampler0", ramp.textureView, ramp.sampler)
+            pass.setVertexBuffer(0, curtain())
+            pass.setIndexBuffer(quadIndices.getBuffer(AURORA_INDICES), quadIndices.type())
+            pass.drawIndexed(0, 0, AURORA_INDICES, 1)
+        }
+        auroraInfo.rotate()
+
+        modelViewStack.popMatrix()
+    }
+
+    /** The curtain's parameters, laid out to match `AuroraInfo` in the shaders. */
+    private fun writeAuroraInfo(aurora: Aurora, strength: Float, timeTicks: Float) {
+        RenderSystem.getDevice().createCommandEncoder().mapBuffer(auroraInfo.currentBuffer(), false, true)
+            .use { view ->
+                Std140Builder.intoBuffer(view.data())
+                    .putVec4(
+                        strength,
+                        wrapped(timeTicks.toDouble() * AURORA_DRIFT, AURORA_FOLD_PERIOD),
+                        aurora.breadth.coerceIn(0.0f, 1.0f),
+                        aurora.height.coerceIn(0.0f, 1.0f),
+                    )
+                    .putVec4(AURORA_WANDER, AURORA_RAY_FINENESS, 0.0f, 0.0f)
+            }
+    }
+
+    /** This ramp as a texture, baked on first use and kept. */
+    private fun rampOf(colours: List<Rgba>): DynamicTexture = ramps.getOrPut(colours) { bakeRamp(colours) }
+
+    /**
+     * The ramp as one row of pixels, **crown at the left**, with the stops already blended between.
+     *
+     * The order is the one the colours were written in, all the way from the sentence to the fetch, so the
+     * only place it is reversed is the one line in `aurora.fsh` that turns "how far up the curtain" into
+     * "how far down the ramp" — and that line says so.
+     */
+    private fun bakeRamp(colours: List<Rgba>): DynamicTexture {
+        val image = NativeImage(RAMP_STEPS, 1, false)
+        for (step in 0..<RAMP_STEPS) {
+            val down = step.toFloat() / (RAMP_STEPS - 1).toFloat()
+            image.setPixelABGR(step, 0, packedAbgr(rampAt(colours, down)))
+        }
+        return DynamicTexture({ "Ephemeris aurora ramp" }, image).also { it.upload() }
+    }
+
+    /** The colour [down] of the way from crown to hem, `0..1`. */
+    private fun rampAt(colours: List<Rgba>, down: Float): Rgba {
+        if (colours.size == 1) return colours.first()
+        val scaled = down * (colours.size - 1)
+        val above = scaled.toInt().coerceIn(0, colours.size - 2)
+        return colours[above].lerp(colours[above + 1], scaled - above)
+    }
+
+    /** `NativeImage`'s own channel order, which is not [Rgba.packed]'s. */
+    private fun packedAbgr(colour: Rgba): Int {
+        fun channel(value: Float) = (value.coerceIn(0.0f, 1.0f) * FULL_CHANNEL).toInt()
+        return (channel(colour.alpha) shl 24) or (channel(colour.blue) shl 16) or
+            (channel(colour.green) shl 8) or channel(colour.red)
+    }
+
+    private const val FULL_CHANNEL = 255.0f
+
+    private const val NOTHING_TO_DRAW = 0.0f
+
+    /** The band of sky the curtain is carved out of, built once and kept. */
+    private fun curtain(): GpuBuffer = curtainBuffer ?: buildCurtain().also { curtainBuffer = it }
+
+    /**
+     * A grid of quads laid on the sky sphere, spanning [AURORA_HALF_SWEEP] either side of north and
+     * [AURORA_LOWEST] to [AURORA_HIGHEST] above the horizon.
+     *
+     * Each vertex carries where on the band it is rather than where in the world — `0..1` across and `0..1`
+     * up — because that is what the fragment stage reasons in, and because it makes the mesh independent of
+     * every number the curtain can be asked for.
+     */
+    private fun buildCurtain(): GpuBuffer {
+        val format = DefaultVertexFormat.POSITION_TEX
+        return ByteBufferBuilder.exactlySized(AURORA_QUADS * QUAD_VERTICES * format.vertexSize).use { bytes ->
+            val builder = BufferBuilder(bytes, VertexFormat.Mode.QUADS, format)
+
+            fun corner(across: Int, up: Int) {
+                val alongBand = across.toFloat() / AURORA_ACROSS
+                val upBand = up.toFloat() / AURORA_UP
+                val azimuth = Math.toRadians(((alongBand - 0.5f) * 2.0f * AURORA_HALF_SWEEP).toDouble())
+                val elevation =
+                    Math.toRadians((AURORA_LOWEST + upBand * (AURORA_HIGHEST - AURORA_LOWEST)).toDouble())
+                val outward = Math.cos(elevation) * AURORA_DISTANCE
+                builder.addVertex(
+                    (Math.sin(azimuth) * outward).toFloat(),
+                    (Math.sin(elevation) * AURORA_DISTANCE).toFloat(),
+                    // North is `-Z`, which is where an azimuth of nought points.
+                    (-Math.cos(azimuth) * outward).toFloat(),
+                ).setUv(alongBand, upBand)
+            }
+
+            for (across in 0..<AURORA_ACROSS) {
+                for (up in 0..<AURORA_UP) {
+                    corner(across, up)
+                    corner(across + 1, up)
+                    corner(across + 1, up + 1)
+                    corner(across, up + 1)
+                }
+            }
+
+            builder.buildOrThrow().use { mesh ->
+                RenderSystem.getDevice()
+                    .createBuffer({ "Ephemeris aurora band" }, GpuBuffer.USAGE_VERTEX, mesh.vertexBuffer())
+            }
+        }
     }
 
     /** The deck's parameters, laid out to match `DeckInfo` in the shaders. */

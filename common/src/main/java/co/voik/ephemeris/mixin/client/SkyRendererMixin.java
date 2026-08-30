@@ -25,6 +25,12 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  *
  * <p>The {@code poseStack} is not forwarded: vanilla is handed a fresh one here and pushes its transform
  * onto {@code RenderSystem.getModelViewStack()} anyway, which is where a renderer should write.
+ *
+ * <p><b>Two injectors, because an overlay must run over whichever sky was drawn.</b> Cancelling from the
+ * head returns at the injection point, so a {@code TAIL} injector runs exactly when the head did not
+ * cancel — which is to say exactly when vanilla drew the sky itself. Each path therefore draws the
+ * overlays once and draws them last. A flag forwarded from the head would have said the same thing and
+ * left a field on a Mixin to reason about.
  */
 @Mixin(SkyRenderer.class)
 public class SkyRendererMixin {
@@ -45,7 +51,27 @@ public class SkyRendererMixin {
         }
         var moment = new SkyMoment(level, sunAngle, moonAngle, starAngle, moonPhase, rainBrightness, starBrightness);
         if (LevelRendering.INSTANCE.drawSky(moment)) {
+            LevelRendering.INSTANCE.drawSkyOverlays(moment);
             callback.cancel();
         }
+    }
+
+    /** Reached only where nothing claimed the sky above, so vanilla has just drawn its own. */
+    @Inject(method = "renderSunMoonAndStars", at = @At("TAIL"))
+    private void ephemeris$drawOverVanillasSky(
+            PoseStack poseStack,
+            float sunAngle,
+            float moonAngle,
+            float starAngle,
+            MoonPhase moonPhase,
+            float rainBrightness,
+            float starBrightness,
+            CallbackInfo callback) {
+        var level = Minecraft.getInstance().level;
+        if (level == null) {
+            return;
+        }
+        LevelRendering.INSTANCE.drawSkyOverlays(
+                new SkyMoment(level, sunAngle, moonAngle, starAngle, moonPhase, rainBrightness, starBrightness));
     }
 }

@@ -20,6 +20,8 @@ data class SkySpec(
     val stars: StarField,
     /** Overcast layers, outermost last, and empty for the great majority of skies that have none. */
     val decks: List<CloudDeck> = emptyList(),
+    /** The curtain that stands in it on some nights, or null for the great majority that have none. */
+    val aurora: Aurora? = null,
 ) {
 
     /**
@@ -30,6 +32,11 @@ data class SkySpec(
      * The star *seed* is deliberately not compared: a different arrangement of the same number of stars is
      * not something vanilla cannot draw. A star **reveal** is, so it counts — [decks] do not, because the
      * cloud renderer draws those and a level may have them over an otherwise unremarkable sky.
+     *
+     * **[aurora] does not count either, and that is the point of drawing one on an overlay.** An aurora is
+     * something vanilla cannot draw, but it is not a reason to take vanilla's sun and moon away from a
+     * level that wanted neither changed: the overlay runs whether this renderer claimed the sky or vanilla
+     * drew it, so an otherwise unremarkable sky keeps vanilla's own and gains a curtain.
      */
     val isOrdinary: Boolean
         get() {
@@ -83,6 +90,14 @@ data class SkySpec(
             cover,
         )
     } + listOfNotNull(
+        // Crown first, which is the order it was written in and the order it is drawn in — a report that
+        // said it the other way round would be the one place the three disagree.
+        aurora?.let { curtain ->
+            val ramp = curtain.colours.joinToString(" over ") { colour -> colour.packed().toUInt().toString(16) }
+            "aurora %s glow %.2f breadth %.2f height %.2f on %.0f%% of nights bearing %.0f".format(
+                ramp, curtain.glow, curtain.breadth, curtain.height, curtain.frequency * 100.0f, curtain.bearingDegrees,
+            )
+        },
         "stars ${stars.count}" + if (stars.glow == ORDINARY_STAR_GLOW) "" else
             " burning %.2f times vanilla's".format(stars.glow),
         stars.reveal?.let { "— hidden below %.0f, fully shown above %.0f".format(it.hiddenBelow, it.fullyShownAbove) },
@@ -121,7 +136,9 @@ data class SkySpec(
                 CelestialBody.CODEC.listOf().fieldOf("bodies").forGetter(SkySpec::bodies),
                 StarField.CODEC.fieldOf("stars").forGetter(SkySpec::stars),
                 CloudDeck.CODEC.listOf().optionalFieldOf("decks", emptyList()).forGetter(SkySpec::decks),
-            ).apply(instance, ::SkySpec)
+                Aurora.CODEC.optionalFieldOf("aurora")
+                    .forGetter { spec -> java.util.Optional.ofNullable(spec.aurora) },
+            ).apply(instance) { bodies, stars, decks, aurora -> SkySpec(bodies, stars, decks, aurora.orElse(null)) }
         }
 
         /**

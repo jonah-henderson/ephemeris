@@ -1,0 +1,132 @@
+package co.voik.ephemeris.sky
+
+import co.voik.ephemeris.Rgba
+import com.mojang.serialization.Codec
+import com.mojang.serialization.codecs.RecordCodecBuilder
+
+/**
+ * A curtain of light standing in a level's sky, on the nights it comes.
+ *
+ * **Data, like everything else in a [SkySpec]** — it travels on the payload and is rebuilt on every open,
+ * so nothing about how it is drawn belongs here.
+ *
+ * Two things about it are load-bearing and easy to get backwards.
+ *
+ * - **[colours] is a ramp read from the crown down.** The first is the colour at the top of the curtain and
+ *   the last the colour at its hem, which is the order a person names them in and the order the renderer's
+ *   ramp texture is built in. One colour is a ramp of one, and is the ordinary case.
+ * - **Nothing here says whether it is *showing*.** [strengthOn] answers only whether tonight is one of its
+ *   nights; how bright it stands at this instant, and whether the ground below is cold enough to see it at
+ *   all, are the renderer's to ask. Keeping the two apart is what lets this be checked without a level.
+ */
+data class Aurora(
+    /** What it burns, **crown first**. Never empty; a ramp of one is a curtain of one colour. */
+    val colours: List<Rgba> = ORDINARY_RAMP,
+    /** How brightly it burns, against an ordinary one. */
+    val glow: Float = ORDINARY_GLOW,
+    /** How much of the sky it crosses, `0..1`. */
+    val breadth: Float = ORDINARY_BREADTH,
+    /** How tall the curtain stands, `0..1`. */
+    val height: Float = ORDINARY_HEIGHT,
+    /** What share of nights it comes at all, `0..1`. One is every night; nought is never. */
+    val frequency: Float = ORDINARY_FREQUENCY,
+    /** Which way the band crosses the sky, in degrees clockwise from north. */
+    val bearingDegrees: Float = 0.0f,
+    /** Which nights it takes and which way its folds lie. Two levels alike still differ. */
+    val seed: Long = 0L,
+) {
+
+    /**
+     * The ramp as anything reading it should see it — [colours], or the ordinary one where a packet arrived
+     * with none.
+     *
+     * A guard rather than a `require` in the constructor: an empty list is a thing a codec can deliver and
+     * a level that looks slightly wrong beats a client that throws while decoding a sky.
+     */
+    val ramp: List<Rgba> get() = colours.ifEmpty { ORDINARY_RAMP }
+
+    /**
+     * How strongly it comes on the [dayIndex]th day, `0..1` — **nought on a night it does not come**.
+     *
+     * A pure function of the seed and the day, so every client computes the same answer from what it was
+     * already told and nothing has to be sent, persisted or reconciled. That is the whole of why an aurora
+     * needs no server tick: there is no state, only arithmetic both ends can do.
+     *
+     * **A night that barely qualified is a faint one.** Testing the roll and returning a constant would make
+     * [frequency] a switch — every aurora identical on the nights it came — where reading *how far inside*
+     * its own threshold the roll landed gives a spread of nights for free, and gives a rare aurora the
+     * decency of usually being a faint one.
+     */
+    fun strengthOn(dayIndex: Long): Float {
+        if (frequency <= NEVER) return NOTHING
+        val rolled = rollOn(dayIndex)
+        if (rolled >= frequency) return NOTHING
+        val howFarInside = 1.0f - rolled / frequency
+        return FAINTEST + (1.0f - FAINTEST) * howFarInside
+    }
+
+    /**
+     * This night's roll, in `0.0..1.0` — stable for as long as the seed and the day are what they are.
+     *
+     * An integer mix rather than a `RandomSource`: this is asked every frame by the renderer, and building
+     * a generator to take one number from it is a cost with nothing to show for it.
+     */
+    private fun rollOn(dayIndex: Long): Float {
+        var bits = (seed xor (dayIndex * NIGHTS_APART)) * MIX_ONE
+        bits = (bits xor (bits ushr 33)) * MIX_TWO
+        bits = bits xor (bits ushr 29)
+        return ((bits ushr 40).toFloat() / (1 shl 24).toFloat()).coerceIn(NOTHING, 1.0f)
+    }
+
+    companion object {
+        /**
+         * What an aurora nobody described looks like — **the real one**, which is the point of the whole
+         * feature: a faint red crown, green through the body, a violet hem.
+         *
+         * Green in the middle because that is where an aurora's green is, and because a ramp read at the
+         * curtain's middle is what the eye takes for its colour.
+         */
+        val ORDINARY_RAMP: List<Rgba> = listOf(
+            Rgba(0.85f, 0.22f, 0.30f),
+            Rgba(0.25f, 0.95f, 0.55f),
+            Rgba(0.45f, 0.30f, 0.85f),
+        )
+
+        const val ORDINARY_GLOW = 1.0f
+
+        /** Rather more than half the sky, which is what a band crossing it looks like from underneath. */
+        const val ORDINARY_BREADTH = 0.7f
+
+        const val ORDINARY_HEIGHT = 0.6f
+
+        /** About one night in three, which is often enough to be a feature of the Age and not of the week. */
+        const val ORDINARY_FREQUENCY = 0.35f
+
+        /** How faint the least of its nights is. Above nothing, or a qualifying night would show nothing. */
+        const val FAINTEST = 0.35f
+
+        private const val NOTHING = 0.0f
+        private const val NEVER = 0.0f
+
+        /** Spreads consecutive days apart before the mix, so night follows night rather than tracking it. */
+        private const val NIGHTS_APART = 0x2545F4914F6CDD1DL
+
+        private const val MIX_ONE = -0x61c8864680b583ebL
+        private const val MIX_TWO = -0x40a7b892e31b1a47L
+
+        val CODEC: Codec<Aurora> = RecordCodecBuilder.create { instance ->
+            instance.group(
+                // **A list, and any length.** A fixed few would have put a cap on how many colours a
+                // curtain may burn, and the renderer builds a ramp texture rather than filling uniform
+                // slots precisely so there is no number to choose here.
+                Rgba.CODEC.listOf().optionalFieldOf("colours", ORDINARY_RAMP).forGetter(Aurora::colours),
+                Codec.FLOAT.optionalFieldOf("glow", ORDINARY_GLOW).forGetter(Aurora::glow),
+                Codec.FLOAT.optionalFieldOf("breadth", ORDINARY_BREADTH).forGetter(Aurora::breadth),
+                Codec.FLOAT.optionalFieldOf("height", ORDINARY_HEIGHT).forGetter(Aurora::height),
+                Codec.FLOAT.optionalFieldOf("frequency", ORDINARY_FREQUENCY).forGetter(Aurora::frequency),
+                Codec.FLOAT.optionalFieldOf("bearing", 0.0f).forGetter(Aurora::bearingDegrees),
+                Codec.LONG.optionalFieldOf("seed", 0L).forGetter(Aurora::seed),
+            ).apply(instance, ::Aurora)
+        }
+    }
+}

@@ -29,6 +29,7 @@ object LevelRendering {
     private val skies = mutableListOf<LevelSkyRenderer>()
     private val clouds = mutableListOf<LevelCloudRenderer>()
     private val horizons = mutableListOf<LevelHorizonRenderer>()
+    private val overlays = mutableListOf<LevelSkyOverlay>()
     private val environments = mutableListOf<LevelEnvironment>()
 
     /** Offer to draw suns, moons and stars. */
@@ -53,6 +54,21 @@ object LevelRendering {
     }
 
     /**
+     * Offer to draw **over** whatever drew the sky — a curtain, a haze, an aurora.
+     *
+     * Unlike [sky] this one **does not claim**, in the way [environment] does not: every overlay registered
+     * is drawn, and it is drawn whether this library's own renderer took the sky or vanilla drew its own.
+     *
+     * That is the whole reason it exists rather than being folded into [sky]. Something a level adds
+     * *above* its sun and moon is not a reason to take its sun and moon away from it: a level whose sky is
+     * one vanilla can already draw should go on getting vanilla's own code rather than an imitation of it,
+     * and still get whatever it added. A claiming seam cannot express that.
+     */
+    fun skyOverlay(overlay: LevelSkyOverlay) {
+        overlays += overlay
+    }
+
+    /**
      * Offer to bend a level's air — its fog, sky colour, light tint and how far you can see.
      *
      * Unlike the two above this one **does not claim**: every layer offered is applied, in order, over
@@ -68,6 +84,15 @@ object LevelRendering {
 
     /** Asked by the sky Mixin. Registering a renderer is the way in; this is the way out. */
     fun drawSky(moment: SkyMoment): Boolean = skies.any { it.draw(moment) }
+
+    /**
+     * Asked by the sky Mixin, from **both** of its injectors — once where a renderer claimed the sky, and
+     * once at the tail where vanilla drew it. A cancelled head returns at the injection point, so the tail
+     * runs exactly when the head did not cancel and each path draws these once.
+     */
+    fun drawSkyOverlays(moment: SkyMoment) {
+        for (overlay in overlays) overlay.draw(moment)
+    }
 
     /** Asked by the cloud Mixin. */
     fun drawClouds(moment: CloudMoment): Boolean = clouds.any { it.draw(moment) }
@@ -100,6 +125,16 @@ class SkyMoment(
 fun interface LevelSkyRenderer {
     /** **True** if this drew the sky; **false** to pass, leaving it to the next renderer or to vanilla. */
     fun draw(moment: SkyMoment): Boolean
+}
+
+/**
+ * Draws whatever a level hangs above its sun, moon and stars.
+ *
+ * No return: an overlay adds to the sky rather than deciding it, so there is nothing for it to claim and
+ * nothing for a caller to do about the answer.
+ */
+fun interface LevelSkyOverlay {
+    fun draw(moment: SkyMoment)
 }
 
 /**
