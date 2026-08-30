@@ -41,6 +41,7 @@ class HorizonPainterCheck : FunSpec({
             distance: Float,
             angularSize: Float,
             tint: Rgba,
+            veil: Rgba,
             emitsOwnLight: Boolean,
         ) = Unit
 

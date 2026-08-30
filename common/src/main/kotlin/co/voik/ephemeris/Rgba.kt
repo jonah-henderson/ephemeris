@@ -66,6 +66,9 @@ data class Rgba(val red: Float, val green: Float, val blue: Float, val alpha: Fl
     companion object {
         val WHITE = Rgba(1.0f, 1.0f, 1.0f)
 
+        /** No light at all — what a body with nothing scattered in front of it is veiled by. */
+        val CLEAR = Rgba(0.0f, 0.0f, 0.0f, 0.0f)
+
         private const val FULL = 255f
 
         // How much of perceived brightness each channel carries — the usual luma weights.

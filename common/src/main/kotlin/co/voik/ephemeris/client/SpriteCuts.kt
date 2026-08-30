@@ -7,7 +7,8 @@ import net.minecraft.resources.Identifier
  * How a body's sprite is drawn when it **covers** the sky rather than adding to it.
  *
  * Covering needs a sprite that says which of its pixels are sky, and not every sprite does. Vanilla's carry
- * no alpha at all, so Ephemeris cuts theirs by luminance — see `celestial_cut.fsh`, which has the numbers.
+ * no alpha at all, so Ephemeris crops theirs instead — see `Blaze3dSkyCanvas.keptOf`, which cuts the moon's
+ * painted-on night sky away by the measured window rather than by testing colours.
  * A consumer's own texture is assumed to carry its own transparency and is drawn as it is.
  *
  * **This is the escape hatch for anything else.** A texture that needs a different rule — a chroma key, a

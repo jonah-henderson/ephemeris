@@ -34,6 +34,10 @@ interface SkyCanvas {
      *
      * A body that [emitsOwnLight] adds itself to the sky and so reads as a light source; one that does not
      * covers what is behind it instead. Bodies are drawn farthest first, so the second kind occludes.
+     *
+     * [veil] is the light scattered *in front* of the body, laid over it and never through it — its colour
+     * is the air's and its alpha is how much of it there is. A body that covers must cover whatever the air
+     * is doing, so this is added rather than blended and is [Rgba.CLEAR] for a body seen through nothing.
      */
     fun drawBody(
         shape: Identifier,
@@ -41,6 +45,7 @@ interface SkyCanvas {
         distance: Float,
         angularSize: Float,
         tint: Rgba,
+        veil: Rgba,
         emitsOwnLight: Boolean,
     )
 

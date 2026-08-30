@@ -299,6 +299,7 @@ object Blaze3dSkyCanvas : SkyCanvas {
         distance: Float,
         angularSize: Float,
         tint: Rgba,
+        veil: Rgba,
         emitsOwnLight: Boolean,
     ) {
         val kept = keptOf(shape)
@@ -313,6 +314,71 @@ object Blaze3dSkyCanvas : SkyCanvas {
             drawOneQuad(shape, WHOLE_SPRITE, orientation, distance, angularSize, tint.dimmed(GLOWS), true)
         }
         drawOneQuad(shape, kept, orientation, distance, angularSize, tint, emitsOwnLight)
+        // **And the air's own light on top of it**, which is what pales a covering body by day without
+        // making it see-through. A plain quad the body's size, added: `RenderPipelines.STARS` is exactly
+        // that shader — a position in and `ColorModulator` out — so no pipeline of ours is needed.
+        if (veil.alpha > VEIL_WORTH_DRAWING) {
+            drawVeilQuad(kept, orientation, distance, angularSize, veil)
+        }
+    }
+
+    /** Below this the air over a body is not worth a draw of its own. */
+    private const val VEIL_WORTH_DRAWING = 0.002f
+
+    private fun drawVeilQuad(
+        kept: Kept,
+        orientation: Quaternionf,
+        distance: Float,
+        angularSize: Float,
+        veil: Rgba,
+    ) {
+        val modelViewStack = RenderSystem.getModelViewStack()
+        modelViewStack.pushMatrix()
+        modelViewStack.rotate(orientation)
+        modelViewStack.translate(0.0f, distance, 0.0f)
+        modelViewStack.scale(angularSize, 1.0f, angularSize)
+
+        val transforms = RenderSystem.getDynamicUniforms().writeTransform(
+            modelViewStack,
+            Vector4f(veil.red, veil.green, veil.blue, veil.alpha),
+            Vector3f(),
+            Matrix4f(),
+        )
+        val quadIndices = RenderSystem.getSequentialBuffer(VertexFormat.Mode.QUADS)
+
+        renderPass("Ephemeris sky body veil")?.use { pass ->
+            pass.setPipeline(RenderPipelines.STARS)
+            RenderSystem.bindDefaultUniforms(pass)
+            pass.setUniform("DynamicTransforms", transforms)
+            pass.setVertexBuffer(0, veilQuadOf(kept))
+            pass.setIndexBuffer(quadIndices.getBuffer(QUAD_INDICES), quadIndices.type())
+            pass.drawIndexed(0, 0, QUAD_INDICES, 1)
+        }
+
+        modelViewStack.popMatrix()
+    }
+
+    /**
+     * A textureless quad the size of a body's, for the light the air lays over it. Two ever exist — one for
+     * a whole sprite and one for vanilla's cropped moon — and neither depends on the atlas, so unlike
+     * [bodyQuadOf] these are never rebuilt.
+     */
+    private val veilQuads = mutableMapOf<Kept, GpuBuffer>()
+
+    private fun veilQuadOf(kept: Kept): GpuBuffer = veilQuads.getOrPut(kept) {
+        val reach = kept.to - kept.from
+        val format = DefaultVertexFormat.POSITION
+        ByteBufferBuilder.exactlySized(QUAD_VERTICES * format.vertexSize).use { bytes ->
+            val builder = BufferBuilder(bytes, VertexFormat.Mode.QUADS, format)
+            builder.addVertex(-reach, 0.0f, -reach)
+            builder.addVertex(reach, 0.0f, -reach)
+            builder.addVertex(reach, 0.0f, reach)
+            builder.addVertex(-reach, 0.0f, reach)
+            builder.buildOrThrow().use { mesh ->
+                RenderSystem.getDevice()
+                    .createBuffer({ "Ephemeris sky veil quad" }, GpuBuffer.USAGE_VERTEX, mesh.vertexBuffer())
+            }
+        }
     }
 
     /** How much of a cropped body's glow is added around it. Its own dimming, as a luminous body gets. */
@@ -362,7 +428,8 @@ object Blaze3dSkyCanvas : SkyCanvas {
      *
      * Adding needs nothing special — dark contributes nothing to a sum, which is exactly why vanilla's
      * sprites can get away with having no alpha. Covering is drawn plainly, the sky painted around vanilla's
-     * moon having already been cropped away by [keptOf] rather than shaded away here.
+     * moon having already been cropped away by [keptOf] rather than shaded away here. There is no cut
+     * *shader*: cropping is exact where a luminance test has to guess, and it gets the new moon right.
      *
      * A texture that needs a rule of its own — a chroma key, a mask in another channel, a rim that should
      * glow — registers a pipeline through [SpriteCuts].

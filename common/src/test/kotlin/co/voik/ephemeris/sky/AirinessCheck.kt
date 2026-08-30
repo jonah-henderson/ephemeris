@@ -59,6 +59,23 @@ class AirinessCheck : FunSpec({
         }
     }
 
+    test("what the air takes from a body it can give back as its own light") {
+        // **The two halves of one sum**, which is what a covering body is drawn as: itself at `solidity`,
+        // and the air's own glow laid over it at the rest. Either half outside `0..1` is a veil that
+        // brightens the sky rather than pales the body, or a body drawn brighter than it is.
+        for (height in listOf(-20.0f, 0.0f, 30.0f, 90.0f)) {
+            for (lit in listOf(0.0f, 0.4f, 1.0f)) {
+                for (thickness in listOf(0.0f, 1.0f, 4.0f)) {
+                    val survives = Airiness.solidityAt(height, lit, thickness)
+                    check(survives in 0.0f..1.0f) {
+                        "At $height° under a sky $lit lit through air $thickness thick, $survives of a body " +
+                            "survives — so the air lays ${1.0f - survives} of its own light over it"
+                    }
+                }
+            }
+        }
+    }
+
     test("airmass is most at the horizon and least overhead") {
         check(Airiness.airmassAt(0.0f) == 1.0f) { "The horizon is the most air there is, by definition" }
         check(Airiness.airmassAt(90.0f) < 0.3f) { "Straight up should be the thinnest line through the air" }

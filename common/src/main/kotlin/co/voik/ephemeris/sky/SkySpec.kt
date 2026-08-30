@@ -96,7 +96,7 @@ data class SkySpec(
                 steps = Appearance.MOON_SHAPES.size,
             ),
             // A moon is a body, not a light: it hides what is behind it. Safe now that the sky baked into
-            // vanilla's sprite is cut away — see `Blending.COVERS` and `celestial_cut.fsh`.
+            // vanilla's sprite is cropped away — see `Blending.COVERS` and `Blaze3dSkyCanvas.keptOf`.
             blending = Blending.COVERS,
         )
 

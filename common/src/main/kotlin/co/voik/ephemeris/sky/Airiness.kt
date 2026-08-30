@@ -10,9 +10,12 @@ import net.minecraft.util.Mth
  * less of the body survives. That is why a moon overhead at midnight is crisp and white, one low over a
  * blue afternoon is a ghost, and one on an airless world is as hard-edged at noon as at midnight.
  *
- * **It costs nothing to draw, because translucent blending already is this equation.** A disc drawn at alpha
- * `a` gives `body * a + sky * (1 - a)`, which is exactly light through a partly-scattering medium. So the
- * haze is not painted on top of the moon; it is the moon's own opacity, and the sky behind shows through it.
+ * **It is a sum of two lights, and not an opacity.** What reaches the eye is `body × solidity` plus the
+ * air's own glow at `1 - solidity`. Translucent blending computes that same sum for free — and computes it
+ * against *whatever happens to be behind*, which is why the moon was drawn at alpha `solidity` for a long
+ * time and why a sun behind one shone straight through the rock (Jonah, 2026-08-27, walked). The two agree
+ * exactly against plain sky and nowhere else, so the sum is now written out: the body dims and the air's
+ * light is laid over it.
  *
  * Two things decide it, and both are what they are in the world:
  *
@@ -25,9 +28,9 @@ object Airiness {
     /**
      * How solid a body at [altitudeDegrees] looks when the sky around it is [skyLit] bright, `0..1`.
      *
-     * One is untouched. Below that the sky shows through, which both pales the body and — deliberately —
-     * stops it hiding what is behind it: a moon you can see through is a moon a sun shines past, and that is
-     * the right answer rather than a compromise.
+     * One is untouched. Below that this much of the body survives the air and the rest of what the eye
+     * gets is the air's own glow — which pales the body without making it see-through. A moon is rock at
+     * every hour of the day, and a sun behind one is behind it.
      */
     fun solidityAt(altitudeDegrees: Float, skyLit: Float, thickness: Float): Float {
         if (thickness <= 0.0f) return 1.0f

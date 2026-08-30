@@ -1,5 +1,6 @@
 package co.voik.ephemeris.client
 
+import co.voik.ephemeris.Rgba
 import co.voik.ephemeris.sky.Airiness
 import co.voik.ephemeris.sky.Appearance
 import co.voik.ephemeris.sky.Blending
@@ -13,6 +14,7 @@ import co.voik.ephemeris.sky.SkyRules
 import co.voik.ephemeris.sky.VanillasBody
 import co.voik.ephemeris.sky.SkySpec
 import net.minecraft.client.Minecraft
+import net.minecraft.world.attribute.EnvironmentAttributes
 import net.minecraft.world.level.MoonPhase
 import org.joml.Quaternionf
 
@@ -141,24 +143,50 @@ object SkyPainter {
             // `Blending`, which is why this is the body's own choice and why the default is to add.
             val adds = body.blending == Blending.ADDS
             val plain = if (adds) sprite.tint.dimmed(LUMINOUS_ADDS) else sprite.tint
+            val altitude = body.path.altitudeAt(clockTime)
             // Air only hides what covers. A luminous body *adds* its light, and scattered sky cannot take
             // light away — which is why the sun stays the sun at noon and the moon does not.
-            val tint = if (adds) {
-                plain
-            } else {
-                val altitude = body.path.altitudeAt(clockTime)
-                plain.copy(alpha = plain.alpha * Airiness.solidityAt(altitude, skyLit, rules.airThickness))
-            }
+            //
+            // **And it hides it by adding its own light in front, never by making it see-through.** The two
+            // are the same sum against plain sky and nothing alike against a sun: drawn at alpha
+            // `solidity`, a daytime moon let more than half of a sun behind it straight through (Jonah,
+            // 2026-08-27, walked). So what survives the air dims the body, and the rest is the veil.
+            val survivesTheAir = if (adds) 1.0f else Airiness.solidityAt(altitude, skyLit, rules.airThickness)
+            // Rain is more of the same: something else lit and in front, so it thickens the veil rather
+            // than opening a hole in the body. A luminous body keeps vanilla's own fade, which is a dimming.
+            val survives = survivesTheAir * rainBrightness
+            val tint = if (adds) plain.copy(alpha = plain.alpha * rainBrightness) else plain.dimmed(survives)
+            val veil = if (adds) Rgba.CLEAR else airOver(altitude, (1.0f - survives) * plain.alpha)
             canvas.drawBody(
                 shape = shape,
                 orientation = facingOf(body, clockTime, sunAngle, moonAngle),
                 distance = body.path.distanceAt(clockTime),
                 angularSize = sprite.angularSize,
-                tint = tint.copy(alpha = tint.alpha * rainBrightness),
+                tint = tint,
+                veil = veil,
                 emitsOwnLight = adds,
             )
         }
     }
+
+    /**
+     * The light the air lays over a body at [altitudeDegrees], at [strength] of its full measure.
+     *
+     * **Vanilla's own two colours**, so a level that repainted either gets a veil that matches what it
+     * painted: the sky's colour straight up, where you look through the least air, carried toward the fog's
+     * along the horizon, where you look through all of it and the fog colour already *is* what that looks
+     * like. Getting this wrong shows as a moon the wrong colour rather than as a moon in the wrong place.
+     */
+    private fun airOver(altitudeDegrees: Float, strength: Float): Rgba {
+        val probe = Minecraft.getInstance().gameRenderer.mainCamera.attributeProbe()
+        // Whole ticks: both are keyframed over minutes, and a partial tick is not worth threading through
+        // the canvas to smooth a colour that cannot be seen to step.
+        val sky = Rgba.of(probe.getValue(EnvironmentAttributes.SKY_COLOR, WHOLE_TICK))
+        val fog = Rgba.of(probe.getValue(EnvironmentAttributes.FOG_COLOR, WHOLE_TICK))
+        return sky.lerp(fog, Airiness.airmassAt(altitudeDegrees)).copy(alpha = strength)
+    }
+
+    private const val WHOLE_TICK = 1.0f
 
     /**
      * How much of an authored tint a **luminous** body actually adds to the sky (Jonah, 2026-08-09, walked:
