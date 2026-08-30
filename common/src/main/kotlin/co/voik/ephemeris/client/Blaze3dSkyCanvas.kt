@@ -210,57 +210,61 @@ object Blaze3dSkyCanvas : SkyCanvas {
         .build()
 
     /**
-     * The curtain's canvas: a band of sky, generous in both directions, with the curtain *carved out of it*
-     * by the fragment shader.
+     * The curtain's canvas: a flat unit grid, standing in three dimensions by the vertex shader.
      *
-     * **Generous geometry and a shader-carved silhouette**, which is the whole reason this is affordable.
-     * The alternative is a mesh that is the curtain — folds, taper, hem and all — rebuilt as it moves, which
-     * is a vertex buffer written every frame for a shape a handful of sines already describe. Here the mesh
-     * never changes and every fold is arithmetic.
+     * **The mesh carries no world position at all**, which is what lets one static buffer serve every
+     * curtain at every distance and lets the fold cost no rebuild. Where a sheet stands — how far off, how
+     * long, how high — is uniforms, and `aurora.vsh` puts it there.
      *
-     * Wider than the widest curtain and taller than the tallest, so `breadth` and `height` crop rather than
-     * scale: a band that only ever showed as much sky as it was asked for would have nothing to taper into.
+     * **A sheet at a real distance, not a band painted on the dome.** A curtain is a thin vertical wall
+     * standing between 100 and 300 kilometres up and tens to hundreds of kilometres away, and drawing it as
+     * one buys three things a dome band cannot have at any price: an arc that runs from horizon to horizon
+     * through however much sky its distance gives it; the foreshortening that makes a far arc a low ribbon
+     * and a near one fill the view; and the **corona** — parallel rays along near-vertical field lines,
+     * converging overhead by nothing but perspective, the way railway lines do.
      */
-    private const val AURORA_DISTANCE = 100.0f
-
-    /** Either side of the bearing, in degrees. Just short of a half-turn, so the ends can taper. */
-    private const val AURORA_HALF_SWEEP = 95.0f
-
-    /**
-     * The band of sky it may occupy, in degrees above the horizon.
-     *
-     * **The bottom reaches below the horizon on purpose.** The curtain's hem is a wavy line — the fold moves
-     * it up and down along the band — and where it dipped past the mesh's own lower edge it was clipped to a
-     * dead straight one, which reads as the sky having a shelf in it (Jonah, 2026-08-30, walked). Below the
-     * horizon there is terrain and vanilla's dark disc in front of it, so the overrun costs nothing and is
-     * never seen.
-     */
-    private const val AURORA_LOWEST = -10.0f
-    private const val AURORA_HIGHEST = 84.0f
-
-    /**
-     * How finely the band is divided. Enough that the arc reads as a curve rather than a chord, and no more:
-     * the detail is in the fragment stage, so these buy geometry and not appearance.
-     */
-    private const val AURORA_ACROSS = 64
-    private const val AURORA_UP = 12
-    private const val AURORA_QUADS = AURORA_ACROSS * AURORA_UP
+    private const val AURORA_ALONG = 96
+    private const val AURORA_UP = 10
+    private const val AURORA_QUADS = AURORA_ALONG * AURORA_UP
     private const val AURORA_INDICES = AURORA_QUADS * QUAD_INDICES
+
+    /**
+     * Where the light is made, in kilometres.
+     *
+     * Measured, not chosen: green oxygen emits between 100 and 150km and red oxygen between 200 and 300,
+     * and the sharp lower border of an auroral form sits at about 105. So a sheet from 100 to 300 is the
+     * real extent, and it is why the ramp's green belongs low and its red high.
+     */
+    private const val LOWEST_KM = 100.0f
+    private const val HIGHEST_KM = 300.0f
+
+    /** Half the length of an arc, in kilometres, before [Aurora.breadth] scales it. */
+    private const val LONGEST_ARC_KM = 900.0f
+
+    /**
+     * How far off the nearest and furthest curtains stand, in kilometres.
+     *
+     * **This is what spreads them over the whole sky.** Distance is what decides how high an arc rides:
+     * one at 40km is nearly overhead and one at 800km lies along the horizon, so a display at several
+     * distances fills the dome from the zenith down — which is how a real one is arranged, arcs stacked in
+     * the poleward direction rather than fanned around the compass.
+     */
+    private const val NEAREST_ARC_KM = 45.0f
+    private const val FURTHEST_ARC_KM = 850.0f
+
+    /** How far a sheet snakes sideways, in kilometres. Real folds are bends in the ground track. */
+    private const val SNAKE_KM = 60.0f
 
     /**
      * Where the fold may wrap without jumping.
      *
-     * `aurora.fsh` moves its sines at 0.13, 0.21, 0.09 and 0.05 of the drifted time — all whole multiples of
-     * 0.01 — and `200π` completes a whole number of turns for every such multiple. Adding a coefficient that
-     * is not one breaks this, which is why they are all hundredths.
+     * `aurora.vsh` and `aurora.fsh` move their sines at hundredths of the drifted time, and `200π` completes
+     * a whole number of turns for every such multiple. Adding a coefficient that is not one breaks this.
      */
     private const val AURORA_FOLD_PERIOD = 200.0 * Math.PI
 
     /** How fast the fold travels. Slow: an aurora moves at the pace of something very far away. */
     private const val AURORA_DRIFT = 0.05
-
-    /** How far the curtain's middle wanders from the band's, as a share of the band. */
-    private const val AURORA_WANDER = 1.0f
 
     /** How fine the vertical rays are. Higher is more of them. */
     private const val AURORA_RAY_FINENESS = 220.0f
@@ -280,25 +284,29 @@ object Blaze3dSkyCanvas : SkyCanvas {
     /** Above 1, so a curtain spends more of its time faint than bright and the sky is rarely full. */
     private const val SWELL_PEAKINESS = 1.7
 
-    /** How far apart their bearings lean, in degrees. Near-parallel, which is what real arcs are. */
-    private const val BETWEEN_CURTAINS = 11.0f
+    /**
+     * How far apart their bearings lean, in degrees.
+     *
+     * Small: real arcs are very nearly parallel, being circles about one distant pole. Enough only that
+     * several of them are not one ruled line repeated.
+     */
+    private const val BETWEEN_CURTAINS = 4.0f
 
-    /** How far up and down the band several curtains are spread, as a share of it. */
-    private const val CURTAINS_SPREAD = 0.34f
-
-    /** How much smaller a later curtain may be than the first, so they are not clones. */
+    /** How much shorter a later arc may be than the first, so they are not clones. */
     private const val CURTAIN_VARIANCE = 0.35f
 
     /** An irrational-ish step, so the variation does not repeat every few curtains. */
     private const val CURTAIN_STRIDE = 0.618f
+
+    /** Three `vec4`s, matching `AuroraInfo` in the shaders. */
+    private const val AURORA_INFO_BYTES = 3 * 4 * Float.SIZE_BYTES
 
     /**
      * How many steps the ramp is baked into.
      *
      * **Interpolated here rather than by the sampler**, which is what makes any number of colours free: the
      * stops are blended into this many pixels on the way in, so the shader takes one fetch and never loops,
-     * and nothing depends on how a `GpuSampler` was configured. At this width one step is a fraction of a
-     * degree of sky, which is past anything an eye resolves.
+     * and nothing depends on how a `GpuSampler` was configured.
      */
     private const val RAMP_STEPS = 128
 
@@ -319,9 +327,6 @@ object Blaze3dSkyCanvas : SkyCanvas {
             AURORA_INFO_BYTES,
         )
     }
-
-    /** Two `vec4`s, matching `AuroraInfo` in the shaders. */
-    private const val AURORA_INFO_BYTES = 2 * 4 * Float.SIZE_BYTES
 
     private var curtainBuffer: GpuBuffer? = null
 
@@ -666,8 +671,9 @@ object Blaze3dSkyCanvas : SkyCanvas {
      * wide band: a real display is several arcs that brighten and die out of step with each other, so the
      * sky fills and empties through a night. One curtain held all night reads as scenery.
      *
-     * Each also gets its own phase, lift, height and breadth, so what is drawn several times is never the
-     * same curtain twice.
+     * Each stands at its own distance, which is what spreads a display over the sky rather than crowding it
+     * into one quarter — and gets its own phase, lean and length besides, so what is drawn several times is
+     * never the same curtain twice.
      */
     override fun drawAurora(aurora: Aurora, strength: Float, timeTicks: Float) {
         if (strength <= NOTHING_TO_DRAW) return
@@ -750,27 +756,38 @@ object Blaze3dSkyCanvas : SkyCanvas {
     /**
      * One curtain's parameters, laid out to match `AuroraInfo` in the shaders.
      *
-     * The per-curtain variation is spent here rather than in the mesh, which never changes: a different
-     * phase, a different lift up the band, and a height and breadth jittered off its own index. Nothing is
-     * random — two clients drawing the same instant draw the same sky.
+     * **Distance is what spreads a display over the sky**, and it is spread *geometrically* rather than
+     * evenly: how high an arc rides falls away with distance, so equal steps in kilometres would pile every
+     * curtain but the first down near the horizon. Equal steps in ratio put them at even heights, which is
+     * what the eye reads as a sky filling up.
      */
     private fun writeAuroraInfo(aurora: Aurora, curtain: Int, many: Int, showing: Float, drifted: Float) {
         val phase = curtain * CURTAINS_APART.toFloat()
-        // Spread up the band, so several arcs stand at different heights instead of on top of each other.
-        val lift = if (many == 1) 0.0f else (curtain.toFloat() / (many - 1) - 0.5f) * CURTAINS_SPREAD
         val varied = 1.0f - CURTAIN_VARIANCE * ((curtain * CURTAIN_STRIDE) % 1.0f)
+        val away = standingOff(curtain, many)
+        // A taller display reaches higher rather than starting lower: where the light *begins* is where the
+        // air stops the electrons, which is not a thing a writer moves.
+        val reaches = LOWEST_KM + (HIGHEST_KM - LOWEST_KM) * aurora.height.coerceIn(0.2f, 1.0f)
         RenderSystem.getDevice().createCommandEncoder().mapBuffer(auroraInfo.currentBuffer(), false, true)
             .use { view ->
                 Std140Builder.intoBuffer(view.data())
-                    .putVec4(
-                        showing,
-                        drifted,
-                        (aurora.breadth * varied).coerceIn(0.0f, 1.0f),
-                        (aurora.height * varied).coerceIn(0.0f, 1.0f),
-                    )
-                    .putVec4(AURORA_WANDER, AURORA_RAY_FINENESS, phase, lift)
+                    .putVec4(showing, drifted, aurora.breadth.coerceIn(0.05f, 1.0f), 0.0f)
+                    .putVec4(SNAKE_KM * varied, AURORA_RAY_FINENESS, phase, 0.0f)
+                    .putVec4(away, LONGEST_ARC_KM * varied, LOWEST_KM, reaches)
             }
     }
+
+    /**
+     * How far off the [curtain]th of [many] stands, in kilometres — geometric, so they ride at even heights.
+     */
+    private fun standingOff(curtain: Int, many: Int): Float {
+        if (many <= 1) return NEAREST_ARC_KM * MIDDLE_DISTANCE
+        val share = curtain.toFloat() / (many - 1)
+        return NEAREST_ARC_KM * Math.pow((FURTHEST_ARC_KM / NEAREST_ARC_KM).toDouble(), share.toDouble()).toFloat()
+    }
+
+    /** Where a lone curtain stands, as a multiple of the nearest — well up the sky but not overhead. */
+    private const val MIDDLE_DISTANCE = 3.0f
 
     /** This ramp as a texture, baked on first use and kept. */
     private fun rampOf(colours: List<Rgba>): DynamicTexture = ramps.getOrPut(colours) { bakeRamp(colours) }
@@ -810,49 +827,39 @@ object Blaze3dSkyCanvas : SkyCanvas {
 
     private const val NOTHING_TO_DRAW = 0.0f
 
-    /** The band of sky the curtain is carved out of, built once and kept. */
+    /** The sheet's grid, built once and kept. */
     private fun curtain(): GpuBuffer = curtainBuffer ?: buildCurtain().also { curtainBuffer = it }
 
     /**
-     * A grid of quads laid on the sky sphere, spanning [AURORA_HALF_SWEEP] either side of north and
-     * [AURORA_LOWEST] to [AURORA_HIGHEST] above the horizon.
+     * A flat unit grid — **no world position at all**, which is the point.
      *
-     * Each vertex carries where on the band it is rather than where in the world — `0..1` across and `0..1`
-     * up — because that is what the fragment stage reasons in, and because it makes the mesh independent of
-     * every number the curtain can be asked for.
+     * Every vertex carries only where on the sheet it is, `0..1` along and `0..1` up. `aurora.vsh` turns
+     * that into a place in the sky from the arc's distance, length and altitudes, so one buffer serves every
+     * curtain of every display and a fold that moves every frame rebuilds nothing.
      */
     private fun buildCurtain(): GpuBuffer {
         val format = DefaultVertexFormat.POSITION_TEX
         return ByteBufferBuilder.exactlySized(AURORA_QUADS * QUAD_VERTICES * format.vertexSize).use { bytes ->
             val builder = BufferBuilder(bytes, VertexFormat.Mode.QUADS, format)
 
-            fun corner(across: Int, up: Int) {
-                val alongBand = across.toFloat() / AURORA_ACROSS
-                val upBand = up.toFloat() / AURORA_UP
-                val azimuth = Math.toRadians(((alongBand - 0.5f) * 2.0f * AURORA_HALF_SWEEP).toDouble())
-                val elevation =
-                    Math.toRadians((AURORA_LOWEST + upBand * (AURORA_HIGHEST - AURORA_LOWEST)).toDouble())
-                val outward = Math.cos(elevation) * AURORA_DISTANCE
-                builder.addVertex(
-                    (Math.sin(azimuth) * outward).toFloat(),
-                    (Math.sin(elevation) * AURORA_DISTANCE).toFloat(),
-                    // North is `-Z`, which is where an azimuth of nought points.
-                    (-Math.cos(azimuth) * outward).toFloat(),
-                ).setUv(alongBand, upBand)
+            fun corner(along: Int, up: Int) {
+                val alongSheet = along.toFloat() / AURORA_ALONG
+                val upSheet = up.toFloat() / AURORA_UP
+                builder.addVertex(alongSheet, upSheet, 0.0f).setUv(alongSheet, upSheet)
             }
 
-            for (across in 0..<AURORA_ACROSS) {
+            for (along in 0..<AURORA_ALONG) {
                 for (up in 0..<AURORA_UP) {
-                    corner(across, up)
-                    corner(across + 1, up)
-                    corner(across + 1, up + 1)
-                    corner(across, up + 1)
+                    corner(along, up)
+                    corner(along + 1, up)
+                    corner(along + 1, up + 1)
+                    corner(along, up + 1)
                 }
             }
 
             builder.buildOrThrow().use { mesh ->
                 RenderSystem.getDevice()
-                    .createBuffer({ "Ephemeris aurora band" }, GpuBuffer.USAGE_VERTEX, mesh.vertexBuffer())
+                    .createBuffer({ "Ephemeris aurora sheet" }, GpuBuffer.USAGE_VERTEX, mesh.vertexBuffer())
             }
         }
     }
