@@ -15,4 +15,8 @@ internal object RuntimeLevelLog {
     fun warn(message: String, cause: Throwable? = null) {
         if (cause == null) log.warn(message) else log.warn(message, cause)
     }
+
+    fun info(message: String) {
+        log.info(message)
+    }
 }

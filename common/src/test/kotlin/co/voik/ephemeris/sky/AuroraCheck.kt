@@ -2,6 +2,9 @@ package co.voik.ephemeris.sky
 
 import co.voik.ephemeris.Rgba
 import com.mojang.serialization.JsonOps
+import net.minecraft.core.registries.Registries
+import net.minecraft.resources.Identifier
+import net.minecraft.resources.ResourceKey
 import io.kotest.core.spec.style.FunSpec
 
 /**
@@ -134,6 +137,64 @@ class AuroraCheck : FunSpec({
         // so hanging one over a level must not take vanilla's own sun and moon away from it.
         check(SkySpec.VANILLA.copy(aurora = Aurora()).isOrdinary) {
             "An aurora made the sky extraordinary, so vanilla's sun will be replaced by a copy of itself"
+        }
+    }
+})
+
+/**
+ * That a curtain survives **the wire**, which is a different question from surviving a codec.
+ *
+ * `LevelLookPayload` sends a spec through `ByteBufCodecs.fromCodec`, so what actually crosses is an NBT
+ * round-trip inside a byte buffer — not the JSON one every other check here exercises. The two are not the
+ * same test, and this codebase has already lost an afternoon to the difference: the Spire's unbroken cloud
+ * decks encoded as vanilla-cut ones and arrived full of holes, with everything offline saying they were
+ * fine (Jonah, 2026-08-27, walked).
+ *
+ * An aurora is the worst possible thing to make that mistake with, because it is invisible most nights by
+ * design — a field that failed to cross would read as bad luck for weeks.
+ */
+class AuroraOnTheWireCheck : FunSpec({
+
+    // Built rather than `Level.OVERWORLD`, whose class cannot initialise without a bootstrapped game —
+    // and none of what crosses here needs one.
+    val somewhere: ResourceKey<net.minecraft.world.level.Level> = ResourceKey.create(
+        Registries.DIMENSION,
+        Identifier.fromNamespaceAndPath("minecraft", "overworld"),
+    )
+
+    fun crossed(look: LevelLook): LevelLook {
+        val payload = LevelLookPayload(listOf(LevelLookPayload.Entry(somewhere, look)))
+        val buffer = io.netty.buffer.Unpooled.buffer()
+        LevelLookPayload.STREAM_CODEC.encode(buffer, payload)
+        return LevelLookPayload.STREAM_CODEC.decode(buffer).looks.single().look
+    }
+
+    val elaborate = Aurora(
+        colours = listOf(Rgba(0.9f, 0.1f, 0.2f), Rgba(0.2f, 0.9f, 0.4f), Rgba(0.3f, 0.2f, 0.9f)),
+        glow = 1.31f,
+        breadth = 0.73f,
+        height = 0.68f,
+        frequency = 0.43f,
+        bearingDegrees = 214.0f,
+        ground = AuroraGround.WHERE_IT_SNOWS,
+        seed = 4242L,
+    )
+
+    test("a curtain crosses the wire unchanged") {
+        val arrived = crossed(LevelLook(SkySpec.VANILLA.copy(aurora = elaborate))).sky.aurora
+        check(arrived != null) { "The curtain did not cross at all, so no client will ever draw one" }
+        check(arrived == elaborate) { "The curtain crossed as $arrived" }
+    }
+
+    test("the ramp crosses in the order it was written") {
+        val arrived = crossed(LevelLook(SkySpec.VANILLA.copy(aurora = elaborate))).sky.aurora?.colours
+        check(arrived == elaborate.colours) { "The ramp arrived as $arrived" }
+    }
+
+    test("a sky with no curtain crosses as a sky with no curtain") {
+        // The optional field's other half: absent must arrive absent rather than as a default one.
+        check(crossed(LevelLook(SkySpec.VANILLA)).sky.aurora == null) {
+            "A sky nobody hung a curtain in arrived wearing one"
         }
     }
 })

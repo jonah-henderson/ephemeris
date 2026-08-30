@@ -1,5 +1,6 @@
 package co.voik.ephemeris.client
 
+import co.voik.ephemeris.RuntimeLevelLog
 import co.voik.ephemeris.sky.Aurora
 import co.voik.ephemeris.sky.AuroraGround
 import co.voik.ephemeris.sky.LevelDaylight
@@ -28,9 +29,29 @@ object AuroraPainter {
         val aurora = look.sky.aurora ?: return
 
         val strength = strengthOf(aurora, level, look, rainBrightness, starBrightness)
+        sayWhetherItIsUp(strength)
         if (strength <= WORTH_DRAWING) return
         canvas.drawAurora(aurora, strength, level.defaultClockTime.toFloat())
     }
+
+    /**
+     * A line when the curtain comes up and a line when it goes, and nothing in between.
+     *
+     * **An aurora is the first thing here that can be correct and invisible**, so the one question a walk
+     * cannot answer from a window is whether the painter ever decided to draw. `/age aurora here` answers
+     * it from the server's side; this is the same answer from the client's, and the two together say which
+     * half of the wire is at fault. On a change only, so a night costs two lines.
+     */
+    private fun sayWhetherItIsUp(strength: Float) {
+        val up = strength > WORTH_DRAWING
+        if (up == wasUp) return
+        wasUp = up
+        if (up) RuntimeLevelLog.info("Aurora up, drawing at %.3f".format(strength))
+        else RuntimeLevelLog.info("Aurora down")
+    }
+
+    /** What the last frame decided, so only a change is worth a line. */
+    private var wasUp = false
 
     /**
      * How present the curtain is right now, `0..1` — independent things multiplied together, each of which

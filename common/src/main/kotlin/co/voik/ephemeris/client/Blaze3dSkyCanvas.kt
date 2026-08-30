@@ -1,6 +1,7 @@
 package co.voik.ephemeris.client
 
 import co.voik.ephemeris.Rgba
+import co.voik.ephemeris.RuntimeLevelLog
 import co.voik.ephemeris.Sphere
 import co.voik.ephemeris.sky.Aurora
 import co.voik.ephemeris.sky.CloudDeck
@@ -288,6 +289,9 @@ object Blaze3dSkyCanvas : SkyCanvas {
     private const val AURORA_INFO_BYTES = 2 * 4 * Float.SIZE_BYTES
 
     private var curtainBuffer: GpuBuffer? = null
+
+    /** Said once. A frame that cannot draw is very likely every frame, and a log per frame helps nobody. */
+    private var saidTheTargetWasEmpty = false
 
     /** Half the slab's width. Beyond this the deck simply ends, which is why it is walled. */
     private const val DECK_RADIUS = 512.0f
@@ -643,7 +647,14 @@ object Blaze3dSkyCanvas : SkyCanvas {
         writeAuroraInfo(aurora, strength, timeTicks)
         val quadIndices = RenderSystem.getSequentialBuffer(VertexFormat.Mode.QUADS)
 
-        renderPass("Ephemeris aurora")?.use { pass ->
+        val pass = renderPass("Ephemeris aurora")
+        // **A null pass draws nothing and says nothing**, which is the one silent failure left in this
+        // path: every other way an aurora can fail to appear is a number somebody can ask for.
+        if (pass == null && !saidTheTargetWasEmpty) {
+            saidTheTargetWasEmpty = true
+            RuntimeLevelLog.warn("An aurora had no colour attachment to draw onto, so none was drawn")
+        }
+        pass?.use { pass ->
             pass.setPipeline(AURORA_PIPELINE)
             RenderSystem.bindDefaultUniforms(pass)
             pass.setUniform("DynamicTransforms", transforms)
