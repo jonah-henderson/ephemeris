@@ -1,5 +1,6 @@
 package co.voik.ephemeris.client
 
+import co.voik.ephemeris.RuntimeLevelLog
 import net.minecraft.client.multiplayer.ClientLevel
 import net.minecraft.world.attribute.EnvironmentAttributeSystem
 import net.minecraft.world.level.MoonPhase
@@ -91,8 +92,17 @@ object LevelRendering {
      * runs exactly when the head did not cancel and each path draws these once.
      */
     fun drawSkyOverlays(moment: SkyMoment) {
+        // **Once, and only to say the seam was reached.** An overlay that draws nothing is indistinguishable
+        // from a seam that never runs, and the two want opposite investigations — so the seam says which it
+        // is, exactly once, rather than leaving silence to mean both (Jonah, 2026-08-30, walked).
+        if (!saidTheSeamRan) {
+            saidTheSeamRan = true
+            RuntimeLevelLog.info("Sky overlays reached, ${overlays.size} registered")
+        }
         for (overlay in overlays) overlay.draw(moment)
     }
+
+    private var saidTheSeamRan = false
 
     /** Asked by the cloud Mixin. */
     fun drawClouds(moment: CloudMoment): Boolean = clouds.any { it.draw(moment) }
