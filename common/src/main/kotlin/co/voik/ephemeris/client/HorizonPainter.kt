@@ -7,6 +7,9 @@ import co.voik.ephemeris.sky.HorizonGlow
 import co.voik.ephemeris.sky.LevelLook
 import co.voik.ephemeris.sky.LevelLooks
 import net.minecraft.client.Minecraft
+import net.minecraft.client.multiplayer.ClientLevel
+import net.minecraft.world.attribute.EnvironmentAttributeSystem
+import net.minecraft.world.attribute.EnvironmentAttributes
 
 /**
  * Sunrises and sunsets, one per sun.
@@ -35,6 +38,42 @@ object HorizonPainter {
         val look = LevelLooks.of(level.dimension()) ?: return false
         return paint(canvas, look, level.defaultClockTime)
     }
+
+    /**
+     * Whether this level can ever light a horizon at all.
+     *
+     * **Shared with [silenceVanillasGlow] so the two cannot answer differently about one sky.** [paint]
+     * returning true having drawn nothing is exactly this case, and the level still has vanilla's own
+     * `SUNRISE_SUNSET_COLOR` sitting in its attributes — which nothing here draws but
+     * `AtmosphericFogEnvironment` does, washing the fog warm on one horizon. A sky with no suns in it was
+     * therefore getting a sunset (Jonah, 2026-08-27, walked, on the Spire).
+     *
+     * An ordinary sky is left alone: vanilla draws that one and its own glow is the right one.
+     */
+    fun everGlows(look: LevelLook): Boolean {
+        if (look.sky.isOrdinary) return true
+        if (look.rules.glow == HorizonGlow.NONE) return false
+        return look.sky.bodies.any { it.phase == null }
+    }
+
+    /**
+     * Takes vanilla's sunrise colour away from a level that has no sunrise — registered as an environment
+     * layer, because the fog reads that attribute directly and no renderer stands between them.
+     *
+     * Levels that *do* light a horizon keep it: our own bands are drawn on the sky disc and vanilla's warm
+     * fog beneath them is the right companion, placed by the same sun.
+     */
+    fun silenceVanillasGlow(
+        level: ClientLevel,
+        layers: EnvironmentAttributeSystem.Builder,
+    ): EnvironmentAttributeSystem.Builder {
+        val look = LevelLooks.of(level.dimension()) ?: return layers
+        if (everGlows(look)) return layers
+        return layers.addConstantLayer(EnvironmentAttributes.SUNRISE_SUNSET_COLOR) { UNLIT_HORIZON }
+    }
+
+    /** Fully transparent, which is what `SkyRenderer` and the fog both read as "no sunrise here". */
+    private const val UNLIT_HORIZON = 0
 
     /**
      * The same, given the appearance and the hour outright — **so it can be checked without a game running**.

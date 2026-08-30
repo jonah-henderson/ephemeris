@@ -80,6 +80,25 @@ class HorizonPainterCheck : FunSpec({
         check(canvas.glows.isEmpty()) { "It also drew ${canvas.glows.size} glow(s) while declining" }
     }
 
+    test("a sky with nothing to light a horizon has no sunrise at all") {
+        // **Claiming the seam is not enough**, which is the trap this closes. With no suns the painter
+        // draws no band and returns true, so vanilla's own glow never runs — but the level still carries
+        // `SUNRISE_SUNSET_COLOR`, and `AtmosphericFogEnvironment` reads that attribute straight, washing
+        // the fog warm on one horizon. The Spire has never had a sun and was getting a sunset (Jonah,
+        // 2026-08-27, walked).
+        val sunless = lookOf(HorizonGlow.BLENDED, moon(Orbit.VANILLA_MOON))
+        check(!HorizonPainter.everGlows(sunless)) { "A sky with no suns was left vanilla's sunrise colour" }
+
+        val silenced = lookOf(HorizonGlow.NONE, sun(tilted))
+        check(!HorizonPainter.everGlows(silenced)) { "A sky that asked for no glow was left vanilla's" }
+
+        check(HorizonPainter.everGlows(lookOf(HorizonGlow.BLENDED, sun(tilted)))) {
+            "A sky with a sun in it lost the warm fog under its own band"
+        }
+        // Vanilla draws an ordinary sky's glow itself, and its own is the right one.
+        check(HorizonPainter.everGlows(LevelLook(SkySpec.VANILLA))) { "An ordinary sky lost its sunrise" }
+    }
+
     test("a sun at the horizon paints, and one overhead does not") {
         val look = lookOf(HorizonGlow.BLENDED, sun(tilted))
 

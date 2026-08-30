@@ -48,4 +48,5 @@ private fun registerTheBuiltInPainters() {
     }
     LevelRendering.clouds { moment -> CloudPainter.draw(Blaze3dSkyCanvas, moment.cameraPosition, moment.time) }
     LevelRendering.horizon { HorizonPainter.draw(Blaze3dSkyCanvas) }
+    LevelRendering.environment(HorizonPainter::silenceVanillasGlow)
 }
