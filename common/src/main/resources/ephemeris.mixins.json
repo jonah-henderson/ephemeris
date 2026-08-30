@@ -5,7 +5,8 @@
   "mixins": [
     "EnvironmentAttributesMixin",
     "LevelMixin",
-    "ServerLevelMixin"
+    "ServerLevelMixin",
+    "TimelineLayersMixin"
   ],
   "client": [
     "client.ClientLevelMixin",

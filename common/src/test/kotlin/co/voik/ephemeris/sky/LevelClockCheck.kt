@@ -2,7 +2,10 @@ package co.voik.ephemeris.sky
 
 import co.voik.ephemeris.Rgba
 import io.kotest.core.spec.style.FunSpec
+import net.minecraft.SharedConstants
 import net.minecraft.core.Direction
+import net.minecraft.core.registries.BuiltInRegistries
+import net.minecraft.server.Bootstrap
 
 /**
  * That the hour we hand the timeline is the hour whose sky matches ours.
@@ -200,6 +203,48 @@ class LevelClockCheck : FunSpec({
             check(worst < 1.0f) {
                 "'$name' was lit as ${worst}° of sun movement in $step ticks, at tick $worstAt. A single sun " +
                     "shows about 0.4°, so this is a seam in the mapping rather than the sampling"
+            }
+        }
+    }
+
+    test("nothing that says where a body is reads the moved hour") {
+        // **Walked, and the whole reason the tracks are split**: a moon a little short of the zenith
+        // reappeared the same distance past it, taking the starfield with it. 26.1 turns vanilla's sun, moon
+        // and stars by three timeline tracks, so they rode the mapped hour — which leaps, both when the
+        // brightest sun changes and when the deciding one turns around short of the zenith. Equal heights
+        // excuse the leap for a colour and never for a position.
+        val tilted = lookOf(
+            sun(Orbit.VANILLA_SUN),
+            sun(Orbit.VANILLA_SUN.copy(inclinationDegrees = 30.0f, phaseDegrees = 200.0f)),
+        )
+        val step = 20
+        fun mappedHourAt(tick: Int): Long =
+            LevelClock.vanillaEquivalent(tilted, tick.toLong()) ?: error("no mapping at $tick")
+
+        fun movedBy(tick: Int): Long {
+            val apart = Math.abs(mappedHourAt(tick) - mappedHourAt(tick - step))
+            return Math.min(apart, day - apart)
+        }
+
+        val widest = (step..<day step step).maxOf(::movedBy)
+        check(widest > 1000L) {
+            "This sky's hour moved at most $widest ticks in $step, so it no longer leaps and the fixture " +
+                "has stopped saying why the three angles are held off it"
+        }
+        // Swept over vanilla's own registry rather than listed, so an attribute Minecraft adds is caught
+        // rather than quietly riding the moved hour: an angle is the only kind of track that places
+        // something, and vanilla names every one of them for what it is.
+        SharedConstants.tryDetectVersion()
+        Bootstrap.bootStrap()
+        for (attribute in BuiltInRegistries.ENVIRONMENT_ATTRIBUTE) {
+            val name = BuiltInRegistries.ENVIRONMENT_ATTRIBUTE.getKey(attribute) ?: error("unregistered")
+            val isAnAngle = name.path.endsWith("_angle")
+            check(LevelClock.placesTheSky(attribute) == isAnAngle) {
+                if (isAnAngle) {
+                    "$name would ride the moved hour, so whatever it turns leaps when the hour does"
+                } else {
+                    "$name was held off the moved hour, so this level would show it at the real one"
+                }
             }
         }
     }

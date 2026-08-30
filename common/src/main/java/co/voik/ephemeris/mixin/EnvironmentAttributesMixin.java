@@ -23,6 +23,9 @@ import org.spongepowered.asm.mixin.injection.Redirect;
  *
  * <p>No loader event comes near this, and no data can express it: a runtime level cannot be given a timeline
  * of its own, timelines being datapack content frozen at startup.
+ *
+ * <p>Every track but three, that is: {@link TimelineLayersMixin} holds the sun, moon and star angles on the
+ * real clock, the moved hour being allowed to leap and a position not.
  */
 @Mixin(net.minecraft.world.attribute.EnvironmentAttributeSystem.class)
 public class EnvironmentAttributesMixin {

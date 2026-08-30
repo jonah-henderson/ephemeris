@@ -216,6 +216,9 @@ object SkyPainter {
      * **A body on vanilla's own path takes vanilla's own angle.** That is exact where reconstructing the
      * day curve would only be close, and it survives vanilla changing that curve — which it has, the sun's
      * schedule now being a timeline rather than a formula. Everything else turns on the level's clock.
+     *
+     * The angle is read at the real hour and not the one an Age's suns are lit at, which is
+     * [co.voik.ephemeris.sky.LevelClock.forTrack]'s doing — a lit-as hour may leap and a position may not.
      */
     /** Where the body is, turned the way the body asks to be turned. */
     private fun facingOf(

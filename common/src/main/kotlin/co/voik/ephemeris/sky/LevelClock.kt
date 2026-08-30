@@ -2,6 +2,8 @@ package co.voik.ephemeris.sky
 
 import net.minecraft.core.Holder
 import net.minecraft.util.Mth
+import net.minecraft.world.attribute.EnvironmentAttribute
+import net.minecraft.world.attribute.EnvironmentAttributes
 import net.minecraft.world.clock.ClockManager
 import net.minecraft.world.clock.WorldClock
 import net.minecraft.world.level.Level
@@ -24,13 +26,18 @@ import net.minecraft.world.level.Level
  * matching progress would march the sky through a night it never has. A sky with *no* sun is the same rule
  * at its limit: nothing rises, so the hour is midnight and stays there.
  *
- * **The hour is allowed to leap, and the sky is not.** When the brightest sun changes, the answer flips from
- * the dusk side of noon to the dawn side — thousands of ticks at once — because the sky has stopped dimming
- * and started brightening, and those are different parts of vanilla's curve. It happens at equal heights, so
- * what the sky is *lit as* does not move at all: measured across one, two and three suns, never more than a
- * third of a degree of sun movement, which is the sampling rather than a seam. `LevelClockCheck` holds the
- * second property and deliberately not the first — smoothing the hour would mean keeping dusk colours while
- * the sky brightened.
+ * **The hour is allowed to leap, and the sky is not.** When the brightest sun changes, or when the deciding
+ * one turns around short of the zenith, the answer flips from the dusk side of noon to the dawn side —
+ * thousands of ticks at once — because the sky has stopped dimming and started brightening, and those are
+ * different parts of vanilla's curve. It happens at equal heights, so what the sky is *lit as* does not move
+ * at all: measured across one, two and three suns, never more than a third of a degree of sun movement, which
+ * is the sampling rather than a seam. `LevelClockCheck` holds the second property and deliberately not the
+ * first — smoothing the hour would mean keeping dusk colours while the sky brightened.
+ *
+ * **So the moved hour says what the sky looks like and never where anything is.** Three of the same
+ * timeline's tracks are the angles 26.1 places vanilla's sun, moon and stars by, and equal heights are no
+ * excuse for a position: a moon short of the zenith reappeared the same distance past it, carrying the
+ * starfield with it. [forTrack] is where those three are held back.
  */
 object LevelClock {
 
@@ -121,6 +128,30 @@ object LevelClock {
     fun forTimelines(level: Level, real: ClockManager): ClockManager =
         MappedClock(level, real)
 
+    /** Whether [clock] is one of ours, with the hour already moved. */
+    fun movesTheHour(clock: ClockManager): Boolean = clock is MappedClock
+
+    /**
+     * The clock one track should read — the moved hour for everything that says what the hour *looks* like,
+     * and the real one for the three that say *where* the sky's furniture is.
+     *
+     * `visual/sun_angle`, `visual/moon_angle` and `visual/star_angle` sit on the same timeline as the colours
+     * and are what `SkyRenderer` turns vanilla's sun, moon and starfield by. Left on the moved hour they leap
+     * when it does, so a body on vanilla's own path skipped across the sky while the colours — which leap at
+     * equal heights — stayed put.
+     *
+     * The moon's *phase* stays on the moved hour and is unharmed: the move keeps the day number, and the
+     * phase only changes on a day boundary.
+     */
+    fun forTrack(attribute: EnvironmentAttribute<*>, clock: ClockManager): ClockManager =
+        if (clock is MappedClock && placesTheSky(attribute)) clock.real else clock
+
+    /** Whether [attribute] says **where** something in the sky is, rather than what the hour looks like. */
+    fun placesTheSky(attribute: EnvironmentAttribute<*>): Boolean =
+        attribute == EnvironmentAttributes.SUN_ANGLE ||
+            attribute == EnvironmentAttributes.MOON_ANGLE ||
+            attribute == EnvironmentAttributes.STAR_ANGLE
+
     /**
      * The real clock with the hour moved, and **memoised on the tick it was asked about**.
      *
@@ -128,7 +159,7 @@ object LevelClock {
      * clock does — so without this the whole sky reading would be rebuilt dozens of times a frame to return
      * the same number.
      */
-    private class MappedClock(private val level: Level, private val real: ClockManager) : ClockManager {
+    private class MappedClock(private val level: Level, val real: ClockManager) : ClockManager {
 
         private var askedAbout = Long.MIN_VALUE
         private var answered = Long.MIN_VALUE
