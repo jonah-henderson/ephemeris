@@ -98,5 +98,7 @@ object AuroraPainter {
 
     private const val NOTHING = 0.0f
 
+    private const val NONE_DRAWN = 0
+
     private const val TICKS_PER_DAY = 24000L
 }
