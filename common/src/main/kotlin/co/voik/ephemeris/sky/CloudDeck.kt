@@ -96,12 +96,16 @@ data class CloudDeck(
                 Codec.FLOAT.optionalFieldOf("half_thickness", VANILLA_HALF_THICKNESS)
                     .forGetter(CloudDeck::halfThickness),
                 Codec.FLOAT.optionalFieldOf("contrast", DEFAULT_CONTRAST).forGetter(CloudDeck::contrast),
-                // Absent means vanilla's picture; an explicit null cannot be written, so a solid deck is
-                // said with the `solid` factory rather than in JSON. Nothing authors one yet.
-                Identifier.CODEC.optionalFieldOf("texture", VANILLA_CLOUDS).forGetter {
-                    it.texture ?: VANILLA_CLOUDS
-                },
-            ).apply(instance, ::CloudDeck)
+                // **Absent is a deck with no holes, and the vanilla picture is named outright.** The other
+                // way round reads more kindly and cannot say "none": a solid deck encoded as a vanilla-cut
+                // one, so the Spire's two unbroken sheets crossed to the client full of holes and nothing
+                // offline could see it (Jonah, 2026-08-27, walked). A Kotlin caller is unaffected — the
+                // constructor's own default is still vanilla's picture.
+                Identifier.CODEC.optionalFieldOf("texture")
+                    .forGetter { deck -> java.util.Optional.ofNullable(deck.texture) },
+            ).apply(instance) { height, low, high, drift, offsetX, offsetZ, halfThickness, contrast, texture ->
+                CloudDeck(height, low, high, drift, offsetX, offsetZ, halfThickness, contrast, texture.orElse(null))
+            }
         }
     }
 }

@@ -72,9 +72,19 @@ data class SkySpec(
             }
         }
     } + decks.map { deck ->
-        "deck height %.0f drift %.3f thickness %.0f".format(deck.height, deck.driftSpeed, deck.halfThickness * 2)
+        // Whether it has holes, because that is the whole difference between an overcast and vanilla's
+        // scattered cloud — and the one thing about a deck that a report showing a correct one had no way
+        // of contradicting when the client was drawing a different one.
+        val cover = deck.texture?.let { "cut from $it" } ?: "unbroken"
+        "deck height %.0f drift %.3f thickness %.0f %s".format(
+            deck.height,
+            deck.driftSpeed,
+            deck.halfThickness * 2,
+            cover,
+        )
     } + listOfNotNull(
-        "stars ${stars.count}",
+        "stars ${stars.count}" + if (stars.glow == ORDINARY_STAR_GLOW) "" else
+            " burning %.2f times vanilla's".format(stars.glow),
         stars.reveal?.let { "— hidden below %.0f, fully shown above %.0f".format(it.hiddenBelow, it.fullyShownAbove) },
         "— an ordinary sky, so vanilla draws this one and we stay out of it".takeIf { isOrdinary },
     )
