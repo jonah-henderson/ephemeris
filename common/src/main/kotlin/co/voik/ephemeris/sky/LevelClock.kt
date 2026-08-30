@@ -135,7 +135,7 @@ object LevelClock {
 
         override fun getTotalTicks(definition: Holder<WorldClock>): Long {
             val actual = real.getTotalTicks(definition)
-            val look = LevelLooks.anywhere(level.dimension()) ?: return actual
+            val look = LevelLooks.anywhere(level) ?: return actual
             if (actual != askedAbout) {
                 askedAbout = actual
                 answered = vanillaEquivalent(look, actual) ?: actual

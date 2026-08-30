@@ -58,13 +58,19 @@ object LevelLooks {
     fun forgetAll() = looks.clear()
 
     /**
-     * How [dimension] looks, **from whichever side is asking**.
+     * How [level] looks, **as the side asking was told**.
      *
      * A server fills `LevelAppearance` and never this; a client fills this and never that. So one call
      * answers on both, and the shared code that needs an appearance — the day and night rules, which run on
      * a server and are read on a client — needs no test for which side it is on.
+     *
+     * **Asked of the level rather than of its key**, because in single player both stores live in one JVM
+     * and reading whichever is filled hands a client the *server's* answer. The two are allowed to differ:
+     * a client told something directly — `LevelLookPreview`, or a consumer filling this rung from its own
+     * packet — was told it on purpose, and every rule that reads a look on the client must follow it.
      */
-    fun anywhere(dimension: ResourceKey<Level>): LevelLook? = LevelAppearance.of(dimension) ?: of(dimension)
+    fun anywhere(level: Level): LevelLook? =
+        if (level.isClientSide) of(level.dimension()) else LevelAppearance.of(level.dimension())
 }
 
 /**

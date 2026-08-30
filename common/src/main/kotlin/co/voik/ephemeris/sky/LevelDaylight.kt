@@ -27,7 +27,7 @@ object LevelDaylight {
      * that the visuals may disagree with the rules.
      */
     fun skyDarkenFor(level: Level): Int? {
-        val look = LevelLooks.anywhere(level.dimension()) ?: return null
+        val look = LevelLooks.anywhere(level) ?: return null
         if (look.sky.isOrdinary) return null
         if (look.rules.daylight == Daylight.VANILLA_CLOCK) return null
 
@@ -89,7 +89,7 @@ object LevelDaylight {
      * turns on the level's clock, so they still wheel over a sunless Age at the rate its day runs at.
      */
     fun starlitnessFor(level: Level): Float? {
-        val look = LevelLooks.anywhere(level.dimension()) ?: return null
+        val look = LevelLooks.anywhere(level) ?: return null
         if (look.sky.isOrdinary) return null
         if (look.rules.daylight == Daylight.VANILLA_CLOCK) return null
 

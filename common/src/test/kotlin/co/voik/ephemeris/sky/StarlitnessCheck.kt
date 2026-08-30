@@ -78,6 +78,23 @@ class StarlitnessCheck : FunSpec({
         check(starlitAt(oneOfThem, midnight) == 1.0f) { "one sun alone left no night for the pair to close" }
     }
 
+    /**
+     * **A sun that never sets holds the light, whatever else is in the sky.** Walked as "polar sun, and
+     * night still fell" (Jonah, 2026-08-27) — which turned out to be a preview never reaching this rule
+     * rather than the rule, but the doubt was worth pinning. The ramp follows whichever sun stands
+     * highest, so one on vanilla's own path going under at midnight cannot pull the light down with it.
+     */
+    test("a sun that never sets holds the light, beside one that does") {
+        val circling = Orbit.VANILLA_SUN.copy(inclinationDegrees = 90.0f, liftDegrees = 25.0f)
+        val midnightSun = skyOf(sun(Orbit.VANILLA_SUN), sun(circling), moon(Orbit.VANILLA_MOON))
+        for (hour in 0L..<24000L step 250L) {
+            check(starlitAt(midnightSun, hour) == 0.0f) {
+                "at $hour a sky with a sun circling 25° up reached ${starlitAt(midnightSun, hour)} of its " +
+                    "stars, so night fell under a midnight sun"
+            }
+        }
+    }
+
     /** The fade is a ramp and not a switch, or dusk arrives as a flicker. */
     test("the stars come in over the fall of the light rather than at a stroke") {
         val sky = skyOf(sun(Orbit.VANILLA_SUN), moon(Orbit.VANILLA_MOON))
