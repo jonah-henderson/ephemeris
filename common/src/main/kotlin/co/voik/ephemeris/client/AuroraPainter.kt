@@ -22,36 +22,43 @@ import net.minecraft.world.phys.Vec3
  */
 object AuroraPainter {
 
-    /** Draws the level's aurora, if it has one and this is a night it comes. */
+    /**
+     * Draws the level's aurora, if it has one and this is a night it comes.
+     *
+     * **Every path out of here says which one it took**, including the ones that decline. A first draft
+     * logged only the decision to draw, which meant silence covered four different answers — no curtain
+     * written, none sent, none tonight, and *this function never ran* — and the last of those is the one a
+     * walk most needs to tell apart from the rest (Jonah, 2026-08-30: "that is a no line output"). Silence
+     * now means one thing only, which is what makes it evidence.
+     */
     fun draw(canvas: SkyCanvas, rainBrightness: Float, starBrightness: Float) {
-        val level = Minecraft.getInstance().level ?: return
-        val look = LevelLooks.of(level.dimension()) ?: return
-        val aurora = look.sky.aurora ?: return
+        val level = Minecraft.getInstance().level
+        if (level == null) return sayItIs("no level to draw in")
+        val look = LevelLooks.of(level.dimension())
+        if (look == null) return sayItIs("nothing has said what ${level.dimension().identifier()} looks like")
+        val aurora = look.sky.aurora
+        if (aurora == null) return sayItIs("the look for ${level.dimension().identifier()} carries no curtain")
 
         val strength = strengthOf(aurora, level, look, rainBrightness, starBrightness)
-        sayWhetherItIsUp(strength)
-        if (strength <= WORTH_DRAWING) return
+        if (strength <= WORTH_DRAWING) return sayItIs("a curtain is written but not showing, at %.3f".format(strength))
+        sayItIs("a curtain is up, drawing at %.3f".format(strength))
         canvas.drawAurora(aurora, strength, level.defaultClockTime.toFloat())
     }
 
     /**
-     * A line when the curtain comes up and a line when it goes, and nothing in between.
+     * One line whenever the answer changes, and nothing while it stays the same.
      *
-     * **An aurora is the first thing here that can be correct and invisible**, so the one question a walk
-     * cannot answer from a window is whether the painter ever decided to draw. `/age aurora here` answers
-     * it from the server's side; this is the same answer from the client's, and the two together say which
-     * half of the wire is at fault. On a change only, so a night costs two lines.
+     * Rate-limited by the answer itself rather than by a clock: a night costs two lines however many frames
+     * it lasts, and a *changed* answer is never swallowed by a timer.
      */
-    private fun sayWhetherItIsUp(strength: Float) {
-        val up = strength > WORTH_DRAWING
-        if (up == wasUp) return
-        wasUp = up
-        if (up) RuntimeLevelLog.info("Aurora up, drawing at %.3f".format(strength))
-        else RuntimeLevelLog.info("Aurora down")
+    private fun sayItIs(state: String) {
+        if (state == said) return
+        said = state
+        RuntimeLevelLog.info("Aurora: $state")
     }
 
-    /** What the last frame decided, so only a change is worth a line. */
-    private var wasUp = false
+    /** What was last said, so only a change is worth saying. */
+    private var said: String? = null
 
     /**
      * How present the curtain is right now, `0..1` — independent things multiplied together, each of which
