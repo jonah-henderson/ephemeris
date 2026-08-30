@@ -112,9 +112,17 @@ class AuroraCheck : FunSpec({
             frequency = 0.19f,
             bearingDegrees = 237.0f,
             ground = AuroraGround.WHERE_IT_SNOWS,
+            curtains = 5,
             seed = -998877L,
         )
         check(sent(elaborate) == elaborate) { "A curtain changed on the way: ${sent(elaborate)}" }
+    }
+
+    test("how many curtains hang crosses the wire") {
+        // The field the sky fills or empties by, and the kind that is quietly dropped by an optional codec
+        // entry: a display of five arriving as one is a much duller sky and no error anywhere.
+        check(sent(Aurora(curtains = 5)).curtains == 5) { "Five curtains arrived as ${sent(Aurora(curtains = 5)).curtains}" }
+        check(Aurora().curtains == Aurora.ORDINARY_CURTAINS) { "An undescribed aurora hangs the wrong number" }
     }
 
     test("a curtain that says nothing about the ground may be seen over any") {
@@ -177,6 +185,7 @@ class AuroraOnTheWireCheck : FunSpec({
         frequency = 0.43f,
         bearingDegrees = 214.0f,
         ground = AuroraGround.WHERE_IT_SNOWS,
+        curtains = 4,
         seed = 4242L,
     )
 

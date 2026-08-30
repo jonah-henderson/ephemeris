@@ -94,8 +94,14 @@ data class SkySpec(
         // said it the other way round would be the one place the three disagree.
         aurora?.let { curtain ->
             val ramp = curtain.colours.joinToString(" over ") { colour -> colour.packed().toUInt().toString(16) }
-            "aurora %s glow %.2f breadth %.2f height %.2f on %.0f%% of nights bearing %.0f".format(
-                ramp, curtain.glow, curtain.breadth, curtain.height, curtain.frequency * 100.0f, curtain.bearingDegrees,
+            "aurora %s ×%d glow %.2f breadth %.2f height %.2f on %.0f%% of nights bearing %.0f".format(
+                ramp,
+                curtain.curtains,
+                curtain.glow,
+                curtain.breadth,
+                curtain.height,
+                curtain.frequency * 100.0f,
+                curtain.bearingDegrees,
             )
         },
         "stars ${stars.count}" + if (stars.glow == ORDINARY_STAR_GLOW) "" else

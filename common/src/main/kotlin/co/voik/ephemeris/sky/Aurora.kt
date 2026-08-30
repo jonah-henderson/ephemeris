@@ -28,6 +28,15 @@ data class Aurora(
     val breadth: Float = ORDINARY_BREADTH,
     /** How tall the curtain stands, `0..1`. */
     val height: Float = ORDINARY_HEIGHT,
+    /**
+     * How many curtains hang at once — **each waxing and waning on its own**, so the sky fills and empties
+     * through a night rather than holding one arc all the way to dawn.
+     *
+     * A real display is several arcs at different heights, and they are not in step: one brightens as
+     * another dies. That is the whole reason this is a count rather than a wider single band, and why the
+     * renderer gives each its own phase, height and lift instead of drawing the same curtain twice.
+     */
+    val curtains: Int = ORDINARY_CURTAINS,
     /** What share of nights it comes at all, `0..1`. One is every night; nought is never. */
     val frequency: Float = ORDINARY_FREQUENCY,
     /** Which way the band crosses the sky, in degrees clockwise from north. */
@@ -108,6 +117,12 @@ data class Aurora(
 
         const val ORDINARY_HEIGHT = 0.6f
 
+        /** Enough that the sky has something going on in it without becoming a ceiling. */
+        const val ORDINARY_CURTAINS = 3
+
+        /** The most that will be drawn, each being a pass of its own. */
+        const val MOST_CURTAINS = 6
+
         /** About one night in three, which is often enough to be a feature of the Age and not of the week. */
         const val ORDINARY_FREQUENCY = 0.35f
 
@@ -132,6 +147,7 @@ data class Aurora(
                 Codec.FLOAT.optionalFieldOf("glow", ORDINARY_GLOW).forGetter(Aurora::glow),
                 Codec.FLOAT.optionalFieldOf("breadth", ORDINARY_BREADTH).forGetter(Aurora::breadth),
                 Codec.FLOAT.optionalFieldOf("height", ORDINARY_HEIGHT).forGetter(Aurora::height),
+                Codec.INT.optionalFieldOf("curtains", ORDINARY_CURTAINS).forGetter(Aurora::curtains),
                 Codec.FLOAT.optionalFieldOf("frequency", ORDINARY_FREQUENCY).forGetter(Aurora::frequency),
                 Codec.FLOAT.optionalFieldOf("bearing", 0.0f).forGetter(Aurora::bearingDegrees),
                 AuroraGround.CODEC.optionalFieldOf("ground", AuroraGround.ANYWHERE).forGetter(Aurora::ground),

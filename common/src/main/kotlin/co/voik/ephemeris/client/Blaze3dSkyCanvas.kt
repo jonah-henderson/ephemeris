@@ -258,6 +258,33 @@ object Blaze3dSkyCanvas : SkyCanvas {
     private const val AURORA_RAY_FINENESS = 220.0f
 
     /**
+     * How far apart two curtains are dealt in phase, in radians.
+     *
+     * Not a fraction of a turn, so no two of them ever come round to breathe together however long anybody
+     * watches.
+     */
+    private const val CURTAINS_APART = 2.1
+
+    /** The rates the curtains swell at. Coprime over [AURORA_FOLD_PERIOD], and both hundredths — see it. */
+    private const val SLOW_SWELL = 0.03
+    private const val SLOWER_SWELL = 0.07
+
+    /** Above 1, so a curtain spends more of its time faint than bright and the sky is rarely full. */
+    private const val SWELL_PEAKINESS = 1.7
+
+    /** How far apart their bearings lean, in degrees. Near-parallel, which is what real arcs are. */
+    private const val BETWEEN_CURTAINS = 11.0f
+
+    /** How far up and down the band several curtains are spread, as a share of it. */
+    private const val CURTAINS_SPREAD = 0.34f
+
+    /** How much smaller a later curtain may be than the first, so they are not clones. */
+    private const val CURTAIN_VARIANCE = 0.35f
+
+    /** An irrational-ish step, so the variation does not repeat every few curtains. */
+    private const val CURTAIN_STRIDE = 0.618f
+
+    /**
      * How many steps the ramp is baked into.
      *
      * **Interpolated here rather than by the sampler**, which is what makes any number of colours free: the
@@ -624,19 +651,62 @@ object Blaze3dSkyCanvas : SkyCanvas {
         modelViewStack.popMatrix()
     }
 
+    /**
+     * Every curtain this aurora hangs, each on its own clock.
+     *
+     * **They come and go independently**, which is the whole of why an aurora is a count rather than one
+     * wide band: a real display is several arcs that brighten and die out of step with each other, so the
+     * sky fills and empties through a night. One curtain held all night reads as scenery.
+     *
+     * Each also gets its own phase, lift, height and breadth, so what is drawn several times is never the
+     * same curtain twice.
+     */
     override fun drawAurora(aurora: Aurora, strength: Float, timeTicks: Float) {
         if (strength <= NOTHING_TO_DRAW) return
         val ramp = rampOf(aurora.ramp)
+        val drifted = wrapped(timeTicks.toDouble() * AURORA_DRIFT, AURORA_FOLD_PERIOD)
+        val many = aurora.curtains.coerceIn(1, Aurora.MOST_CURTAINS)
+        for (curtain in 0..<many) {
+            val showing = strength * swellOf(curtain, drifted)
+            if (showing <= NOTHING_TO_DRAW) continue
+            drawOneCurtain(aurora, curtain, many, showing, drifted, ramp)
+        }
+    }
 
+    /**
+     * How far this curtain has swelled just now, `0..1` — nought for one that has died away entirely.
+     *
+     * Two slow waves at coprime rates, raised to a power so it spends more of its time faint than bright:
+     * a sky where every curtain sits at half strength is a sky where nothing is happening. The phase offset
+     * is not a fraction of a turn, so no two curtains ever come to breathe together.
+     */
+    private fun swellOf(curtain: Int, drifted: Float): Float {
+        val phase = curtain * CURTAINS_APART
+        val slow = Math.sin(drifted * SLOW_SWELL + phase)
+        val slower = Math.sin(drifted * SLOWER_SWELL - phase * 1.7)
+        val together = ((slow * 0.6 + slower * 0.4) + 1.0) / 2.0
+        return Math.pow(together, SWELL_PEAKINESS).toFloat()
+    }
+
+    /** One curtain of several, with everything that makes it its own. */
+    private fun drawOneCurtain(
+        aurora: Aurora,
+        curtain: Int,
+        many: Int,
+        showing: Float,
+        drifted: Float,
+        ramp: DynamicTexture,
+    ) {
         val modelViewStack = RenderSystem.getModelViewStack()
         modelViewStack.pushMatrix()
         // **Negated, because a bearing and a turn about Y count opposite ways.** The band is built centred
         // on north, and JOML's `rotateY` carries north toward the *west* as its angle grows where a bearing
         // counts clockwise toward the east. Rotating by the bearing itself puts a north-crossing curtain in
         // the south-west and looks, from inside, like a curtain that is merely somewhere else.
-        modelViewStack.rotate(
-            Quaternionf().rotateY(Math.toRadians(-aurora.bearingDegrees.toDouble()).toFloat()),
-        )
+        // Each curtain crosses at its own slight angle to the last, so several arcs do not read as one
+        // thick one — real ones are near-parallel rather than parallel.
+        val leaning = aurora.bearingDegrees + curtain * BETWEEN_CURTAINS
+        modelViewStack.rotate(Quaternionf().rotateY(Math.toRadians(-leaning.toDouble()).toFloat()))
 
         val transforms = RenderSystem.getDynamicUniforms().writeTransform(
             modelViewStack,
@@ -644,7 +714,7 @@ object Blaze3dSkyCanvas : SkyCanvas {
             Vector3f(),
             Matrix4f(),
         )
-        writeAuroraInfo(aurora, strength, timeTicks)
+        writeAuroraInfo(aurora, curtain, many, showing, drifted)
         val quadIndices = RenderSystem.getSequentialBuffer(VertexFormat.Mode.QUADS)
 
         val pass = renderPass("Ephemeris aurora")
@@ -669,18 +739,28 @@ object Blaze3dSkyCanvas : SkyCanvas {
         modelViewStack.popMatrix()
     }
 
-    /** The curtain's parameters, laid out to match `AuroraInfo` in the shaders. */
-    private fun writeAuroraInfo(aurora: Aurora, strength: Float, timeTicks: Float) {
+    /**
+     * One curtain's parameters, laid out to match `AuroraInfo` in the shaders.
+     *
+     * The per-curtain variation is spent here rather than in the mesh, which never changes: a different
+     * phase, a different lift up the band, and a height and breadth jittered off its own index. Nothing is
+     * random — two clients drawing the same instant draw the same sky.
+     */
+    private fun writeAuroraInfo(aurora: Aurora, curtain: Int, many: Int, showing: Float, drifted: Float) {
+        val phase = curtain * CURTAINS_APART.toFloat()
+        // Spread up the band, so several arcs stand at different heights instead of on top of each other.
+        val lift = if (many == 1) 0.0f else (curtain.toFloat() / (many - 1) - 0.5f) * CURTAINS_SPREAD
+        val varied = 1.0f - CURTAIN_VARIANCE * ((curtain * CURTAIN_STRIDE) % 1.0f)
         RenderSystem.getDevice().createCommandEncoder().mapBuffer(auroraInfo.currentBuffer(), false, true)
             .use { view ->
                 Std140Builder.intoBuffer(view.data())
                     .putVec4(
-                        strength,
-                        wrapped(timeTicks.toDouble() * AURORA_DRIFT, AURORA_FOLD_PERIOD),
-                        aurora.breadth.coerceIn(0.0f, 1.0f),
-                        aurora.height.coerceIn(0.0f, 1.0f),
+                        showing,
+                        drifted,
+                        (aurora.breadth * varied).coerceIn(0.0f, 1.0f),
+                        (aurora.height * varied).coerceIn(0.0f, 1.0f),
                     )
-                    .putVec4(AURORA_WANDER, AURORA_RAY_FINENESS, 0.0f, 0.0f)
+                    .putVec4(AURORA_WANDER, AURORA_RAY_FINENESS, phase, lift)
             }
     }
 
