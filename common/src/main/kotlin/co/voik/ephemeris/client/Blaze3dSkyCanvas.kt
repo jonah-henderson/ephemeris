@@ -226,8 +226,16 @@ object Blaze3dSkyCanvas : SkyCanvas {
     /** Either side of the bearing, in degrees. Just short of a half-turn, so the ends can taper. */
     private const val AURORA_HALF_SWEEP = 95.0f
 
-    /** The band of sky it may occupy, in degrees above the horizon. */
-    private const val AURORA_LOWEST = 6.0f
+    /**
+     * The band of sky it may occupy, in degrees above the horizon.
+     *
+     * **The bottom reaches below the horizon on purpose.** The curtain's hem is a wavy line — the fold moves
+     * it up and down along the band — and where it dipped past the mesh's own lower edge it was clipped to a
+     * dead straight one, which reads as the sky having a shelf in it (Jonah, 2026-08-30, walked). Below the
+     * horizon there is terrain and vanilla's dark disc in front of it, so the overrun costs nothing and is
+     * never seen.
+     */
+    private const val AURORA_LOWEST = -10.0f
     private const val AURORA_HIGHEST = 84.0f
 
     /**

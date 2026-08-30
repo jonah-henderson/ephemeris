@@ -32,6 +32,14 @@ const float HEM_SHARPNESS = 0.05;
 const float CROWN_FADE_FROM = 0.22;
 const float CROWN_FADE_TO = 1.0;
 
+// How much of the band's height is spent fading out at its two edges.
+//
+// **The mesh is a rectangle of sky and the curtain inside it wanders**, so a low-hanging one can reach the
+// edge — where without this it simply stops, on a straight line no fold put there. Exactly the fault the
+// cloud deck's square slab has at its corners, and exactly the same remedy: fade before the geometry ends,
+// so the geometry's own shape is never what the eye sees.
+const float BAND_EDGE = 0.07;
+
 // How much of the brightness the vertical rays own. Enough to read as structure, not so much that the
 // curtain becomes a comb.
 const float RAY_SHARE = 0.45;
@@ -121,7 +129,10 @@ void main() {
     // The rays fade out toward the crown with everything else, so they read as standing *in* the curtain.
     float rays = mix(1.0, raysAt(along, drifted, fineness, phase), RAY_SHARE * crown);
 
-    float alpha = body * rays * ends * strength;
+    // Fades to nothing before the mesh runs out, at the bottom and the top alike.
+    float withinBand = smoothstep(0.0, BAND_EDGE, up) * (1.0 - smoothstep(1.0 - BAND_EDGE, 1.0, up));
+
+    float alpha = body * rays * ends * withinBand * strength;
     if (alpha <= 0.0) discard;
 
     // Crown at 0, hem at 1 — the order the colours were written in, so what the ramp holds and what a
