@@ -108,9 +108,17 @@ class AuroraCheck : FunSpec({
             height = 0.83f,
             frequency = 0.19f,
             bearingDegrees = 237.0f,
+            ground = AuroraGround.WHERE_IT_SNOWS,
             seed = -998877L,
         )
         check(sent(elaborate) == elaborate) { "A curtain changed on the way: ${sent(elaborate)}" }
+    }
+
+    test("a curtain that says nothing about the ground may be seen over any") {
+        // The neutral answer is the default on purpose: a library aurora that silently never comes is a
+        // worse thing to meet first than one that comes everywhere.
+        check(Aurora().ground == AuroraGround.ANYWHERE) { "An undescribed curtain carries a rule nobody asked for" }
+        check(sent(Aurora()).ground == AuroraGround.ANYWHERE) { "The default did not survive the trip" }
     }
 
     test("a sky carries its curtain to the client") {

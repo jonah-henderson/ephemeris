@@ -1,11 +1,13 @@
 package co.voik.ephemeris.client
 
 import co.voik.ephemeris.sky.Aurora
+import co.voik.ephemeris.sky.AuroraGround
 import co.voik.ephemeris.sky.LevelDaylight
 import co.voik.ephemeris.sky.LevelLook
 import co.voik.ephemeris.sky.LevelLooks
 import net.minecraft.client.Minecraft
 import net.minecraft.client.multiplayer.ClientLevel
+import net.minecraft.world.phys.Vec3
 
 /**
  * The curtain a level was written with, drawn over whatever drew its sky — the painter for [Aurora] and the
@@ -38,7 +40,12 @@ object AuroraPainter {
      * the whole of why an aurora needs no server tick. **How dark the sky has gone** is read the way
      * [SkyPainter] reads it for the stars — off the level's own suns rather than off vanilla's clock — so an
      * Age with three suns, or one pinned at midnight, is answered correctly with nothing written for it.
-     * **Weather** hides an aurora as it hides the stars.
+     * **Weather** hides an aurora as it hides the stars. And **the ground** decides whether it may be seen
+     * from where the viewer is standing at all ([SnowLine]).
+     *
+     * The ground is asked **last**, and only where a rule says to: it is the one factor that costs a walk
+     * over the level, and on a night the curtain is not having, or at noon, there is nothing for it to
+     * decide.
      */
     private fun strengthOf(
         aurora: Aurora,
@@ -54,8 +61,19 @@ object AuroraPainter {
             ?: LevelDaylight.starlitnessFor(level)
             ?: (starBrightness / VANILLAS_BRIGHTEST_STARS)
         val clearSky = 1.0f - rainBrightness
-        return (tonight * nightliness * clearSky * aurora.glow).coerceIn(NOTHING, 1.0f)
+        val inTheSky = tonight * nightliness * clearSky * aurora.glow
+        if (inTheSky <= WORTH_DRAWING) return NOTHING
+        return (inTheSky * groundUnder(aurora, level)).coerceIn(NOTHING, 1.0f)
     }
+
+    /** How much of the ground around the viewer answers this curtain's rule, `1` where it asks for none. */
+    private fun groundUnder(aurora: Aurora, level: ClientLevel): Float = when (aurora.ground) {
+        AuroraGround.ANYWHERE -> 1.0f
+        AuroraGround.WHERE_IT_SNOWS -> SnowLine.shareSeenFrom(level, eye())
+    }
+
+    /** Where the viewer is. The camera rather than the player, so a spectator sees what they are looking from. */
+    private fun eye(): Vec3 = Minecraft.getInstance().gameRenderer.mainCamera.position()
 
     /** Below this there is nothing on the screen and the pass is not worth opening. */
     private const val WORTH_DRAWING = 0.01f

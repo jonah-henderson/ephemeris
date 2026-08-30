@@ -32,6 +32,15 @@ data class Aurora(
     val frequency: Float = ORDINARY_FREQUENCY,
     /** Which way the band crosses the sky, in degrees clockwise from north. */
     val bearingDegrees: Float = 0.0f,
+    /**
+     * The ground it may be seen over.
+     *
+     * **[AuroraGround.ANYWHERE] by default, and deliberately the neutral answer rather than the realistic
+     * one.** A library whose aurora silently never comes is a worse thing to meet first than one that comes
+     * everywhere, and a consumer who wants the polar rule is one field away from it. The realism this
+     * feature is aimed at lives in [ORDINARY_RAMP], where a default can be seen.
+     */
+    val ground: AuroraGround = AuroraGround.ANYWHERE,
     /** Which nights it takes and which way its folds lie. Two levels alike still differ. */
     val seed: Long = 0L,
 ) {
@@ -125,6 +134,7 @@ data class Aurora(
                 Codec.FLOAT.optionalFieldOf("height", ORDINARY_HEIGHT).forGetter(Aurora::height),
                 Codec.FLOAT.optionalFieldOf("frequency", ORDINARY_FREQUENCY).forGetter(Aurora::frequency),
                 Codec.FLOAT.optionalFieldOf("bearing", 0.0f).forGetter(Aurora::bearingDegrees),
+                AuroraGround.CODEC.optionalFieldOf("ground", AuroraGround.ANYWHERE).forGetter(Aurora::ground),
                 Codec.LONG.optionalFieldOf("seed", 0L).forGetter(Aurora::seed),
             ).apply(instance, ::Aurora)
         }
