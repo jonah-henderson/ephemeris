@@ -125,7 +125,15 @@ class SkyMoment(
     val moonAngle: Float,
     val starAngle: Float,
     val moonPhase: MoonPhase,
-    /** How much of the sky the weather is hiding, `0..1`. */
+    /**
+     * How much of the sky the weather is **leaving**, `0..1` — **1 in clear weather and 0 in a downpour**,
+     * which is the opposite of what the name suggests.
+     *
+     * The name is vanilla's and so is the quantity: `SkyRenderer.renderSun` multiplies its sprite's alpha by
+     * this, so a body *dims* as it grows. Said this plainly because the old wording here said the reverse
+     * and a painter believed it — an aurora multiplied by `1 - this` and so could only ever appear in a
+     * storm, which read as a renderer that never worked at all (Jonah, 2026-08-30, walked).
+     */
     val rainBrightness: Float,
     /** How visible stars are at this hour, before anything of yours dims them further. */
     val starBrightness: Float,

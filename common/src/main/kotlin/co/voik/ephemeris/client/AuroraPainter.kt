@@ -50,7 +50,9 @@ object AuroraPainter {
             return sayIt("light", "a curtain is up tonight, but the sky is only %.3f dark".format(nightliness))
         }
 
-        val clearSky = 1.0f - rainBrightness
+        // **Used as it comes, not inverted.** `rainBrightness` is how much of the sky the weather leaves —
+        // 1 when it is clear — which is why `SkyPainter` multiplies a body's alpha by it.
+        val clearSky = rainBrightness
         if (clearSky <= WORTH_DRAWING) return sayIt("weather", "a curtain is up tonight, but the weather has it")
 
         val ground = groundUnder(aurora, level)
