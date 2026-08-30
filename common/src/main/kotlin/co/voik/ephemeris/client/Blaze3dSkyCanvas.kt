@@ -236,7 +236,15 @@ object Blaze3dSkyCanvas : SkyCanvas {
      * real extent, and it is why the ramp's green belongs low and its red high.
      */
     private const val LOWEST_KM = 100.0f
-    private const val HIGHEST_KM = 300.0f
+
+    /**
+     * How far the tallest rays reach.
+     *
+     * Red oxygen emits to 300km and beyond in a strong display, and the point of going to the top of that
+     * range is that the height is the whole illusion: a sheet that only reaches 300 looks like a ribbon
+     * somebody hung, where one climbing past 400 reads as something hundreds of kilometres tall.
+     */
+    private const val HIGHEST_KM = 430.0f
 
     /** Half the length of an arc, in kilometres, before [Aurora.breadth] scales it. */
     private const val LONGEST_ARC_KM = 900.0f
@@ -249,11 +257,20 @@ object Blaze3dSkyCanvas : SkyCanvas {
      * distances fills the dome from the zenith down — which is how a real one is arranged, arcs stacked in
      * the poleward direction rather than fanned around the compass.
      */
-    private const val NEAREST_ARC_KM = 45.0f
-    private const val FURTHEST_ARC_KM = 850.0f
+    private const val NEAREST_ARC_KM = 35.0f
+    private const val FURTHEST_ARC_KM = 700.0f
 
     /** How far a sheet snakes sideways, in kilometres. Real folds are bends in the ground track. */
-    private const val SNAKE_KM = 60.0f
+    private const val SNAKE_KM = 85.0f
+
+    /**
+     * How far the crown leans past the hem, in kilometres.
+     *
+     * The field lines a curtain stands along dip about seventy-eight degrees from horizontal up here, so
+     * three hundred kilometres of height carries the top some seventy sideways. It is the difference
+     * between a sheet and a flat extrusion of a curve.
+     */
+    private const val LEAN_KM = 70.0f
 
     /**
      * Where the fold may wrap without jumping.
@@ -766,13 +783,14 @@ object Blaze3dSkyCanvas : SkyCanvas {
         val varied = 1.0f - CURTAIN_VARIANCE * ((curtain * CURTAIN_STRIDE) % 1.0f)
         val away = standingOff(curtain, many)
         // A taller display reaches higher rather than starting lower: where the light *begins* is where the
-        // air stops the electrons, which is not a thing a writer moves.
-        val reaches = LOWEST_KM + (HIGHEST_KM - LOWEST_KM) * aurora.height.coerceIn(0.2f, 1.0f)
+        // air stops the electrons, which is not a thing a writer moves. Never stubby — the floor is high
+        // because a short curtain reads as a ribbon rather than as a modest aurora.
+        val reaches = LOWEST_KM + (HIGHEST_KM - LOWEST_KM) * aurora.height.coerceIn(0.5f, 1.0f)
         RenderSystem.getDevice().createCommandEncoder().mapBuffer(auroraInfo.currentBuffer(), false, true)
             .use { view ->
                 Std140Builder.intoBuffer(view.data())
                     .putVec4(showing, drifted, aurora.breadth.coerceIn(0.05f, 1.0f), 0.0f)
-                    .putVec4(SNAKE_KM * varied, AURORA_RAY_FINENESS, phase, 0.0f)
+                    .putVec4(SNAKE_KM * varied, AURORA_RAY_FINENESS, phase, LEAN_KM * varied)
                     .putVec4(away, LONGEST_ARC_KM * varied, LOWEST_KM, reaches)
             }
     }
@@ -783,7 +801,13 @@ object Blaze3dSkyCanvas : SkyCanvas {
     private fun standingOff(curtain: Int, many: Int): Float {
         if (many <= 1) return NEAREST_ARC_KM * MIDDLE_DISTANCE
         val share = curtain.toFloat() / (many - 1)
-        return NEAREST_ARC_KM * Math.pow((FURTHEST_ARC_KM / NEAREST_ARC_KM).toDouble(), share.toDouble()).toFloat()
+        val away = NEAREST_ARC_KM *
+            Math.pow((FURTHEST_ARC_KM / NEAREST_ARC_KM).toDouble(), share.toDouble()).toFloat()
+        // **Every other one stands on the far side**, which is what puts a display in more than one quarter
+        // of the sky. Dealing them all off one bearing put every arc but the nearest into the same corner —
+        // correct for somebody watching the oval from outside it, and not what standing *underneath* one
+        // looks like. Inside, arcs run past you on both hands (Jonah, 2026-08-30, walked).
+        return if (curtain % 2 == 0) away else -away
     }
 
     /** Where a lone curtain stands, as a multiple of the nearest — well up the sky but not overhead. */

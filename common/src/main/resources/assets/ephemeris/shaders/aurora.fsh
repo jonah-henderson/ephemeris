@@ -27,12 +27,19 @@ const float ENDS_BEGIN = 0.45;
 // one hard line in the whole phenomenon.
 const float HEM_SHARPNESS = 0.04;
 
-// Where the long fade to the crown begins.
+// Where the long fade to the crown begins, as a share of **how high this column reaches**.
 //
 // The emission thins upward because the air does: green oxygen runs 100–150km and red oxygen 200–300km, far
-// fainter. So the sheet is brightest in its lowest quarter and trails away above.
-const float CROWN_FADE_FROM = 0.18;
-const float CROWN_FADE_TO = 1.0;
+// fainter. So the sheet is brightest low and trails away above.
+const float CROWN_FADE_FROM = 0.30;
+
+// How short the lowest columns are against the tallest, `0..1`.
+//
+// **This is what stops the top being a ruled line.** Every column reached exactly the same altitude before,
+// so the sheet ended on a dead straight edge however folded its ground track was — which is the whole of
+// what read as flat (Jonah, 2026-08-30, walked: "all the heights are completely equal"). A real form has a
+// ragged crown: some rays shoot far above their neighbours and others barely clear the border.
+const float SHORTEST_REACH = 0.32;
 
 // How much of the brightness the vertical rays own.
 const float RAY_SHARE = 0.45;
@@ -45,6 +52,20 @@ const float COARSE_RAYS = 0.13;
 // How far the raying itself comes and goes along the arc — stretches of hard striation and stretches of
 // smooth light, so the whole length never reads as one texture.
 const float PATCHINESS = 0.55;
+
+/**
+ * How high the column at this point along the arc reaches, `SHORTEST_REACH..1`.
+ *
+ * Two scales, and both matter. The broad wave gives whole stretches of arc that stand tall or low, which is
+ * the silhouette an eye reads first. The fine one is tied to the ray spacing, so a bright ray is a *tall*
+ * ray — which is not a trick but the physics: a brighter column is one more energetic electrons reached, and
+ * they excite a longer stretch of air on the way down.
+ */
+float reachAt(float along, float drifted, float fineness, float phase) {
+    float broad = 0.5 + 0.5 * sin(along * 4.3 - drifted * 0.11 + phase * 0.9);
+    float fine = 0.5 + 0.5 * sin(along * fineness * 0.5 + 2.0 * sin(along * 17.0 + phase));
+    return SHORTEST_REACH + (1.0 - SHORTEST_REACH) * (0.65 * broad + 0.35 * fine);
+}
 
 /**
  * The vertical rays, in 0..1.
@@ -76,7 +97,10 @@ void main() {
     // **The sheet is the whole mesh now**, top to bottom, so there is no band to carve a curtain out of and
     // no edge for a fold to be clipped against. `up` is altitude directly.
     float hem = smoothstep(0.0, HEM_SHARPNESS, up);
-    float crown = 1.0 - smoothstep(CROWN_FADE_FROM, CROWN_FADE_TO, up);
+    // The crown fades toward *this column's* own ceiling rather than the mesh's, which is what makes the
+    // top ragged instead of ruled.
+    float reach = reachAt(along, drifted, fineness, phase);
+    float crown = 1.0 - smoothstep(CROWN_FADE_FROM * reach, reach, up);
     float body = hem * crown;
 
     // Both ends fade rather than stopping, so the arc runs out into the air instead of ending on a cut.

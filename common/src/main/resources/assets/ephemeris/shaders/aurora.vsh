@@ -14,7 +14,7 @@ layout(std140) uniform AuroraInfo {
     // z: what share of its length actually glows.  w: unused.
     vec4 Shape;
     // x: how far the sheet snakes, in kilometres.  y: how fine the rays are.
-    // z: this curtain's own phase.  w: unused.
+    // z: this curtain's own phase.  w: how far the top leans past the bottom, in kilometres.
     vec4 Fold;
     // x: how far away the arc stands.  y: half its length.  z: the altitude it starts at.
     // w: the altitude it reaches. All in kilometres.
@@ -42,7 +42,12 @@ float snakeAt(float along, float drifted, float reach, float phase) {
     float bend = sin(along * 3.1 + drifted * 0.13 + phase);
     bend += 0.55 * sin(along * 7.7 - drifted * 0.21 + phase * 1.7);
     bend += 0.30 * cos(along * 13.3 + drifted * 0.09 - phase * 2.3);
-    return bend * reach;
+
+    // **How hard it is folding just here.** A real arc is not evenly wavy along its whole length: it runs
+    // nearly straight for a stretch and then knots into a tight curl, and it is the *contrast* between the
+    // two that reads as an aurora rather than as a ribbon. An even wave is a ribbon however deep it is.
+    float curling = 0.25 + 0.75 * pow(0.5 + 0.5 * sin(along * 2.3 - drifted * 0.06 + phase * 1.1), 2.0);
+    return bend * reach * curling;
 }
 
 void main() {
@@ -57,7 +62,12 @@ void main() {
     float upKm = mix(Arc.z, Arc.w, up);
     // And away from the viewer: the arc's own distance, its bow, and the snake it is making just now.
     float fromEnd = acrossKm / max(halfLength, 1.0);
-    float awayKm = Arc.x + BOW * halfLength * fromEnd * fromEnd
+    // **The top leans past the bottom**, because the field lines it stands along are not quite vertical —
+    // about seventy-eight degrees at auroral latitudes, so a couple of hundred kilometres of height carries
+    // the crown some tens of kilometres poleward. Without it the sheet is a flat extrusion, and a flat
+    // extrusion is exactly what "ribbony" means.
+    float leaning = Fold.w * up;
+    float awayKm = Arc.x + BOW * halfLength * fromEnd * fromEnd + leaning
         + snakeAt(along, Shape.y, Fold.x, Fold.z);
 
     // North is -Z, which is where an arc with no bearing stands.

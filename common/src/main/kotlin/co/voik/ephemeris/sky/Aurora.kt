@@ -115,7 +115,8 @@ data class Aurora(
         /** Rather more than half the sky, which is what a band crossing it looks like from underneath. */
         const val ORDINARY_BREADTH = 0.7f
 
-        const val ORDINARY_HEIGHT = 0.6f
+        /** Tall by default: height is most of what sells a form standing hundreds of kilometres up. */
+        const val ORDINARY_HEIGHT = 0.78f
 
         /** Enough that the sky has something going on in it without becoming a ceiling. */
         const val ORDINARY_CURTAINS = 3
