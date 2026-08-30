@@ -15,6 +15,9 @@ class LevelClockCheck : FunSpec({
 
     val day = Orbit.TICKS_PER_VANILLA_DAY
 
+    /** Vanilla's own midnight, which is where a sky with nothing to rise sits. */
+    val midnight = 18000L
+
     fun sun(path: CelestialPath) = CelestialBody(path, Appearance.Sprite(Rgba.WHITE, 30.0f, Appearance.SUN_SHAPES))
     fun lookOf(vararg bodies: CelestialBody, rules: SkyRules = SkyRules.DEFAULT) =
         LevelLook(SkySpec(bodies.toList(), StarField(1500, 0L)), rules = rules)
@@ -109,6 +112,33 @@ class LevelClockCheck : FunSpec({
             check(Orbit.VANILLA_SUN.altitudeAt(Math.floorMod(hour, day.toLong())) > 0.0f) {
                 "A midnight sun was to be lit like hour ${hour % day}, which is below the horizon"
             }
+        }
+    }
+
+    test("a sky with no suns is at midnight at every hour") {
+        // **Walked on the Spire** (Jonah, 2026-08-27). Answering null here left every track on the
+        // overworld's own schedule, so a world that has never had a sun took vanilla's sky-light colour
+        // warm at dusk, its sunrise colour with it, and its light down to nothing at midnight — under a sky
+        // whose stars were pinned on and whose fog never moved. There is nothing to derive because there is
+        // nothing to rise.
+        val moonOnly = lookOf(
+            CelestialBody(
+                Orbit.VANILLA_MOON,
+                Appearance.Sprite(Rgba.WHITE, 20.0f, Appearance.MOON_SHAPES),
+                PhaseCycle(day, 0),
+            ),
+        )
+        for (tick in 0..<day step 500) {
+            val hour = LevelClock.vanillaEquivalent(moonOnly, tick.toLong()) ?: error("no mapping at $tick")
+            check(Math.floorMod(hour, day.toLong()) == midnight) {
+                "At tick $tick a sky with no suns was to be lit like hour ${Math.floorMod(hour, day.toLong())}"
+            }
+        }
+
+        // And an empty sky, which is what a world sealed overhead resolves to.
+        val empty = LevelLook(SkySpec(emptyList(), StarField(1500, 0L)))
+        check(LevelClock.vanillaEquivalent(empty, 6000L)?.let { Math.floorMod(it, day.toLong()) } == midnight) {
+            "An empty sky was lit like noon at noon"
         }
     }
 

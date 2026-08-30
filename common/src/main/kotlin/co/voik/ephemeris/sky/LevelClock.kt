@@ -21,7 +21,8 @@ import net.minecraft.world.level.Level
  *
  * **Matched on the deciding sun's height, because height is what vanilla's own curves are keyed to.** Not on
  * its progress around its path: a sun that never sets goes right round its circle while staying up, and
- * matching progress would march the sky through a night it never has.
+ * matching progress would march the sky through a night it never has. A sky with *no* sun is the same rule
+ * at its limit: nothing rises, so the hour is midnight and stays there.
  *
  * **The hour is allowed to leap, and the sky is not.** When the brightest sun changes, the answer flips from
  * the dusk side of noon to the dawn side — thousands of ticks at once — because the sky has stopped dimming
@@ -36,20 +37,25 @@ object LevelClock {
     /**
      * The vanilla time [look] should be lit as at [dayTime], or **null** to leave the real clock alone.
      *
-     * Null for a sky vanilla could already draw, for one that asked to keep vanilla's clock, and for one
-     * with no suns at all — a level with nothing overhead has no daylight to derive and vanilla's curve is a
-     * better answer than a guess.
+     * Null only for a sky vanilla could already draw and for one that asked to keep vanilla's clock.
+     *
+     * **A sky with no suns is held at midnight, and that is the whole of what makes a sunless world one.**
+     * It used to answer null here on the grounds that a level with nothing overhead has no daylight to
+     * derive — which left every track running on the overworld's own schedule, so the Spire, which has
+     * never had a sun, took vanilla's sky-light colour warm at dusk, its sunrise colour with it, and its
+     * light down to nothing at midnight (Jonah, 2026-08-27, walked). There is nothing to derive because
+     * there is nothing to *rise*: the answer is midnight and it is midnight at every hour.
      */
     fun vanillaEquivalent(look: LevelLook, dayTime: Long): Long? {
         if (look.sky.isOrdinary) return null
         if (look.rules.daylight == Daylight.VANILLA_CLOCK) return null
-        val deciding = decidingSun(look, dayTime) ?: return null
-
-        val height = deciding.altitudeDegrees
-        val rising = deciding.body.path.altitudeAt(dayTime + LOOK_AHEAD) > height
         // The day *number* is kept, so anything counting days — a moon's phase, an advancement — carries on
         // as it was. Only the hour within the day moves.
         val dayStarted = Math.floorDiv(dayTime, DAY) * DAY
+        val deciding = decidingSun(look, dayTime) ?: return dayStarted + MIDNIGHT
+
+        val height = deciding.altitudeDegrees
+        val rising = deciding.body.path.altitudeAt(dayTime + LOOK_AHEAD) > height
         return dayStarted + hourAt(height, rising)
     }
 
