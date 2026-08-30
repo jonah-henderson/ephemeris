@@ -84,17 +84,23 @@ sealed interface CelestialPath {
     val vanillas: VanillasBody? get() = null
 
     /**
-     * Whether this path's frame is level the whole way round — **vanilla's case, and only vanilla's**.
+     * The one turn, in radians about the line of sight, that lays this path's sprite level at its **rising**.
      *
-     * Vanilla sweeps about its quad's sideways axis and that axis is horizontal, so its sprite is level
-     * without anything being done to it. A path like that is left exactly alone; any other is levelled by
-     * [co.voik.ephemeris.sky.Facing].
+     * **Locked for the whole path, which is the whole idea.** A sprite that is levelled at every instant
+     * has to be levelled against world up projected into its own plane — and that reference is not defined
+     * straight overhead and *reverses* through it, so a body crossing near the zenith spins half a turn
+     * about its centre while it does (Jonah, 2026-08-29, walked, on a moon rising south and setting north).
+     * There is no arithmetic that avoids it: "upright" names that one reference and nothing else, so
+     * anything upright at every instant inherits the place where upright stops meaning anything.
      *
-     * **Asked of the path and not of an instant.** A stack of motions tilts and untilts as it travels, so an
-     * instant-by-instant test flickers between the two answers — and they differ, so the sprite jumps. This
-     * is one decision per path, which is what makes the choice stable.
+     * A constant has no such place. The frame is the path's own, which is smooth by construction, and this
+     * turns it once so that the horizontal edges of the square lie along the horizon as the body comes up.
+     * It is therefore upside down at setting, which is not a fault — it is what vanilla's own sun and moon
+     * do, and the behaviour being reproduced.
+     *
+     * Zero for vanilla's own path, whose frame already rises level, so a body on it is untouched.
      */
-    val framesAreLevel: Boolean get() = levelness()
+    val levellingTurn: Float get() = levelling()
 
     /** Never dips below the horizon — a polar day. */
     val staysUp: Boolean get() = swing().lowest >= -GRAZING
@@ -118,8 +124,8 @@ sealed interface CelestialPath {
      */
     fun swing(): Swing
 
-    /** Whether the frame is level throughout, memoised alongside [swing] for the same reason. */
-    fun levelness(): Boolean
+    /** The turn that levels the sprite, memoised alongside [swing] for the same reason. */
+    fun levelling(): Float
 
     /** The extremes of a path, in degrees of altitude. */
     data class Swing(val lowest: Float, val highest: Float)
@@ -151,19 +157,46 @@ sealed interface CelestialPath {
             return (degrees % FULL_TURN + FULL_TURN) % FULL_TURN
         }
 
-        /** How far a frame's sideways axis may leave the horizon and still count as level. */
-        const val ALREADY_LEVEL = 0.001f
+        /**
+         * Walks one period of [path] and answers the turn that lays its sprite level as the body rises —
+         * which every implementation's [levelling] should memoise.
+         *
+         * The frame's sideways axis is `cos t · sideways - sin t · upward` once turned by `t`, so laying it
+         * on the horizon is asking for the `t` that zeroes the vertical part of that, which `atan2` gives
+         * outright. The same `t` puts the sprite's own upward axis above the horizon rather than below it,
+         * so there is no second question about which way round the answer is.
+         */
+        fun levellingTurnOf(path: CelestialPath): Float {
+            val frame = path.orientationAt(risingTickOf(path))
+            val sideways = frame.transform(Vector3f(1.0f, 0.0f, 0.0f))
+            val upward = frame.transform(Vector3f(0.0f, 0.0f, 1.0f))
+            return Math.atan2(sideways.y.toDouble(), upward.y.toDouble()).toFloat()
+        }
 
-        /** Walks one period of [path], asking whether its frame ever leaves the horizontal. */
-        fun levelnessOf(path: CelestialPath): Boolean {
+        /**
+         * When [path] comes up — the tick it crosses the horizon climbing.
+         *
+         * **A rising and a setting are half a turn apart**, which is exactly the difference the sprite is
+         * meant to show, so the two cannot be used interchangeably. A path that never crosses at all is
+         * levelled where it comes closest to the horizon, which is the nearest thing it has to a rising.
+         */
+        private fun risingTickOf(path: CelestialPath): Long {
             val step = (path.periodTicks.toDouble() / SAMPLES_AROUND).coerceAtLeast(1.0)
+            var lowestAt = 0L
+            var lowest = Float.MAX_VALUE
+            var wasDown = path.altitudeAt((path.periodTicks - step).toLong()) < 0.0f
             var tick = 0.0
             while (tick < path.periodTicks) {
-                val sideways = path.orientationAt(tick.toLong()).transform(Vector3f(1.0f, 0.0f, 0.0f))
-                if (Math.abs(sideways.y) > ALREADY_LEVEL) return false
+                val altitude = path.altitudeAt(tick.toLong())
+                if (wasDown && altitude >= 0.0f) return tick.toLong()
+                if (altitude < lowest) {
+                    lowest = altitude
+                    lowestAt = tick.toLong()
+                }
+                wasDown = altitude < 0.0f
                 tick += step
             }
-            return true
+            return lowestAt
         }
 
         /** Walks one period of [path], which is what every implementation's [swing] should memoise. */
@@ -239,9 +272,9 @@ data class Motions(
 
     override fun swing(): CelestialPath.Swing = walked
 
-    private val level: Boolean by lazy { CelestialPath.levelnessOf(this) }
+    private val levelledBy: Float by lazy { CelestialPath.levellingTurnOf(this) }
 
-    override fun levelness(): Boolean = level
+    override fun levelling(): Float = levelledBy
 
     companion object {
         const val VANILLA_DISTANCE = 100.0f
@@ -280,7 +313,7 @@ data class Named(val id: Identifier) : CelestialPath {
 
     override fun swing(): CelestialPath.Swing = resolved.swing()
 
-    override fun levelness(): Boolean = resolved.levelness()
+    override fun levelling(): Float = resolved.levelling()
 
     companion object {
         val MAP_CODEC: MapCodec<Named> = RecordCodecBuilder.mapCodec { instance ->

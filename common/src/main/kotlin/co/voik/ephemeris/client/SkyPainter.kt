@@ -228,7 +228,7 @@ object SkyPainter {
         moonAngle: Float,
     ): Quaternionf {
         val alongPath = orientationOf(body, clockTime, sunAngle, moonAngle)
-        return body.facing.turn(alongPath, body.path.framesAreLevel)
+        return body.facing.turn(alongPath, body.path.levellingTurn)
     }
 
     private fun orientationOf(

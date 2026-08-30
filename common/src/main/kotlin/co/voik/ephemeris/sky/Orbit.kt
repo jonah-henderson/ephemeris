@@ -116,7 +116,7 @@ data class Orbit(
 
     override fun swing(): CelestialPath.Swing = stack.swing()
 
-    override fun levelness(): Boolean = stack.levelness()
+    override fun levelling(): Float = stack.levelling()
 
     override fun distanceAt(dayTime: Long): Float {
         if (swell == 0.0f) return distance
