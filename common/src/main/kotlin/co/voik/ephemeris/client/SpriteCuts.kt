@@ -14,7 +14,7 @@ import net.minecraft.resources.Identifier
  * **This is the escape hatch for anything else.** A texture that needs a different rule — a chroma key, a
  * mask in another channel, a body that should glow at its rim — registers a pipeline here against the sprite
  * it applies to, and that pipeline is used in place of either default. Nothing else about the body changes:
- * it is still placed by its path, turned by its facing and tinted by its appearance.
+ * it is still placed by its path, laid level by it and tinted by its appearance.
  *
  * Adding is untouched by any of this. Dark contributes nothing to a sum, which is the whole reason vanilla's
  * sprites can have no alpha and still look right.

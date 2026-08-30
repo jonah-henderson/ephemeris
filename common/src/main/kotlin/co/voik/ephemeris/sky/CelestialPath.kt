@@ -84,23 +84,21 @@ sealed interface CelestialPath {
     val vanillas: VanillasBody? get() = null
 
     /**
-     * The one turn, in radians about the line of sight, that lays this path's sprite level at its **rising**.
+     * The turn, in radians about the line of sight, that lays this path's sprite level at [dayTime] — the
+     * square's horizontal edges along the horizon, wherever the body stands and whatever the path.
      *
-     * **Locked for the whole path, which is the whole idea.** A sprite that is levelled at every instant
-     * has to be levelled against world up projected into its own plane — and that reference is not defined
-     * straight overhead and *reverses* through it, so a body crossing near the zenith spins half a turn
-     * about its centre while it does (Jonah, 2026-08-29, walked, on a moon rising south and setting north).
-     * There is no arithmetic that avoids it: "upright" names that one reference and nothing else, so
-     * anything upright at every instant inherits the place where upright stops meaning anything.
+     * **Level names the sprite only up to a half turn, and that spare half turn is the whole difficulty.**
+     * Both answers lay the edges on the horizon and differ only in which way up the sprite ends. Taking the
+     * upright one afresh at every instant snaps the sprite end for end as a body crosses the zenith, where
+     * upright stops meaning anything (Jonah, 2026-08-29, walked, on a moon rising south and setting north).
+     * Following one answer round smoothly never snaps, and pays for that by letting the sprite go upside
+     * down — which is what vanilla's own crescent does between its rising and its setting.
      *
-     * A constant has no such place. The frame is the path's own, which is smooth by construction, and this
-     * turns it once so that the horizontal edges of the square lie along the horizon as the body comes up.
-     * It is therefore upside down at setting, which is not a fault — it is what vanilla's own sun and moon
-     * do, and the behaviour being reproduced.
-     *
-     * Zero for vanilla's own path, whose frame already rises level, so a body on it is untouched.
+     * **Smooth is also the least turning available.** Every other choice is this one with half turns
+     * inserted where it jumps, and each of those spends a half turn's movement this does not. See
+     * [levellingOf], which walks it.
      */
-    val levellingTurn: Float get() = levelling()
+    fun levellingTurnAt(dayTime: Long): Float = levelling().at(dayTime)
 
     /** Never dips below the horizon — a polar day. */
     val staysUp: Boolean get() = swing().lowest >= -GRAZING
@@ -124,11 +122,38 @@ sealed interface CelestialPath {
      */
     fun swing(): Swing
 
-    /** The turn that levels the sprite, memoised alongside [swing] for the same reason. */
-    fun levelling(): Float
+    /** The turns that level the sprite, memoised alongside [swing] for the same reason. */
+    fun levelling(): Levelling
 
     /** The extremes of a path, in degrees of altitude. */
     data class Swing(val lowest: Float, val highest: Float)
+
+    /**
+     * The levelling turn sampled around one period, **already unwrapped** — consecutive entries are one
+     * answer followed round rather than each sample's own nearest upright, so reading it back cannot
+     * produce a snap the walk did not have.
+     *
+     * Entries are ordinary radians and may run outside a single turn, which is the point: a body circling
+     * the zenith accumulates, and folding that back into one turn is exactly the jump being avoided.
+     */
+    class Levelling(private val turns: FloatArray, private val periodTicks: Int) {
+
+        /**
+         * Interpolated between the two samples either side of [dayTime].
+         *
+         * Across the seam those two are a period apart and may stand whole half turns from each other, so
+         * the nearer reading is taken — the short way round, rather than a period's accumulation unwound in
+         * one sample's worth of time.
+         */
+        fun at(dayTime: Long): Float {
+            val period = periodTicks.coerceAtLeast(1)
+            val place = ((dayTime % period + period) % period).toFloat() / period * turns.size
+            val below = place.toInt() % turns.size
+            val above = (below + 1) % turns.size
+            val from = turns[below]
+            return from + (nearestHalfTurnTo(from, turns[above]) - from) * (place - place.toInt())
+        }
+    }
 
     companion object {
         /**
@@ -158,43 +183,71 @@ sealed interface CelestialPath {
         }
 
         /**
-         * Walks one period of [path] and answers the turn that lays its sprite level as the body rises —
+         * Walks one period of [path] and answers the turns that lay its sprite level all the way round —
          * which every implementation's [levelling] should memoise.
          *
          * The frame's sideways axis is `cos t · sideways - sin t · upward` once turned by `t`, so laying it
          * on the horizon is asking for the `t` that zeroes the vertical part of that, which `atan2` gives
-         * outright. The same `t` puts the sprite's own upward axis above the horizon rather than below it,
-         * so there is no second question about which way round the answer is.
+         * outright — but only up to the half turn that zeroes it just as well the other way up.
+         *
+         * **The walk anchors at the rising and unwraps from there.** `atan2`'s own answer is the upright
+         * one, so a body comes up the right way up; every later sample is that sample's answer shifted by
+         * whole half turns to sit nearest the one before it, which is what follows a single answer round
+         * instead of re-choosing at each step. A path that never rises is anchored where it comes closest
+         * to the horizon, that being the nearest thing it has to a rising.
+         *
+         * **It can only follow what it can see.** A body skimming within about half a degree of the zenith
+         * turns faster than [SAMPLES_AROUND] resolves, and the walk may take the wrong half turn there. A
+         * path *through* the zenith is not that case and is exact: its sideways axis is already horizontal,
+         * so there is nothing to follow.
          */
-        fun levellingTurnOf(path: CelestialPath): Float {
-            val frame = path.orientationAt(risingTickOf(path))
+        fun levellingOf(path: CelestialPath): Levelling {
+            val samples = SAMPLES_AROUND
+            val upright = FloatArray(samples) { sample -> uprightTurnOf(path, tickOf(path, sample, samples)) }
+            val turns = FloatArray(samples)
+            val rising = risingSampleOf(path, samples)
+            turns[rising] = upright[rising]
+            for (step in 1..<samples) {
+                val sample = (rising + step) % samples
+                val before = turns[(rising + step - 1) % samples]
+                turns[sample] = nearestHalfTurnTo(before, upright[sample])
+            }
+            return Levelling(turns, path.periodTicks)
+        }
+
+        /**
+         * The upright answer at [dayTime]: level, and with the sprite's own upward axis above the horizon
+         * rather than below it. One of the two half turns that level the sprite, and the one a rising wants.
+         */
+        private fun uprightTurnOf(path: CelestialPath, dayTime: Long): Float {
+            val frame = path.orientationAt(dayTime)
             val sideways = frame.transform(Vector3f(1.0f, 0.0f, 0.0f))
             val upward = frame.transform(Vector3f(0.0f, 0.0f, 1.0f))
             return Math.atan2(sideways.y.toDouble(), upward.y.toDouble()).toFloat()
         }
 
+        private fun tickOf(path: CelestialPath, sample: Int, samples: Int): Long =
+            sample.toLong() * path.periodTicks / samples
+
         /**
-         * When [path] comes up — the tick it crosses the horizon climbing.
+         * The sample [path] comes up on — the first to cross the horizon climbing.
          *
          * **A rising and a setting are half a turn apart**, which is exactly the difference the sprite is
          * meant to show, so the two cannot be used interchangeably. A path that never crosses at all is
-         * levelled where it comes closest to the horizon, which is the nearest thing it has to a rising.
+         * anchored where it comes closest to the horizon.
          */
-        private fun risingTickOf(path: CelestialPath): Long {
-            val step = (path.periodTicks.toDouble() / SAMPLES_AROUND).coerceAtLeast(1.0)
-            var lowestAt = 0L
+        private fun risingSampleOf(path: CelestialPath, samples: Int): Int {
+            var lowestAt = 0
             var lowest = Float.MAX_VALUE
-            var wasDown = path.altitudeAt((path.periodTicks - step).toLong()) < 0.0f
-            var tick = 0.0
-            while (tick < path.periodTicks) {
-                val altitude = path.altitudeAt(tick.toLong())
-                if (wasDown && altitude >= 0.0f) return tick.toLong()
+            var wasDown = path.altitudeAt(tickOf(path, samples - 1, samples)) < 0.0f
+            for (sample in 0..<samples) {
+                val altitude = path.altitudeAt(tickOf(path, sample, samples))
+                if (wasDown && altitude >= 0.0f) return sample
                 if (altitude < lowest) {
                     lowest = altitude
-                    lowestAt = tick.toLong()
+                    lowestAt = sample
                 }
                 wasDown = altitude < 0.0f
-                tick += step
             }
             return lowestAt
         }
@@ -244,6 +297,12 @@ sealed interface CelestialPath {
     val kindKey: String
 }
 
+/** [turn] shifted by whole half turns to land as near [previous] as it can. */
+private fun nearestHalfTurnTo(previous: Float, turn: Float): Float =
+    turn + Math.round((previous - turn) / HALF_TURN_RADIANS) * HALF_TURN_RADIANS
+
+private val HALF_TURN_RADIANS = Math.PI.toFloat()
+
 /** One of vanilla's own two bodies, for a path that is exactly its path. */
 enum class VanillasBody { SUN, MOON }
 
@@ -272,9 +331,9 @@ data class Motions(
 
     override fun swing(): CelestialPath.Swing = walked
 
-    private val levelledBy: Float by lazy { CelestialPath.levellingTurnOf(this) }
+    private val levelledBy: CelestialPath.Levelling by lazy { CelestialPath.levellingOf(this) }
 
-    override fun levelling(): Float = levelledBy
+    override fun levelling(): CelestialPath.Levelling = levelledBy
 
     companion object {
         const val VANILLA_DISTANCE = 100.0f
@@ -313,7 +372,7 @@ data class Named(val id: Identifier) : CelestialPath {
 
     override fun swing(): CelestialPath.Swing = resolved.swing()
 
-    override fun levelling(): Float = resolved.levelling()
+    override fun levelling(): CelestialPath.Levelling = resolved.levelling()
 
     companion object {
         val MAP_CODEC: MapCodec<Named> = RecordCodecBuilder.mapCodec { instance ->

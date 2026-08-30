@@ -8,7 +8,6 @@ import co.voik.ephemeris.sky.CelestialBody
 import co.voik.ephemeris.sky.LevelLook
 import co.voik.ephemeris.sky.LevelDaylight
 import co.voik.ephemeris.sky.LevelLooks
-import co.voik.ephemeris.sky.Facing
 import co.voik.ephemeris.sky.Orbit
 import co.voik.ephemeris.sky.SkyRules
 import co.voik.ephemeris.sky.VanillasBody
@@ -220,7 +219,13 @@ object SkyPainter {
      * The angle is read at the real hour and not the one an Age's suns are lit at, which is
      * [co.voik.ephemeris.sky.LevelClock.forTrack]'s doing — a lit-as hour may leap and a position may not.
      */
-    /** Where the body is, turned the way the body asks to be turned. */
+    /**
+      * Where the body is, rolled about the line of sight so its sprite lies level on the horizon.
+      *
+      * **The roll is read at the level's own clock even for a body taking vanilla's angle.** The two agree
+      * where it matters: only vanilla's own great circle claims that angle, and such a path is level with no
+      * roll at all at every tick, so there is nothing for the two clocks to disagree about.
+      */
     private fun facingOf(
         body: CelestialBody,
         clockTime: Long,
@@ -228,7 +233,7 @@ object SkyPainter {
         moonAngle: Float,
     ): Quaternionf {
         val alongPath = orientationOf(body, clockTime, sunAngle, moonAngle)
-        return body.facing.turn(alongPath, body.path.levellingTurn)
+        return Quaternionf(alongPath).rotateY(body.path.levellingTurnAt(clockTime))
     }
 
     private fun orientationOf(

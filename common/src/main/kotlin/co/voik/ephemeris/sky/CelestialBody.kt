@@ -21,8 +21,6 @@ data class CelestialBody(
     val appearance: Appearance,
     /** Null for a body that never changes, which is every sun. */
     val phase: PhaseCycle? = null,
-    /** How the sprite is turned. Vanilla's way by default, which is upright whatever the path. */
-    val facing: Facing = Facing.LIKE_VANILLA,
     /** How the sprite meets the sky behind it. Vanilla's way by default — see [Blending]. */
     val blending: Blending = Blending.ADDS,
 ) {
@@ -32,10 +30,9 @@ data class CelestialBody(
                 CelestialPath.CODEC.fieldOf("orbit").forGetter(CelestialBody::path),
                 Appearance.CODEC.fieldOf("appearance").forGetter(CelestialBody::appearance),
                 PhaseCycle.CODEC.optionalFieldOf("phase").forGetter { body -> java.util.Optional.ofNullable(body.phase) },
-                Facing.CODEC.optionalFieldOf("facing", Facing.LIKE_VANILLA).forGetter(CelestialBody::facing),
                 Blending.CODEC.optionalFieldOf("blending", Blending.ADDS).forGetter(CelestialBody::blending),
-            ).apply(instance) { path, appearance, phase, facing, blending ->
-                CelestialBody(path, appearance, phase.orElse(null), facing, blending)
+            ).apply(instance) { path, appearance, phase, blending ->
+                CelestialBody(path, appearance, phase.orElse(null), blending)
             }
         }
     }
