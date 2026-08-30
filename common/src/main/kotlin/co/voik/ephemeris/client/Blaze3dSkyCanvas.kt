@@ -273,15 +273,27 @@ object Blaze3dSkyCanvas : SkyCanvas {
     private const val LEAN_KM = 70.0f
 
     /**
-     * Where the fold may wrap without jumping.
+     * Where time wraps, in the units the shaders read it in.
      *
-     * `aurora.vsh` and `aurora.fsh` move their sines at hundredths of the drifted time, and `200π` completes
-     * a whole number of turns for every such multiple. Adding a coefficient that is not one breaks this.
+     * **A round thousand rather than a multiple of π**, and that is the whole difference between waves and
+     * noise. Sines wanted a period that completed a whole number of turns; a tiling noise field wants one
+     * that is a whole number of *cells* at every rate anything walks through it. Every rate in
+     * `aurora.vsh` and `aurora.fsh` is a thousandth, so all of them divide this exactly and the field comes
+     * round seamlessly — where a field that did not tile would snap the fold on the wrap.
      */
-    private const val AURORA_FOLD_PERIOD = 200.0 * Math.PI
+    private const val AURORA_TIME_WRAP = 1000.0
 
     /** How fast the fold travels. Slow: an aurora moves at the pace of something very far away. */
-    private const val AURORA_DRIFT = 0.05
+    private const val AURORA_DRIFT = 0.02
+
+    /**
+     * How fast a column's own brightness surges and dies, against everything else.
+     *
+     * **Much faster, and deliberately.** The rest of this moves the *shape*, so the whole form slid about
+     * like one object however finely it was folded. A real display flickers where it stands, and it is that
+     * rather than the drift which makes it look alive (Jonah, 2026-08-30, walked).
+     */
+    private const val AURORA_FLARE_RATE = 0.4f
 
     /** How fine the vertical rays are. Higher is more of them. */
     private const val AURORA_RAY_FINENESS = 220.0f
@@ -315,8 +327,8 @@ object Blaze3dSkyCanvas : SkyCanvas {
     /** An irrational-ish step, so the variation does not repeat every few curtains. */
     private const val CURTAIN_STRIDE = 0.618f
 
-    /** Three `vec4`s, matching `AuroraInfo` in the shaders. */
-    private const val AURORA_INFO_BYTES = 3 * 4 * Float.SIZE_BYTES
+    /** Four `vec4`s, matching `AuroraInfo` in the shaders. */
+    private const val AURORA_INFO_BYTES = 4 * 4 * Float.SIZE_BYTES
 
     /**
      * How many steps the ramp is baked into.
@@ -695,7 +707,7 @@ object Blaze3dSkyCanvas : SkyCanvas {
     override fun drawAurora(aurora: Aurora, strength: Float, timeTicks: Float) {
         if (strength <= NOTHING_TO_DRAW) return
         val ramp = rampOf(aurora.ramp)
-        val drifted = wrapped(timeTicks.toDouble() * AURORA_DRIFT, AURORA_FOLD_PERIOD)
+        val drifted = wrapped(timeTicks.toDouble() * AURORA_DRIFT, AURORA_TIME_WRAP)
         val many = aurora.curtains.coerceIn(1, Aurora.MOST_CURTAINS)
         for (curtain in 0..<many) {
             val showing = strength * swellOf(curtain, drifted)
@@ -790,8 +802,9 @@ object Blaze3dSkyCanvas : SkyCanvas {
             .use { view ->
                 Std140Builder.intoBuffer(view.data())
                     .putVec4(showing, drifted, aurora.breadth.coerceIn(0.05f, 1.0f), 0.0f)
-                    .putVec4(SNAKE_KM * varied, AURORA_RAY_FINENESS, phase, LEAN_KM * varied)
+                    .putVec4(SNAKE_KM * varied, AURORA_RAY_FINENESS, phase, AURORA_FLARE_RATE)
                     .putVec4(away, LONGEST_ARC_KM * varied, LOWEST_KM, reaches)
+                    .putVec4(LEAN_KM * varied, 0.0f, 0.0f, 0.0f)
             }
     }
 

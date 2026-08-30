@@ -2,6 +2,7 @@
 
 #moj_import <minecraft:dynamictransforms.glsl>
 #moj_import <minecraft:projection.glsl>
+#moj_import <ephemeris:noise.glsl>
 
 // A flat unit grid — `Position` is `(along, up, 0)` and carries no world meaning at all. Where the sheet
 // actually stands is computed here, from uniforms, so one static mesh serves every curtain at every
@@ -14,11 +15,13 @@ layout(std140) uniform AuroraInfo {
     // z: what share of its length actually glows.  w: unused.
     vec4 Shape;
     // x: how far the sheet snakes, in kilometres.  y: how fine the rays are.
-    // z: this curtain's own phase.  w: how far the top leans past the bottom, in kilometres.
+    // z: this curtain's own phase.  w: how fast a column's own brightness surges, read in the fragment stage.
     vec4 Fold;
     // x: how far away the arc stands.  y: half its length.  z: the altitude it starts at.
     // w: the altitude it reaches. All in kilometres.
     vec4 Arc;
+    // x: how far the crown leans past the hem, in kilometres. The rest is spare.
+    vec4 Lean;
 };
 
 out vec2 acrossTheSheet;
@@ -31,23 +34,38 @@ const float UNITS_PER_KM = 0.16;
 // stretch anybody can see it is very nearly straight, with just enough curve that the ends fall away.
 const float BOW = 0.22;
 
+// How far the noise field repeats along the sheet, and how fast time walks through it.
+//
+// The time period must be what the wrapped drift divides into — see `Blaze3dSkyCanvas.AURORA_TIME_WRAP` —
+// or the field jumps when the clock comes round, which on the fold is a visible snap.
+const float SNAKE_ALONG = 6.0;
+const float SNAKE_THROUGH_TIME = 0.05;
+const float CURL_ALONG = 2.2;
+const float CURL_THROUGH_TIME = 0.03;
+const float NOISE_TILE = 8192.0;
+const float TIME_WRAP = 1000.0;
+
 /**
  * How far the sheet has snaked sideways at this point along it, in kilometres.
  *
  * **Horizontal, which is the whole correction.** A real curtain is a thin vertical sheet that meanders in
- * *plan* — the folds and curls are bends in its ground track, seen edge-on as bright vertical creases. The
- * band this replaced undulated *vertically* instead, which is a shape no aurora has.
+ * *plan* — the folds and curls are bends in its ground track, seen edge-on as bright vertical creases.
+ *
+ * **And noise rather than sines.** Three stacked waves gave a meander that was recognisably a meander: the
+ * same bend, at the same spacing, stretched about a bit. Noise gives no spacing to find.
  */
 float snakeAt(float along, float drifted, float reach, float phase) {
-    float bend = sin(along * 3.1 + drifted * 0.13 + phase);
-    bend += 0.55 * sin(along * 7.7 - drifted * 0.21 + phase * 1.7);
-    bend += 0.30 * cos(along * 13.3 + drifted * 0.09 - phase * 2.3);
+    vec2 at = vec2(along * SNAKE_ALONG + phase, drifted * SNAKE_THROUGH_TIME);
+    vec2 period = vec2(NOISE_TILE, TIME_WRAP * SNAKE_THROUGH_TIME);
+    // Signed, so it bends both ways off the arc's own line.
+    float bend = ephemerisFbm(at, period, 4) * 2.0 - 1.0;
 
-    // **How hard it is folding just here.** A real arc is not evenly wavy along its whole length: it runs
-    // nearly straight for a stretch and then knots into a tight curl, and it is the *contrast* between the
-    // two that reads as an aurora rather than as a ribbon. An even wave is a ribbon however deep it is.
-    float curling = 0.25 + 0.75 * pow(0.5 + 0.5 * sin(along * 2.3 - drifted * 0.06 + phase * 1.1), 2.0);
-    return bend * reach * curling;
+    // **How hard it is folding just here.** A real arc runs nearly straight for a stretch and then knots
+    // into a tight curl, and the contrast between the two is what reads as an aurora rather than as a
+    // ribbon. Squared, so the knots are occasional and the straights are the common case.
+    vec2 curlAt = vec2(along * CURL_ALONG + phase * 0.7, drifted * CURL_THROUGH_TIME);
+    float curling = ephemerisFbm(curlAt, vec2(NOISE_TILE, TIME_WRAP * CURL_THROUGH_TIME), 2);
+    return bend * reach * (0.15 + 1.7 * curling * curling);
 }
 
 void main() {
@@ -66,7 +84,7 @@ void main() {
     // about seventy-eight degrees at auroral latitudes, so a couple of hundred kilometres of height carries
     // the crown some tens of kilometres poleward. Without it the sheet is a flat extrusion, and a flat
     // extrusion is exactly what "ribbony" means.
-    float leaning = Fold.w * up;
+    float leaning = Lean.x * up;
     float awayKm = Arc.x + BOW * halfLength * fromEnd * fromEnd + leaning
         + snakeAt(along, Shape.y, Fold.x, Fold.z);
 
