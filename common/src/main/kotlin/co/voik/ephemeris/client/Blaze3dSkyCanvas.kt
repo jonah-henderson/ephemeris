@@ -857,15 +857,22 @@ object Blaze3dSkyCanvas : SkyCanvas {
     ) {
         val showing = strength * rainbow.glow
         if (showing <= FAINTEST_BOW) return
-        val arc = bowFor(rainbow, lightAltitudeDegrees)
+        val arc = bowFor(rainbow)
         val mesh = arc.buffer ?: return
 
         val modelViewStack = RenderSystem.getModelViewStack()
         modelViewStack.pushMatrix()
-        // **Negated, as the curtain's turn is and for the same reason**: the arc is built about a light due
-        // north, and `rotateY` carries north toward the west as its angle grows where a bearing counts
-        // clockwise toward the east.
-        modelViewStack.rotate(Quaternionf().rotateY(Math.toRadians(-lightBearingDegrees.toDouble()).toFloat()))
+        // **The antisolar point, which is the whole of where a bow is** — half a turn round the compass
+        // from its light, and as far below the horizon as the light stands above it. Turning the mesh to
+        // the light's *own* bearing put the bow round the sun (Jonah, 2026-08-30, walked), which is the one
+        // place in the sky it can never be.
+        val awayFromIt = lightBearingDegrees + HALF_TURN
+        // Negated for the curtain's reason: `rotateY` carries north toward the west as its angle grows,
+        // where a bearing counts clockwise toward the east.
+        modelViewStack.rotate(Quaternionf().rotateY(Math.toRadians(-awayFromIt.toDouble()).toFloat()))
+        // And tipped under the horizon by however high the light stands. Turned here rather than built in,
+        // so the arc follows a climbing sun smoothly instead of stepping between a mesh per two degrees.
+        modelViewStack.rotate(Quaternionf().rotateX(Math.toRadians(-lightAltitudeDegrees.toDouble()).toFloat()))
 
         val transforms = RenderSystem.getDynamicUniforms().writeTransform(
             modelViewStack,
@@ -889,17 +896,14 @@ object Blaze3dSkyCanvas : SkyCanvas {
     private class BowArc(val buffer: GpuBuffer?, val indices: Int)
 
     /**
-     * **Keyed on how high the light stands as well as on the bow**, because that height is built into the
-     * mesh rather than applied to it — only a turn about the vertical is left for the draw, and only a turn
-     * about the vertical leaves world up where the horizon fade expects to find it. A whole day is some two
-     * dozen meshes at [BOW_ALTITUDE_STEP], built as the light passes through them and then kept.
+     * **One mesh per bow, with nothing about the light built into it.** It was keyed on the light's height
+     * once, so that the ground could be cut out at build time — which cost a mesh every couple of degrees
+     * and made the arc jump as the sun climbed through them (Jonah, 2026-08-30, walked). Both the cut and
+     * the keying are gone: the whole circle is built once and the light is two turns at the draw.
      */
-    private val bows = mutableMapOf<Pair<Rainbow, Int>, BowArc>()
+    private val bows = mutableMapOf<Rainbow, BowArc>()
 
-    private fun bowFor(rainbow: Rainbow, lightAltitudeDegrees: Float): BowArc {
-        val step = Math.round(lightAltitudeDegrees / BOW_ALTITUDE_STEP)
-        return bows.getOrPut(rainbow to step) { buildBow(rainbow, step * BOW_ALTITUDE_STEP) }
-    }
+    private fun bowFor(rainbow: Rainbow): BowArc = bows.getOrPut(rainbow) { buildBow(rainbow) }
 
     /**
      * The bow, as quads on a sphere about the antisolar point.
@@ -909,20 +913,17 @@ object Blaze3dSkyCanvas : SkyCanvas {
      * a circle at that angular distance actually is seen from underneath, and the second bow lands where
      * the geometry puts it rather than where a hand-drawn one would.
      *
-     * **The ground takes the bottom of it and the mesh never carries that.** A ring about a point below the
-     * horizon spends most of itself underground: a cell with no corner above the horizon is dropped
-     * outright, and what is left fades in over [HORIZON_FADE_DEGREES], which is what gives a bow legs that
-     * end rather than legs that stop.
+     * **The whole circle, and the ground is left to hide what it hides.** The underground half used to be
+     * cut away at build time, which read as a bow whose legs stopped in mid-air the moment you flew high
+     * enough to see under the horizon (Jonah, 2026-08-30, walked). A bow *is* a full circle — that is what
+     * one looks like from an aeroplane — and the terrain drawn after this pass covers whatever part of it
+     * is below the ground without being asked to.
      */
-    private fun buildBow(rainbow: Rainbow, lightAltitudeDegrees: Float): BowArc {
-        // Due north, and as far below the horizon as the light stands above it.
-        val tilt = Math.toRadians(-lightAltitudeDegrees.toDouble())
-        val axis = Vector3f(0.0f, Math.sin(tilt).toFloat(), -Math.cos(tilt).toFloat())
-        val sideways = Vector3f(axis).cross(0.0f, 1.0f, 0.0f)
-        // A light exactly overhead would leave nothing to cross with. It cannot reach here through
-        // `Rainbow.castAt`, and a fixed answer beats a NaN if some other caller ever does.
-        if (sideways.lengthSquared() < STRAIGHT_UP) sideways.set(1.0f, 0.0f, 0.0f) else sideways.normalize()
-        val over = Vector3f(sideways).cross(axis).normalize()
+    private fun buildBow(rainbow: Rainbow): BowArc {
+        // Due north and level. Where the light actually stands is two turns at the draw.
+        val axis = Vector3f(0.0f, 0.0f, -1.0f)
+        val sideways = Vector3f(1.0f, 0.0f, 0.0f)
+        val over = Vector3f(0.0f, 1.0f, 0.0f)
 
         val vertexSize = DefaultVertexFormat.POSITION_COLOR.vertexSize
         val most = BOW_RING_STEPS * BOW_RADIAL_STEPS * VERTICES_PER_QUAD * BOWS_AT_MOST
@@ -977,7 +978,6 @@ object Blaze3dSkyCanvas : SkyCanvas {
         val corners = BOW_RADIAL_STEPS + 1
         val places = Array((BOW_RING_STEPS + 1) * corners) { at -> towards(at / corners, at % corners) }
         fun placeOf(ring: Int, across: Int) = places[ring * corners + across]
-        fun fadeOf(place: Vector3f) = (place.y / HORIZON_FADE_SINE).coerceIn(0.0f, 1.0f)
 
         var written = 0
         for (ring in 0..<BOW_RING_STEPS) {
@@ -988,14 +988,13 @@ object Blaze3dSkyCanvas : SkyCanvas {
                     ring + 1 to across + 1,
                     ring to across + 1,
                 )
-                if (cell.none { (atRing, atAcross) -> fadeOf(placeOf(atRing, atAcross)) > 0.0f }) continue
                 for ((atRing, atAcross) in cell) {
                     val place = placeOf(atRing, atAcross)
                     val across01 = atAcross.toFloat() / BOW_RADIAL_STEPS
                     // Nothing at either edge and full in the middle, so a band has no cut sides.
                     val profile = Math.sin(across01 * Math.PI).toFloat()
                     val tint = colourAcross(band, across01)
-                        .copy(alpha = profile * fadeOf(place) * keeps)
+                        .copy(alpha = profile * keeps * BOW_ADDS)
                     builder.addVertex(place.x * BOW_DISTANCE, place.y * BOW_DISTANCE, place.z * BOW_DISTANCE)
                         .setColor(tint.packed())
                 }
@@ -1025,13 +1024,15 @@ object Blaze3dSkyCanvas : SkyCanvas {
     /** Steps across the band. Enough that vertex colours read as a gradient rather than as stripes. */
     private const val BOW_RADIAL_STEPS = 6
 
-    /** How finely the light's height is followed, in degrees — one mesh per step, built as it passes. */
-    private const val BOW_ALTITUDE_STEP = 2.0f
-
-    /** How far above the horizon a bow's legs are fully present. */
-    private const val HORIZON_FADE_DEGREES = 4.0f
-
-    private val HORIZON_FADE_SINE = Math.sin(Math.toRadians(HORIZON_FADE_DEGREES.toDouble())).toFloat()
+    /**
+     * How much of its colour a bow adds — **the lever, exactly as [LUMINOUS_ADDS] is for a body**.
+     *
+     * Additive blending sums onto the sky rather than covering it, so a band at full alpha drives its
+     * strongest channel to one while the sky's other two are already high, and the arc comes out white
+     * (Jonah, 2026-08-30, walked). Adding less of a *more* saturated band is what buys a colour that reads
+     * as one: the hue survives where the brightness would have clipped.
+     */
+    private const val BOW_ADDS = 0.30f
 
     /** A primary and a secondary, which is as many as one light casts. */
     private const val BOWS_AT_MOST = 2
@@ -1040,8 +1041,7 @@ object Blaze3dSkyCanvas : SkyCanvas {
 
     private const val HALF = 0.5f
 
-    /** How near parallel to the vertical the antisolar axis may lie before crossing it says nothing. */
-    private const val STRAIGHT_UP = 1.0e-6f
+    private const val HALF_TURN = 180.0f
 
     private fun rampOf(colours: List<Rgba>): DynamicTexture = ramps.getOrPut(colours) { bakeRamp(colours) }
 

@@ -124,17 +124,19 @@ data class Rainbow(
         /**
          * What a bow nobody described looks like — **the real one**, outermost first.
          *
-         * Held a little short of full saturation on purpose. A bow is added to the sky rather than laid
-         * over it, so a saturated band against a bright day drives its strongest channel to one and comes
-         * out white; pale is both what the blending can render and what a real bow looks like.
+         * **Saturated, and added faintly** — which is the way round that works. A bow is summed onto the
+         * sky rather than laid over it, so what decides whether a colour survives is how much of it is
+         * added, not how pale it started: a washed-out band added strongly clips to white, where a vivid
+         * one added gently keeps its hue. The gentleness is the renderer's (`BOW_ADDS`) and this is the
+         * hue it spends.
          */
         val ORDINARY_SPECTRUM: List<Rgba> = listOf(
-            Rgba(0.86f, 0.30f, 0.24f),
-            Rgba(0.92f, 0.58f, 0.24f),
-            Rgba(0.90f, 0.86f, 0.35f),
-            Rgba(0.36f, 0.78f, 0.42f),
-            Rgba(0.26f, 0.48f, 0.86f),
-            Rgba(0.50f, 0.32f, 0.78f),
+            Rgba(0.95f, 0.18f, 0.14f),
+            Rgba(0.98f, 0.52f, 0.10f),
+            Rgba(0.95f, 0.90f, 0.18f),
+            Rgba(0.18f, 0.85f, 0.28f),
+            Rgba(0.12f, 0.38f, 0.95f),
+            Rgba(0.45f, 0.16f, 0.88f),
         )
 
         /** What sunlight bent through water does, and the one radius that means "ours". */
