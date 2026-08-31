@@ -24,7 +24,13 @@ import net.minecraft.world.level.dimension.DimensionType
  */
 object LevelLooks {
 
-    private val looks = mutableMapOf<ResourceKey<Level>, LevelLook>()
+    /**
+     * **Concurrent, because the tints are read off the render thread.** Everything else here is asked once
+     * a frame by a renderer; a ground tint is asked while a chunk section is being compiled, on whichever
+     * worker took it. A plain map read against a write from the network thread is a race with no symptom
+     * until it has one.
+     */
+    private val looks = java.util.concurrent.ConcurrentHashMap<ResourceKey<Level>, LevelLook>()
 
     /**
      * How [dimension] looks, or **null** where nobody has said.
@@ -44,7 +50,17 @@ object LevelLooks {
      */
     fun remember(dimension: ResourceKey<Level>, look: LevelLook) {
         looks[dimension] = look
+        whenTold(dimension)
     }
+
+    /**
+     * Told whenever a level's answer changes, so a client can drop whatever it baked from the old one.
+     *
+     * **A slot rather than a call, because this file is common and the baking is not.** Chunk meshes and
+     * tint caches are the client's, and reaching for `Minecraft` from a class a server also loads is how a
+     * dedicated server ends up trying to resolve a client class. The client sets this in its own init.
+     */
+    var whenTold: (ResourceKey<Level>) -> Unit = {}
 
     /** Everything a payload said, which is what a loader's receiver hands over and all it has to do. */
     fun remember(payload: LevelLookPayload) {

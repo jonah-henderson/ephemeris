@@ -5,7 +5,12 @@ import com.mojang.serialization.Codec
 import com.mojang.serialization.codecs.RecordCodecBuilder
 
 /**
- * How the air of a level is painted — the half of its environment a server cannot decide alone.
+ * How a level is coloured — the half of its appearance a server cannot decide alone.
+ *
+ * **The air, and what grows under it.** Most of this is the air the eye sees through; [grass], [foliage]
+ * and [dryFoliage] are the tints vanilla resolves off the *biome*, which is why they have to be here rather
+ * than on a biome: a runtime level borrows the registry's biomes, and repainting one of those would repaint
+ * it in the overworld too. Answering per level instead leaves the registry alone entirely.
  *
  * Every field is **null where nothing said**, and a null is not a colour: it means "whatever the layer below
  * produced", which is how a level can repaint its sky and leave its fog exactly as vanilla lit it.
@@ -24,6 +29,18 @@ data class Look(
     val ceiling: Float? = null,
     val murk: Float? = null,
     /**
+     * What grass is tinted, over whatever the biome would have said.
+     *
+     * **Laid under the biome's own modifier, not instead of it** — a swamp's mottling and a dark forest's
+     * darkening are shape rather than colour, and an Age that repaints the grass should still have a swamp
+     * that reads as one. See `GroundTints`.
+     */
+    val grass: Rgba? = null,
+    /** What leaves are tinted, the same way. */
+    val foliage: Rgba? = null,
+    /** And leaf litter and dead brush, which vanilla resolves separately from live leaves. */
+    val dryFoliage: Rgba? = null,
+    /**
      * How brightly the stars burn, overriding the day's own curve — `1.0` being midnight.
      *
      * **How a sky with no sun stops having a noon.** Vanilla drives star brightness off the timeline, so a
@@ -35,7 +52,8 @@ data class Look(
 ) {
     val saysNothing: Boolean
         get() = sky == null && fog == null && cloud == null && tint == null &&
-            motes == null && haze == null && ceiling == null && murk == null && starBrightness == null
+            motes == null && haze == null && ceiling == null && murk == null && starBrightness == null &&
+            grass == null && foliage == null && dryFoliage == null
 
     /**
      * This look over [under] — every colour of ours that was named, and [under]'s where it was not.
@@ -53,6 +71,9 @@ data class Look(
         ceiling = ceiling ?: under.ceiling,
         murk = murk ?: under.murk,
         starBrightness = starBrightness ?: under.starBrightness,
+        grass = grass ?: under.grass,
+        foliage = foliage ?: under.foliage,
+        dryFoliage = dryFoliage ?: under.dryFoliage,
     )
 
     companion object {
@@ -70,17 +91,25 @@ data class Look(
                 Codec.FLOAT.optionalFieldOf("murk").forGetter { java.util.Optional.ofNullable(it.murk) },
                 Codec.FLOAT.optionalFieldOf("star_brightness")
                     .forGetter { java.util.Optional.ofNullable(it.starBrightness) },
-            ).apply(instance) { sky, fog, cloud, tint, motes, haze, ceiling, murk, starBrightness ->
+                Rgba.CODEC.optionalFieldOf("grass").forGetter { java.util.Optional.ofNullable(it.grass) },
+                Rgba.CODEC.optionalFieldOf("foliage").forGetter { java.util.Optional.ofNullable(it.foliage) },
+                Rgba.CODEC.optionalFieldOf("dry_foliage")
+                    .forGetter { java.util.Optional.ofNullable(it.dryFoliage) },
+            ).apply(instance) { sky, fog, cloud, tint, motes, haze, ceiling, murk, starBrightness,
+                                grass, foliage, dryFoliage ->
                 Look(
-                    sky.orElse(null),
-                    fog.orElse(null),
-                    cloud.orElse(null),
-                    tint.orElse(null),
-                    motes.orElse(null),
-                    haze.orElse(null),
-                    ceiling.orElse(null),
-                    murk.orElse(null),
-                    starBrightness.orElse(null),
+                    sky = sky.orElse(null),
+                    fog = fog.orElse(null),
+                    cloud = cloud.orElse(null),
+                    tint = tint.orElse(null),
+                    motes = motes.orElse(null),
+                    haze = haze.orElse(null),
+                    ceiling = ceiling.orElse(null),
+                    murk = murk.orElse(null),
+                    starBrightness = starBrightness.orElse(null),
+                    grass = grass.orElse(null),
+                    foliage = foliage.orElse(null),
+                    dryFoliage = dryFoliage.orElse(null),
                 )
             }
         }

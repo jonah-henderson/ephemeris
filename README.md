@@ -77,6 +77,18 @@ own band at its own bearing in its own colour, added, shared out, or nearest onl
 day and night settle to reaches hostile spawning, phantoms, sleeping, daylight sensors and the block
 lighting, because 26.1 derives all of them from one number.
 
+**A level can repaint what grows in it** — `Look.grass`, `Look.foliage`, `Look.dryFoliage`, on the level as
+a whole or on any one biome through `corners`. Vanilla resolves those three off the biome, so the obvious
+route is to write a colour onto `minecraft:forest` — and that repaints every forest in every world,
+including the overworld's. These are answered *per level* instead and the biome registry is never touched,
+which is the same reasoning that keeps a runtime dimension out of `LevelStem`.
+
+Grass keeps the biome's own `grass_color_modifier` over whatever colour you give it, so a repainted swamp
+still has a swamp's mottling and a dark forest is still darkened. The colour is baked into the chunk mesh
+when a section compiles, so changing one after the fact means dropping what was baked — `LevelLooks.whenTold`
+fires for that, and `GroundTints.forget` is what the built-in client hangs off it. Water is deliberately not
+here: it is a fluid tint and a different problem.
+
 `Orbit.liftDegrees` carries a body off its great circle so it can stop setting at all. A great circle
 centred on the observer is half above the horizon by construction, so nothing else can produce a midnight
 sun; lay a path flat and lift it, and the sun circles at exactly that height all day.
