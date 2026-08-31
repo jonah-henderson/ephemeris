@@ -158,26 +158,31 @@ object GroundTints {
     }
 
     /**
-     * A leaf block's colour where the level repaints its leaves, and [otherwise] where it does not.
+     * A leaf block's colour where the level repaints its leaves, or **null** where it has no opinion.
      *
-     * **The one thing the resolver cannot reach.** Spruce and birch leaves are registered in `BlockColors`
-     * with `BlockTintSources.constant(…)` — a fixed number that never asks the biome anything — so a level
-     * repainting its foliage left those two stubbornly green while every other leaf followed (Jonah,
-     * 2026-08-30, walked). Nothing is wrong with the resolver; those blocks simply never call one.
+     * **Asked above the tint sources rather than through them**, which is the whole of what the second
+     * attempt got wrong. Vanilla's leaves are three different things: oak and its kin carry
+     * `BlockTintSources.foliage()` and go through the resolver; spruce and birch carry a *constant* that
+     * never asks a biome anything; and cherry, pale oak and azalea carry **no source at all**. A hook on
+     * the source's own call can only ever see the first two kinds — the third never makes that call — so
+     * this is asked where the renderer decides a quad's tint, which happens for every one of them.
      *
-     * So a leaf is answered by *what a leaf here looks like* rather than by what its own source says, which
-     * routes back through [wrap] and picks up the biome blend on the way. A block with no tint source at
-     * all never reaches here — cherry and pale oak are untinted in vanilla and stay that way.
+     * Answering routes back through [wrap] and picks up the biome blend on the way.
+     *
+     * **Azalea is beyond even this**, and it is the model rather than the tint: its leaves are built on
+     * `block/cube_all`, whose faces carry no `tintindex`, so no tint is ever multiplied into them however
+     * it is arrived at. That is a texture that is already coloured, and changing it means shipping a model
+     * over vanilla's.
      */
-    fun leafTintOr(state: BlockState, level: BlockAndTintGetter, pos: BlockPos, otherwise: () -> Int): Int {
-        if (!state.`is`(BlockTags.LEAVES)) return otherwise()
+    fun leafTintIn(state: BlockState, level: BlockAndTintGetter, pos: BlockPos): Int? {
+        if (!state.`is`(BlockTags.LEAVES)) return null
         // **The level being rendered, because the region handed in is a view and not a level.** Sections
         // compile off the render thread, so this can be a tick stale while a player changes dimension —
-        // and a stale answer here is a leaf drawn the other level's colour until the section rebuilds,
-        // which it is about to do anyway.
-        val here = net.minecraft.client.Minecraft.getInstance().level ?: return otherwise()
-        val look = LevelLooks.of(here.dimension()) ?: return otherwise()
-        if (paintedIn(here, look).saysNothingAbout(Ground.FOLIAGE)) return otherwise()
+        // and a stale answer is a leaf drawn the other level's colour until the section rebuilds, which it
+        // is about to do anyway.
+        val here = net.minecraft.client.Minecraft.getInstance().level ?: return null
+        val look = LevelLooks.of(here.dimension()) ?: return null
+        if (paintedIn(here, look).saysNothingAbout(Ground.FOLIAGE)) return null
         return BiomeColors.getAverageFoliageColor(level, pos)
     }
 

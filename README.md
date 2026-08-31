@@ -85,9 +85,11 @@ which is the same reasoning that keeps a runtime dimension out of `LevelStem`.
 
 Grass keeps the biome's own `grass_color_modifier` where that modifier reads the colour it is handed — a
 dark forest stays darkened — and skips it where it does not, because vanilla's swamp modifier ignores its
-base outright and would throw your colour away. Spruce and birch leaves are handled too: those two are
-registered with a *constant* tint that never asks a biome anything, so they are answered by what a leaf
-looks like in that level instead. Blocks vanilla gives no tint at all, like cherry leaves, stay untinted. The colour is baked into the chunk mesh
+base outright and would throw your colour away. Leaves are answered above the tint sources rather than
+through them, because vanilla's are three different things: oak and its kin ask the biome, spruce and birch
+carry a *constant* that never does, and cherry and pale oak carry no tint source at all. All of them follow
+a level that repaints its foliage. **Azalea does not and cannot** — its model is built on `cube_all`, whose
+faces carry no `tintindex`, so no tint is ever multiplied into them however it is arrived at. The colour is baked into the chunk mesh
 when a section compiles, so changing one after the fact means dropping what was baked — `LevelLooks.whenTold`
 fires for that, and `GroundTints.forget` is what the built-in client hangs off it. Water is deliberately not
 here: it is a fluid tint and a different problem.

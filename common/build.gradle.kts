@@ -42,10 +42,6 @@ dependencies {
     // Annotations only, to compile the Mixins in `src/main/java`. Each loader supplies the implementation at
     // runtime, so this must never reach a runtime classpath.
     compileOnly(libs.mixin)
-    // The composable injectors — `@WrapOperation` and friends. Both loaders ship MixinExtras at runtime
-    // (Fabric Loader nests `mixinextras-fabric`, NeoForge bundles `mixinextras-neoforge`), so this is
-    // annotations only and nothing of it is distributed.
-    compileOnly(libs.mixinExtras)
 }
 
 artifacts {

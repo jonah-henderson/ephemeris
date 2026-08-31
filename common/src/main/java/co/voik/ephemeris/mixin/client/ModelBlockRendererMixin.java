@@ -1,50 +1,45 @@
 package co.voik.ephemeris.mixin.client;
 
 import co.voik.ephemeris.client.GroundTints;
-import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
-import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
-import net.minecraft.client.color.block.BlockTintSource;
 import net.minecraft.client.renderer.block.BlockAndTintGetter;
 import net.minecraft.client.renderer.block.ModelBlockRenderer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.block.state.BlockState;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
+import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 /**
- * Lets a level's leaves follow it even where vanilla nailed their colour down.
+ * Lets a level's leaves follow it even where vanilla nailed their colour down, or left it out.
  *
- * <p><b>Two leaves in the game never ask what biome they are in.</b> {@code BlockColors} registers spruce
- * and birch with {@code BlockTintSources.constant(…)} — a fixed number — where every other leaf gets
- * {@code BlockTintSources.foliage()} and goes through the biome resolver. So a level that repaints its
- * foliage repainted all of them but those two, which read as the feature half-working rather than as two
- * blocks being special (Jonah, 2026-08-30, walked).
+ * <p><b>Vanilla's leaves are three different things and only one of them asks a biome anything.</b> Oak and
+ * its kin are registered with {@code BlockTintSources.foliage()} and go through the colour resolver. Spruce
+ * and birch carry a {@code constant} that never asks. Cherry, pale oak and azalea carry <i>no tint source
+ * at all</i>, so nothing is asked and nothing is applied.
  *
- * <p>Nothing is wrong with {@code ClientLevelMixin}'s seam; these blocks simply never reach a resolver at
- * all. This is the one place a block's tint is resolved <i>in world</i>, which is where the question "what
- * does a leaf look like here" can actually be asked.
+ * <p>So the hook is on {@code getTintColor} — where the renderer decides what a tinted quad is multiplied
+ * by — and not on the tint source's own call, which the third kind never reaches. That was the fault in the
+ * first attempt: it could only ever have caught two of the three (Jonah, 2026-08-30, walked twice).
  *
- * <p><b>A wrap rather than a redirect</b>, so the original call is still made for every block this declines
- * to answer for — which is all of them but leaves, in every level that never mentioned foliage.
+ * <p><b>A plain injection, deliberately.</b> The composable one silently does nothing where MixinExtras has
+ * not initialised, and a hook that fails by having no effect is indistinguishable from the fault it was
+ * written to fix. This one applies or the game does not start, which is the right way round for something
+ * whose only symptom is a leaf being the wrong colour.
  */
 @Mixin(ModelBlockRenderer.class)
 public abstract class ModelBlockRendererMixin {
 
-    @WrapOperation(
-            method = "computeTintColor",
-            at = @At(
-                    value = "INVOKE",
-                    target = "Lnet/minecraft/client/color/block/BlockTintSource;colorInWorld("
-                            + "Lnet/minecraft/world/level/block/state/BlockState;"
-                            + "Lnet/minecraft/client/renderer/block/BlockAndTintGetter;"
-                            + "Lnet/minecraft/core/BlockPos;)I"))
-    private int ephemeris$leavesFollowTheLevel(
-            BlockTintSource source,
-            BlockState state,
+    @Inject(method = "getTintColor", at = @At("HEAD"), cancellable = true)
+    private void ephemeris$leavesFollowTheLevel(
             BlockAndTintGetter level,
+            BlockState state,
             BlockPos pos,
-            Operation<Integer> original) {
-        return GroundTints.INSTANCE.leafTintOr(
-                state, level, pos, () -> original.call(source, state, level, pos));
+            int tintIndex,
+            CallbackInfoReturnable<Integer> tint) {
+        Integer painted = GroundTints.INSTANCE.leafTintIn(state, level, pos);
+        if (painted != null) {
+            tint.setReturnValue(painted);
+        }
     }
 }
