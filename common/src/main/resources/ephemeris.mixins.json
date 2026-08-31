@@ -10,7 +10,7 @@
   ],
   "client": [
     "client.ClientLevelMixin",
-    "client.ModelBlockRendererMixin",
+    "client.BlockColorsMixin",
     "client.CloudRendererMixin",
     "client.SkyRendererMixin",
     "client.SunriseSunsetMixin"

@@ -6,11 +6,13 @@ import co.voik.ephemeris.sky.LevelLook
 import co.voik.ephemeris.sky.LevelLooks
 import co.voik.ephemeris.sky.Look
 import net.minecraft.client.multiplayer.ClientLevel
+import net.minecraft.client.color.block.BlockTintSource
 import net.minecraft.client.renderer.BiomeColors
 import net.minecraft.client.renderer.block.BlockAndTintGetter
 import net.minecraft.core.BlockPos
 import net.minecraft.tags.BlockTags
 import net.minecraft.world.level.block.state.BlockState
+import net.minecraft.world.level.block.state.properties.Property
 import net.minecraft.core.registries.Registries
 import net.minecraft.resources.Identifier
 import net.minecraft.resources.ResourceKey
@@ -194,6 +196,38 @@ object GroundTints {
         sayIt("painting", "painting leaves %06x in %s".format(painted and RGB, here.dimension().identifier()))
         return painted
     }
+
+    /**
+     * [sources] with a leaf's own taught to ask the level first — the list untouched for everything else.
+     *
+     * **Wrapped rather than replaced, and only where a source already exists**, so no list changes length
+     * and nothing that indexes one by tint layer is disturbed. A leaf vanilla gives no source at all is
+     * left alone: cherry and pale oak are untinted in vanilla, and azalea's model carries no `tintindex`
+     * for a tint to be applied through anyway.
+     */
+    fun leavesFollowing(state: BlockState, sources: List<BlockTintSource>): List<BlockTintSource> {
+        val own = sources.firstOrNull() ?: return sources
+        if (own is LeafTint || !state.`is`(BlockTags.LEAVES)) return sources
+        return wrappedLeaves.computeIfAbsent(sources) { listOf(LeafTint(own)) + it.drop(1) }
+    }
+
+    /**
+     * Vanilla's leaf source with the level asked ahead of it.
+     *
+     * In hand it is exactly what it wraps — a leaf in an inventory is in no level and has no biome, and
+     * vanilla's answer is the right one there.
+     */
+    private class LeafTint(private val otherwise: BlockTintSource) : BlockTintSource {
+        override fun color(state: BlockState): Int = otherwise.color(state)
+
+        override fun colorInWorld(state: BlockState, level: BlockAndTintGetter, pos: BlockPos): Int =
+            leafTintIn(state, level, pos) ?: otherwise.colorInWorld(state, level, pos)
+
+        override fun relevantProperties(): Set<Property<*>> = otherwise.relevantProperties()
+    }
+
+    /** One wrapper per source list rather than one per call: this is asked once per block per section. */
+    private val wrappedLeaves = ConcurrentHashMap<List<BlockTintSource>, List<BlockTintSource>>()
 
     private fun declined(reason: String, message: String): Int? {
         sayIt(reason, message)
