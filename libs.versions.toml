@@ -25,6 +25,9 @@ fabricApi = "0.155.2+26.1.2"
 flk = "1.13.13+kotlin.2.4.10"
 
 mixin = "0.8.5"
+# Shipped by both loaders already — Fabric Loader nests it, NeoForge bundles it — so this is
+# compile-only and never distributed.
+mixinExtras = "0.5.4"
 
 # Kotest brings its own JUnit Platform engine, so the platform is deliberately not versioned here — see
 # the note beside the test dependencies in common/build.gradle.kts.
@@ -37,6 +40,7 @@ fabricApi = { group = "net.fabricmc.fabric-api", name = "fabric-api", version.re
 flk = { group = "net.fabricmc", name = "fabric-language-kotlin", version.ref = "flk" }
 kff = { group = "thedarkcolour", name = "kotlinforforge-neoforge", version.ref = "kff" }
 mixin = { group = "org.spongepowered", name = "mixin", version.ref = "mixin" }
+mixinExtras = { group = "io.github.llamalad7", name = "mixinextras-common", version.ref = "mixinExtras" }
 
 kotestRunner = { group = "io.kotest", name = "kotest-runner-junit5", version.ref = "kotest" }
 kotestAssertions = { group = "io.kotest", name = "kotest-assertions-core", version.ref = "kotest" }

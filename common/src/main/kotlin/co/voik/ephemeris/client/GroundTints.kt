@@ -6,6 +6,10 @@ import co.voik.ephemeris.sky.LevelLooks
 import co.voik.ephemeris.sky.Look
 import net.minecraft.client.multiplayer.ClientLevel
 import net.minecraft.client.renderer.BiomeColors
+import net.minecraft.client.renderer.block.BlockAndTintGetter
+import net.minecraft.core.BlockPos
+import net.minecraft.tags.BlockTags
+import net.minecraft.world.level.block.state.BlockState
 import net.minecraft.core.registries.Registries
 import net.minecraft.resources.Identifier
 import net.minecraft.resources.ResourceKey
@@ -56,13 +60,26 @@ object GroundTints {
             override fun colourIn(look: Look): Rgba? = look.grass
 
             /**
-             * **Under the biome's own modifier rather than instead of it.** A swamp's mottling and a dark
-             * forest's darkening are shape rather than colour — they are what makes a swamp read as one —
-             * so an Age that repaints the grass keeps them, exactly as `Biome.getGrassColor` layers them
-             * over whatever the base colour was.
+             * **Under the biome's own modifier, but only where that modifier reads what it is given.**
+             *
+             * A dark forest's darkening is shape rather than colour — it averages whatever base it is
+             * handed toward a fixed green — so keeping it is what lets a repainted dark forest still read
+             * as one. A **swamp's is not a modifier at all**: `GrassColorModifier.SWAMP` ignores its base
+             * outright and answers one of two hardcoded colours off a noise field, so layering under it
+             * throws the Age's colour away and the swamp comes out its ordinary green (Jonah, 2026-08-30,
+             * walked: "in purple grass, swamps still have dark green grass").
+             *
+             * So the question is asked of the modifier rather than of its name: hand it two very different
+             * bases at this very position and see whether it answers differently. One that does is shaping
+             * a colour and is kept; one that does not is *replacing* it, and there is nothing of the Age
+             * left in what it returns. That also answers correctly for a modifier some other mod added.
              */
-            override fun settleOn(biome: Biome, colour: Rgba, x: Double, z: Double): Int =
-                biome.specialEffects.grassColorModifier().modifyColor(x, z, colour.packed())
+            override fun settleOn(biome: Biome, colour: Rgba, x: Double, z: Double): Int {
+                val modifier = biome.specialEffects.grassColorModifier()
+                val shapesWhatItIsGiven =
+                    modifier.modifyColor(x, z, PITCH_BLACK) != modifier.modifyColor(x, z, PAPER_WHITE)
+                return if (shapesWhatItIsGiven) modifier.modifyColor(x, z, colour.packed()) else colour.packed()
+            }
         },
         FOLIAGE {
             override fun colourIn(look: Look): Rgba? = look.foliage
@@ -140,6 +157,34 @@ object GroundTints {
         minecraft.levelRenderer.allChanged()
     }
 
+    /**
+     * A leaf block's colour where the level repaints its leaves, and [otherwise] where it does not.
+     *
+     * **The one thing the resolver cannot reach.** Spruce and birch leaves are registered in `BlockColors`
+     * with `BlockTintSources.constant(…)` — a fixed number that never asks the biome anything — so a level
+     * repainting its foliage left those two stubbornly green while every other leaf followed (Jonah,
+     * 2026-08-30, walked). Nothing is wrong with the resolver; those blocks simply never call one.
+     *
+     * So a leaf is answered by *what a leaf here looks like* rather than by what its own source says, which
+     * routes back through [wrap] and picks up the biome blend on the way. A block with no tint source at
+     * all never reaches here — cherry and pale oak are untinted in vanilla and stay that way.
+     */
+    fun leafTintOr(state: BlockState, level: BlockAndTintGetter, pos: BlockPos, otherwise: () -> Int): Int {
+        if (!state.`is`(BlockTags.LEAVES)) return otherwise()
+        // **The level being rendered, because the region handed in is a view and not a level.** Sections
+        // compile off the render thread, so this can be a tick stale while a player changes dimension —
+        // and a stale answer here is a leaf drawn the other level's colour until the section rebuilds,
+        // which it is about to do anyway.
+        val here = net.minecraft.client.Minecraft.getInstance().level ?: return otherwise()
+        val look = LevelLooks.of(here.dimension()) ?: return otherwise()
+        if (paintedIn(here, look).saysNothingAbout(Ground.FOLIAGE)) return otherwise()
+        return BiomeColors.getAverageFoliageColor(level, pos)
+    }
+
     /** For a caller that keeps its own store: whether an id names a biome this look repaints. */
     fun repaints(look: LevelLook, biome: Identifier): Boolean = look.corners.containsKey(biome)
+
+    /** Two bases far enough apart that any modifier reading one at all answers them differently. */
+    private const val PITCH_BLACK = 0xFF000000.toInt()
+    private const val PAPER_WHITE = -1
 }

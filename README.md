@@ -83,8 +83,11 @@ route is to write a colour onto `minecraft:forest` — and that repaints every f
 including the overworld's. These are answered *per level* instead and the biome registry is never touched,
 which is the same reasoning that keeps a runtime dimension out of `LevelStem`.
 
-Grass keeps the biome's own `grass_color_modifier` over whatever colour you give it, so a repainted swamp
-still has a swamp's mottling and a dark forest is still darkened. The colour is baked into the chunk mesh
+Grass keeps the biome's own `grass_color_modifier` where that modifier reads the colour it is handed — a
+dark forest stays darkened — and skips it where it does not, because vanilla's swamp modifier ignores its
+base outright and would throw your colour away. Spruce and birch leaves are handled too: those two are
+registered with a *constant* tint that never asks a biome anything, so they are answered by what a leaf
+looks like in that level instead. Blocks vanilla gives no tint at all, like cherry leaves, stay untinted. The colour is baked into the chunk mesh
 when a section compiles, so changing one after the fact means dropping what was baked — `LevelLooks.whenTold`
 fires for that, and `GroundTints.forget` is what the built-in client hangs off it. Water is deliberately not
 here: it is a fluid tint and a different problem.

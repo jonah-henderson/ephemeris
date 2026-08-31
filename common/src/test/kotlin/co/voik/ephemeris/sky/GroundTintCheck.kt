@@ -3,6 +3,9 @@ package co.voik.ephemeris.sky
 import co.voik.ephemeris.Rgba
 import com.mojang.serialization.JsonOps
 import io.kotest.core.spec.style.FunSpec
+import net.minecraft.SharedConstants
+import net.minecraft.server.Bootstrap
+import net.minecraft.world.level.biome.BiomeSpecialEffects
 import net.minecraft.core.registries.Registries
 import net.minecraft.resources.Identifier
 import net.minecraft.resources.ResourceKey
@@ -58,6 +61,38 @@ class GroundTintCheck : FunSpec({
 
     test("nothing about the ground reaches an ordinary look by accident") {
         check(Look.NOTHING.over(Look.NOTHING).grass == null) { "Two empty looks made a colour between them" }
+    }
+
+    test("a swamp's modifier throws away whatever base it is handed, and a dark forest's does not") {
+        // **The vanilla fact the grass rule turns on, asserted so it cannot change under us.** Layering an
+        // Age's colour under the biome's modifier is right for `DARK_FOREST`, which averages whatever it is
+        // given toward a fixed green — and meaningless for `SWAMP`, which ignores its base outright and
+        // answers one of two hardcoded colours off a noise field. A level repainting its grass purple got
+        // an ordinary green swamp until that was told apart (Jonah, 2026-08-30, walked).
+        //
+        // `GroundTints` asks this of the modifier rather than of its name, so a modifier some other mod
+        // added is answered correctly too. If this test ever fails because `SWAMP` started reading its
+        // base, the special case has stopped being needed rather than started being wrong.
+        // **Bootstrapped before the class is so much as named.** `BiomeSpecialEffects` drags `Biome` and
+        // `BiomeGenerationSettings` in behind it, and a half-initialised `BuiltInRegistries` stays broken
+        // for the life of the JVM — so touching this without booting first fails whatever spec happens to
+        // run next rather than this one.
+        SharedConstants.tryDetectVersion()
+        Bootstrap.bootStrap()
+        val somewhere = 12.0 to 34.0
+        fun answersDifferently(modifier: BiomeSpecialEffects.GrassColorModifier): Boolean =
+            modifier.modifyColor(somewhere.first, somewhere.second, 0xFF000000.toInt()) !=
+                modifier.modifyColor(somewhere.first, somewhere.second, -1)
+
+        check(!answersDifferently(BiomeSpecialEffects.GrassColorModifier.SWAMP)) {
+            "A swamp's modifier now reads the base colour, so grass no longer needs the special case"
+        }
+        check(answersDifferently(BiomeSpecialEffects.GrassColorModifier.DARK_FOREST)) {
+            "A dark forest's modifier stopped reading its base, so a repainted one will come out flat"
+        }
+        check(answersDifferently(BiomeSpecialEffects.GrassColorModifier.NONE)) {
+            "`NONE` stopped handing back what it was given, which is the whole of what it is"
+        }
     }
 })
 
