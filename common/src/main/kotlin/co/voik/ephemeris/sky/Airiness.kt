@@ -55,12 +55,17 @@ object Airiness {
     /**
      * How much air remains straight up, against the horizon's lot.
      *
-     * **Not far off half, because the sky overhead is not clear** — a daytime moon at the zenith is washed
-     * pale blue rather than hanging crisp against it, and a quarter left it reading as barely veiled at all
-     * (Jonah, 2026-08-30, walked). The horizon still gets four times the airmass, which is what keeps a
-     * setting moon the dramatic one; this is only the floor under it.
+     * **The horizon is `1.0` by definition and this is a fraction of it** — a quarter first, then nearly a
+     * half, now three fifths, because a daytime moon at the zenith is washed pale blue rather than hanging
+     * crisp against it (Jonah, 2026-08-30, walked twice).
+     *
+     * **It cannot go much past this without erasing the thing it is part of.** [LEAST_SOLID] floors how
+     * much of a body survives, so once the overhead airmass is near the horizon's both ends clamp to the
+     * same value and altitude stops meaning anything — which is the whole of what makes a setting moon the
+     * dramatic one. A number nearer `1.0` does not give a hazier zenith, it gives a sky with no gradient in
+     * it.
      */
-    private const val THINNEST_OVERHEAD = 0.45f
+    private const val THINNEST_OVERHEAD = 0.6f
 
     /** However thick the air, something of a body survives — otherwise it simply vanishes at dusk. */
     private const val LEAST_SOLID = 0.15f

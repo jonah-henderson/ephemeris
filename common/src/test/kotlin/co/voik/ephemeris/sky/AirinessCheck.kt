@@ -76,14 +76,31 @@ class AirinessCheck : FunSpec({
         }
     }
 
+    /**
+     * **What the airmass is actually for**, and the failure the tuning can walk into.
+     *
+     * `solidityAt` floors how much of a body survives, so as the overhead airmass approaches the horizon's
+     * both ends clamp to that floor and the altitude falloff stops being visible — a hazier zenith bought
+     * by erasing the gradient it was part of. A ratio between the two constants would say this obliquely;
+     * asking what a body at each end actually looks like says it outright.
+     */
+    test("a body overhead is visibly less veiled than one on the horizon") {
+        val lit = 1.0f
+        val ordinary = 1.0f
+        val overhead = Airiness.solidityAt(90.0f, lit, ordinary)
+        val setting = Airiness.solidityAt(0.0f, lit, ordinary)
+        check(overhead - setting > 0.1f) {
+            "A body overhead survives $overhead against $setting on the horizon, which reads as no gradient"
+        }
+    }
+
     test("airmass is most at the horizon and least overhead") {
         check(Airiness.airmassAt(0.0f) == 1.0f) { "The horizon is the most air there is, by definition" }
-        // **A relation rather than a number.** How much air is left overhead is a tuning value — it went
-        // from a quarter to nearly a half when a daytime moon at the zenith read as barely veiled — and a
-        // threshold copied from the constant fails every time that is tuned, saying nothing about the
-        // claim. The claim is that it thins as you look up, and that overhead is well under the horizon's.
-        check(Airiness.airmassAt(90.0f) < Airiness.airmassAt(0.0f) * 0.6f) {
-            "Straight up is not much thinner than the horizon, so altitude has stopped meaning anything"
+        // **The relation, not a number.** How much air is left overhead is a tuning value that has moved
+        // three times, and a threshold copied from the constant fails on every tune while saying nothing
+        // about the claim — this one was written that way and broke on the next tune but one.
+        check(Airiness.airmassAt(90.0f) < Airiness.airmassAt(0.0f)) {
+            "Straight up is not thinner than the horizon at all"
         }
         val climbing = (0..90 step 10).map { Airiness.airmassAt(it.toFloat()) }
         check(climbing == climbing.sortedDescending()) {
