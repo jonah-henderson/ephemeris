@@ -1,6 +1,7 @@
 package co.voik.ephemeris.client
 
 import co.voik.ephemeris.Rgba
+import co.voik.ephemeris.RuntimeLevelLog
 import co.voik.ephemeris.sky.LevelLook
 import co.voik.ephemeris.sky.LevelLooks
 import co.voik.ephemeris.sky.Look
@@ -180,11 +181,43 @@ object GroundTints {
         // compile off the render thread, so this can be a tick stale while a player changes dimension —
         // and a stale answer is a leaf drawn the other level's colour until the section rebuilds, which it
         // is about to do anyway.
-        val here = net.minecraft.client.Minecraft.getInstance().level ?: return null
-        val look = LevelLooks.of(here.dimension()) ?: return null
-        if (paintedIn(here, look).saysNothingAbout(Ground.FOLIAGE)) return null
-        return BiomeColors.getAverageFoliageColor(level, pos)
+        val here = net.minecraft.client.Minecraft.getInstance().level
+        if (here == null) return declined("nowhere", "a leaf asked, and there is no level to answer for")
+        val look = LevelLooks.of(here.dimension())
+        if (look == null) {
+            return declined("untold", "a leaf asked, and nothing has said what ${here.dimension().identifier()} looks like")
+        }
+        if (paintedIn(here, look).saysNothingAbout(Ground.FOLIAGE)) {
+            return declined("bare", "a leaf asked, and the look for ${here.dimension().identifier()} paints no foliage")
+        }
+        val painted = BiomeColors.getAverageFoliageColor(level, pos)
+        sayIt("painting", "painting leaves %06x in %s".format(painted and RGB, here.dimension().identifier()))
+        return painted
     }
+
+    private fun declined(reason: String, message: String): Int? {
+        sayIt(reason, message)
+        return null
+    }
+
+    /**
+     * One line whenever the *reason* changes, and nothing while it stays the same.
+     *
+     * **A leaf being the wrong colour is the whole symptom**, and it is the same symptom whether the hook
+     * never ran, ran and declined, or ran and painted something the eye then failed to notice. Two walks
+     * went on guessing between those (Jonah, 2026-08-30), which is exactly the fault `AuroraPainter` had
+     * already paid for once — so this says which, and says it once.
+     */
+    private fun sayIt(reason: String, message: String) {
+        if (reason == said) return
+        said = reason
+        RuntimeLevelLog.info("Ground: $message")
+    }
+
+    @Volatile
+    private var said: String? = null
+
+    private const val RGB = 0xFFFFFF
 
     /** For a caller that keeps its own store: whether an id names a biome this look repaints. */
     fun repaints(look: LevelLook, biome: Identifier): Boolean = look.corners.containsKey(biome)
