@@ -78,7 +78,17 @@ class AirinessCheck : FunSpec({
 
     test("airmass is most at the horizon and least overhead") {
         check(Airiness.airmassAt(0.0f) == 1.0f) { "The horizon is the most air there is, by definition" }
-        check(Airiness.airmassAt(90.0f) < 0.3f) { "Straight up should be the thinnest line through the air" }
+        // **A relation rather than a number.** How much air is left overhead is a tuning value — it went
+        // from a quarter to nearly a half when a daytime moon at the zenith read as barely veiled — and a
+        // threshold copied from the constant fails every time that is tuned, saying nothing about the
+        // claim. The claim is that it thins as you look up, and that overhead is well under the horizon's.
+        check(Airiness.airmassAt(90.0f) < Airiness.airmassAt(0.0f) * 0.6f) {
+            "Straight up is not much thinner than the horizon, so altitude has stopped meaning anything"
+        }
+        val climbing = (0..90 step 10).map { Airiness.airmassAt(it.toFloat()) }
+        check(climbing == climbing.sortedDescending()) {
+            "Air does not thin steadily as a body climbs: $climbing"
+        }
         // Below the horizon it stops changing: a body already set is not going to get hazier.
         check(Airiness.airmassAt(-30.0f) == Airiness.airmassAt(0.0f)) {
             "A body below the horizon reported different air from one on it"

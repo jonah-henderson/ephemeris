@@ -125,6 +125,28 @@ sealed interface CelestialPath {
     /** The turns that level the sprite, memoised alongside [swing] for the same reason. */
     fun levelling(): Levelling
 
+    /** The ticks in one period at which this path comes up, memoised for [swing]'s reason. */
+    fun risings(): List<Long>
+
+    /**
+     * The tick this body last came up at or before [dayTime], or **null** for a path that never rises.
+     *
+     * **What a body's own day is, for anything that must not change while it is being looked at.** A phase
+     * stepping on the raw clock steps wherever the clock happens to be, which put a moon halfway through
+     * its cycle at the top of its arc (Jonah, 2026-08-30, walked) — a thing the sky does only where nobody
+     * can see it. Held from the rising, a phase is whatever it was when the body appeared and changes while
+     * it is away.
+     */
+    fun lastRoseAt(dayTime: Long): Long? {
+        val rose = risings()
+        if (rose.isEmpty()) return null
+        val period = periodTicks.toLong().coerceAtLeast(1L)
+        val into = ((dayTime % period) + period) % period
+        val opened = dayTime - into
+        val alreadyRisen = rose.lastOrNull { it <= into }
+        return if (alreadyRisen != null) opened + alreadyRisen else opened - period + rose.last()
+    }
+
     /** The extremes of a path, in degrees of altitude. */
     data class Swing(val lowest: Float, val highest: Float)
 
@@ -252,6 +274,26 @@ sealed interface CelestialPath {
             return lowestAt
         }
 
+        /**
+         * Walks one period of [path] for the ticks it comes up on — which every implementation's [risings]
+         * should memoise.
+         *
+         * **Every rising, not the first**, because a path is allowed more than one: an epicycle can dip
+         * below the horizon and climb back out inside a single period, and a body that did so would hold a
+         * phase from the wrong visit.
+         */
+        fun risingsOf(path: CelestialPath): List<Long> {
+            val found = mutableListOf<Long>()
+            var wasDown = path.altitudeAt(tickOf(path, SAMPLES_AROUND - 1, SAMPLES_AROUND)) < 0.0f
+            for (sample in 0..<SAMPLES_AROUND) {
+                val tick = tickOf(path, sample, SAMPLES_AROUND)
+                val up = path.altitudeAt(tick) >= 0.0f
+                if (wasDown && up) found += tick
+                wasDown = !up
+            }
+            return found
+        }
+
         /** Walks one period of [path], which is what every implementation's [swing] should memoise. */
         fun swingOf(path: CelestialPath): Swing {
             var least = Float.MAX_VALUE
@@ -335,6 +377,10 @@ data class Motions(
 
     override fun levelling(): CelestialPath.Levelling = levelledBy
 
+    private val rose: List<Long> by lazy { CelestialPath.risingsOf(this) }
+
+    override fun risings(): List<Long> = rose
+
     companion object {
         const val VANILLA_DISTANCE = 100.0f
 
@@ -373,6 +419,8 @@ data class Named(val id: Identifier) : CelestialPath {
     override fun swing(): CelestialPath.Swing = resolved.swing()
 
     override fun levelling(): CelestialPath.Levelling = resolved.levelling()
+
+    override fun risings(): List<Long> = resolved.risings()
 
     companion object {
         val MAP_CODEC: MapCodec<Named> = RecordCodecBuilder.mapCodec { instance ->

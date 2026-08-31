@@ -52,8 +52,15 @@ object Airiness {
         return Mth.lerp(overhead, 1.0f, THINNEST_OVERHEAD)
     }
 
-    /** How much air remains straight up, against the horizon's lot. */
-    private const val THINNEST_OVERHEAD = 0.25f
+    /**
+     * How much air remains straight up, against the horizon's lot.
+     *
+     * **Not far off half, because the sky overhead is not clear** — a daytime moon at the zenith is washed
+     * pale blue rather than hanging crisp against it, and a quarter left it reading as barely veiled at all
+     * (Jonah, 2026-08-30, walked). The horizon still gets four times the airmass, which is what keeps a
+     * setting moon the dramatic one; this is only the floor under it.
+     */
+    private const val THINNEST_OVERHEAD = 0.45f
 
     /** However thick the air, something of a body survives — otherwise it simply vanishes at dusk. */
     private const val LEAST_SOLID = 0.15f

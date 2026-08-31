@@ -163,3 +163,59 @@ class LevellingCheck : FunSpec({
         check(spread > 1.0) { "...yet one constant of $spread° would have levelled it all day" }
     }
 })
+
+/**
+ * That a body's shape only ever changes where nobody can watch it.
+ *
+ * **A phase is a fact about a body, but *when* it steps is a fact about the sky.** Stepping on the raw
+ * clock steps wherever the clock happens to be, and a moon changed shape at the top of its arc (Jonah,
+ * 2026-08-30, walked) — which is the one thing a real one never does. Held from the rising, a phase is
+ * whatever it was when the body appeared.
+ */
+class PhaseHoldsCheck : FunSpec({
+
+    val day = Orbit.TICKS_PER_VANILLA_DAY
+
+    val paths = mapOf(
+        "vanilla's moon" to Orbit.VANILLA_MOON,
+        "tilted" to Orbit.VANILLA_SUN.copy(inclinationDegrees = 40.0f),
+        "rising north" to Orbit.risingAt(0.0f),
+        "lifted" to Orbit.VANILLA_SUN.copy(liftDegrees = 30.0f),
+    )
+
+    test("a path knows when it last came up, and it is a moment it was down before") {
+        for ((name, path) in paths) {
+            for (tick in 0..<day step 137) {
+                val rose = path.lastRoseAt(tick.toLong()) ?: continue
+                check(rose <= tick) { "'$name' last rose at $rose, which is after $tick" }
+                check(path.altitudeAt(rose) >= -1.0f) { "'$name' was not up at the rising it named, $rose" }
+                check(tick - rose < 2L * day) { "'$name' named a rising ${tick - rose} ticks back" }
+            }
+        }
+    }
+
+    test("the shape a phase reads never changes while the body is up") {
+        // The whole of it: walk a body's day and assert the held tick — and so the shape — is constant for
+        // as long as it is visible, and only moves while it is away.
+        val phase = PhaseCycle(periodTicks = day * 8, offsetTicks = 0, steps = 8)
+        for ((name, path) in paths) {
+            var held: Int? = null
+            var wasUp = false
+            for (tick in 0..<(day * 3) step 20) {
+                val up = path.isUpAt(tick.toLong())
+                if (!up) {
+                    wasUp = false
+                    continue
+                }
+                val at = path.lastRoseAt(tick.toLong()) ?: tick.toLong()
+                val shape = phase.stepAt(at)
+                if (wasUp) {
+                    check(shape == held) { "'$name' changed shape from $held to $shape at tick $tick, in view" }
+                } else {
+                    held = shape
+                }
+                wasUp = true
+            }
+        }
+    }
+})

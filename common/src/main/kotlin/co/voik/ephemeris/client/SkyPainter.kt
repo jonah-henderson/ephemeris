@@ -5,6 +5,7 @@ import co.voik.ephemeris.sky.Airiness
 import co.voik.ephemeris.sky.Appearance
 import co.voik.ephemeris.sky.Blending
 import co.voik.ephemeris.sky.CelestialBody
+import co.voik.ephemeris.sky.CelestialPath
 import co.voik.ephemeris.sky.LevelLook
 import co.voik.ephemeris.sky.LevelDaylight
 import co.voik.ephemeris.sky.LevelLooks
@@ -277,10 +278,22 @@ object SkyPainter {
     ): Int {
         val step = when {
             body.path == Orbit.VANILLA_MOON -> moonPhase.index()
-            else -> body.phase?.stepAt(clockTime) ?: 0
+            // **Held from the rising while it is up.** A phase stepping on the raw clock steps wherever the
+            // clock happens to be, which changed a moon's shape at the top of its arc (Jonah, 2026-08-30,
+            // walked) — something the sky does only where nobody is looking. See `CelestialPath.lastRoseAt`.
+            else -> body.phase?.stepAt(heldFrom(body.path, clockTime)) ?: 0
         }
         return step.coerceIn(0, sprite.shapes.size - 1)
     }
+
+    /**
+     * The tick a body's shape should be read at: when it last came up, or the hour itself while it is away.
+     *
+     * A path that never rises has no visit to hold from and reads the clock, which is the right answer for
+     * something that is never seen anyway.
+     */
+    private fun heldFrom(path: CelestialPath, clockTime: Long): Long =
+        if (path.isUpAt(clockTime)) path.lastRoseAt(clockTime) ?: clockTime else clockTime
 
     /**
      * Vanilla turns its sky about the world's ±X axis, reaching it with a quarter turn about the vertical
