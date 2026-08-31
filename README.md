@@ -137,6 +137,12 @@ provides. Declare it as a dependency; do not bundle it.
 
 Written in Kotlin, callable from Java (`RuntimeLevels.INSTANCE`, and the `fun interface`s are SAM types).
 
+## Notes
+
+`notes/day-and-night.md` is how a sky decides the day, and the record of everything built into one.
+`notes/renderer-compatibility.md` is an open audit: which of the client hooks stand on a seam every
+renderer shares and which are bets on vanilla's own, after Fabric's Indigo cost three walks on a leaf.
+
 ## Building
 
 Java 25 (`.sdkmanrc` pins `25.0.4-tem`). Always the wrapper.
