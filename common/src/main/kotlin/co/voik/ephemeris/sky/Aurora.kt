@@ -66,35 +66,9 @@ data class Aurora(
     /**
      * How strongly it comes on the [dayIndex]th day, `0..1` — **nought on a night it does not come**.
      *
-     * A pure function of the seed and the day, so every client computes the same answer from what it was
-     * already told and nothing has to be sent, persisted or reconciled. That is the whole of why an aurora
-     * needs no server tick: there is no state, only arithmetic both ends can do.
-     *
-     * **A night that barely qualified is a faint one.** Testing the roll and returning a constant would make
-     * [frequency] a switch — every aurora identical on the nights it came — where reading *how far inside*
-     * its own threshold the roll landed gives a spread of nights for free, and gives a rare aurora the
-     * decency of usually being a faint one.
+     * [DayRoll] carries the whole of it, and why a rare aurora is usually a faint one.
      */
-    fun strengthOn(dayIndex: Long): Float {
-        if (frequency <= NEVER) return NOTHING
-        val rolled = rollOn(dayIndex)
-        if (rolled >= frequency) return NOTHING
-        val howFarInside = 1.0f - rolled / frequency
-        return FAINTEST + (1.0f - FAINTEST) * howFarInside
-    }
-
-    /**
-     * This night's roll, in `0.0..1.0` — stable for as long as the seed and the day are what they are.
-     *
-     * An integer mix rather than a `RandomSource`: this is asked every frame by the renderer, and building
-     * a generator to take one number from it is a cost with nothing to show for it.
-     */
-    private fun rollOn(dayIndex: Long): Float {
-        var bits = (seed xor (dayIndex * NIGHTS_APART)) * MIX_ONE
-        bits = (bits xor (bits ushr 33)) * MIX_TWO
-        bits = bits xor (bits ushr 29)
-        return ((bits ushr 40).toFloat() / (1 shl 24).toFloat()).coerceIn(NOTHING, 1.0f)
-    }
+    fun strengthOn(dayIndex: Long): Float = DayRoll.strengthOf(seed, dayIndex, frequency, FAINTEST)
 
     companion object {
         /**
@@ -129,15 +103,6 @@ data class Aurora(
 
         /** How faint the least of its nights is. Above nothing, or a qualifying night would show nothing. */
         const val FAINTEST = 0.35f
-
-        private const val NOTHING = 0.0f
-        private const val NEVER = 0.0f
-
-        /** Spreads consecutive days apart before the mix, so night follows night rather than tracking it. */
-        private const val NIGHTS_APART = 0x2545F4914F6CDD1DL
-
-        private const val MIX_ONE = -0x61c8864680b583ebL
-        private const val MIX_TWO = -0x40a7b892e31b1a47L
 
         val CODEC: Codec<Aurora> = RecordCodecBuilder.create { instance ->
             instance.group(

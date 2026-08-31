@@ -5,6 +5,7 @@ import co.voik.ephemeris.client.Blaze3dSkyCanvas
 import co.voik.ephemeris.client.CloudPainter
 import co.voik.ephemeris.client.HorizonPainter
 import co.voik.ephemeris.client.LevelRendering
+import co.voik.ephemeris.client.RainbowPainter
 import co.voik.ephemeris.client.SkyPainter
 import co.voik.ephemeris.sky.LevelLooks
 import net.neoforged.api.distmarker.Dist
@@ -39,6 +40,14 @@ class EphemerisClient(eventBus: IEventBus) {
         LevelRendering.horizon { HorizonPainter.draw(Blaze3dSkyCanvas) }
         LevelRendering.skyOverlay { moment ->
             AuroraPainter.draw(Blaze3dSkyCanvas, moment.rainBrightness, moment.starBrightness)
+        }
+        LevelRendering.skyOverlay { moment ->
+            RainbowPainter.draw(
+                Blaze3dSkyCanvas,
+                moment.sunAngle,
+                moment.moonAngle,
+                moment.rainBrightness,
+            )
         }
         LevelRendering.environment(HorizonPainter::silenceVanillasGlow)
 

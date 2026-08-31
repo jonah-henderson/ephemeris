@@ -6,6 +6,7 @@ import co.voik.ephemeris.Sphere
 import co.voik.ephemeris.sky.Aurora
 import co.voik.ephemeris.sky.CloudDeck
 import co.voik.ephemeris.sky.HorizonFan
+import co.voik.ephemeris.sky.Rainbow
 import com.mojang.blaze3d.buffers.GpuBuffer
 import com.mojang.blaze3d.buffers.Std140Builder
 import com.mojang.blaze3d.pipeline.BlendFunction
@@ -827,6 +828,221 @@ object Blaze3dSkyCanvas : SkyCanvas {
     private const val MIDDLE_DISTANCE = 3.0f
 
     /** This ramp as a texture, baked on first use and kept. */
+    /**
+     * The bow's own pipeline. Additive like the curtain's and for the same reason — a rainbow is light
+     * scattered toward the viewer rather than a sheet hung in front of the sky — and depth is left alone,
+     * so it sits in the sky pass and the terrain drawn afterwards cuts off whatever stands before it.
+     *
+     * **Vanilla's own `position_color`, and nothing of ours.** The whole of a bow's appearance is a colour
+     * that varies across the band, which the vertices already carry; there is nothing left for a shader of
+     * our own to say, and the aurora's is only there because noise cannot be baked into a static mesh.
+     */
+    private val RAINBOW_PIPELINE: RenderPipeline = RenderPipeline.builder()
+        .withLocation(Identifier.fromNamespaceAndPath(NAMESPACE, "pipeline/rainbow"))
+        .withVertexShader(Identifier.withDefaultNamespace("core/position_color"))
+        .withFragmentShader(Identifier.withDefaultNamespace("core/position_color"))
+        .withUniform("DynamicTransforms", UniformType.UNIFORM_BUFFER)
+        .withUniform("Projection", UniformType.UNIFORM_BUFFER)
+        .withColorTargetState(ColorTargetState(BlendFunction.OVERLAY))
+        // The viewer stands under the arc, and a ring laid out by angle promises no winding.
+        .withCull(false)
+        .withVertexFormat(DefaultVertexFormat.POSITION_COLOR, VertexFormat.Mode.QUADS)
+        .build()
+
+    override fun drawRainbow(
+        rainbow: Rainbow,
+        lightAltitudeDegrees: Float,
+        lightBearingDegrees: Float,
+        strength: Float,
+    ) {
+        val showing = strength * rainbow.glow
+        if (showing <= FAINTEST_BOW) return
+        val arc = bowFor(rainbow, lightAltitudeDegrees)
+        val mesh = arc.buffer ?: return
+
+        val modelViewStack = RenderSystem.getModelViewStack()
+        modelViewStack.pushMatrix()
+        // **Negated, as the curtain's turn is and for the same reason**: the arc is built about a light due
+        // north, and `rotateY` carries north toward the west as its angle grows where a bearing counts
+        // clockwise toward the east.
+        modelViewStack.rotate(Quaternionf().rotateY(Math.toRadians(-lightBearingDegrees.toDouble()).toFloat()))
+
+        val transforms = RenderSystem.getDynamicUniforms().writeTransform(
+            modelViewStack,
+            Vector4f(1.0f, 1.0f, 1.0f, showing.coerceAtMost(1.0f)),
+            Vector3f(),
+            Matrix4f(),
+        )
+        val quadIndices = RenderSystem.getSequentialBuffer(VertexFormat.Mode.QUADS)
+        renderPass("Ephemeris rainbow")?.use { pass ->
+            pass.setPipeline(RAINBOW_PIPELINE)
+            RenderSystem.bindDefaultUniforms(pass)
+            pass.setUniform("DynamicTransforms", transforms)
+            pass.setVertexBuffer(0, mesh)
+            pass.setIndexBuffer(quadIndices.getBuffer(arc.indices), quadIndices.type())
+            pass.drawIndexed(0, 0, arc.indices, 1)
+        }
+        modelViewStack.popMatrix()
+    }
+
+    /** One bow's geometry: the quads left after the ground took the rest. Null where it took them all. */
+    private class BowArc(val buffer: GpuBuffer?, val indices: Int)
+
+    /**
+     * **Keyed on how high the light stands as well as on the bow**, because that height is built into the
+     * mesh rather than applied to it — only a turn about the vertical is left for the draw, and only a turn
+     * about the vertical leaves world up where the horizon fade expects to find it. A whole day is some two
+     * dozen meshes at [BOW_ALTITUDE_STEP], built as the light passes through them and then kept.
+     */
+    private val bows = mutableMapOf<Pair<Rainbow, Int>, BowArc>()
+
+    private fun bowFor(rainbow: Rainbow, lightAltitudeDegrees: Float): BowArc {
+        val step = Math.round(lightAltitudeDegrees / BOW_ALTITUDE_STEP)
+        return bows.getOrPut(rainbow to step) { buildBow(rainbow, step * BOW_ALTITUDE_STEP) }
+    }
+
+    /**
+     * The bow, as quads on a sphere about the antisolar point.
+     *
+     * **Nothing here draws a circle on the dome.** Every vertex is a real direction — the antisolar axis
+     * swung out by the band's angular radius and around by the ring angle — so the arc comes out the shape
+     * a circle at that angular distance actually is seen from underneath, and the second bow lands where
+     * the geometry puts it rather than where a hand-drawn one would.
+     *
+     * **The ground takes the bottom of it and the mesh never carries that.** A ring about a point below the
+     * horizon spends most of itself underground: a cell with no corner above the horizon is dropped
+     * outright, and what is left fades in over [HORIZON_FADE_DEGREES], which is what gives a bow legs that
+     * end rather than legs that stop.
+     */
+    private fun buildBow(rainbow: Rainbow, lightAltitudeDegrees: Float): BowArc {
+        // Due north, and as far below the horizon as the light stands above it.
+        val tilt = Math.toRadians(-lightAltitudeDegrees.toDouble())
+        val axis = Vector3f(0.0f, Math.sin(tilt).toFloat(), -Math.cos(tilt).toFloat())
+        val sideways = Vector3f(axis).cross(0.0f, 1.0f, 0.0f)
+        // A light exactly overhead would leave nothing to cross with. It cannot reach here through
+        // `Rainbow.castAt`, and a fixed answer beats a NaN if some other caller ever does.
+        if (sideways.lengthSquared() < STRAIGHT_UP) sideways.set(1.0f, 0.0f, 0.0f) else sideways.normalize()
+        val over = Vector3f(sideways).cross(axis).normalize()
+
+        val vertexSize = DefaultVertexFormat.POSITION_COLOR.vertexSize
+        val most = BOW_RING_STEPS * BOW_RADIAL_STEPS * VERTICES_PER_QUAD * BOWS_AT_MOST
+        ByteBufferBuilder.exactlySized(most * vertexSize).use { bytes ->
+            val builder = BufferBuilder(bytes, VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_COLOR)
+            var written = layBand(
+                builder, rainbow.band, axis, sideways, over,
+                rainbow.radiusDegrees, rainbow.widthDegrees, 1.0f,
+            )
+            if (rainbow.secondary) {
+                // Reversed, which is the whole of what makes it a second bow: the light is twice reflected
+                // inside the drop, so the band comes back the other way up.
+                written += layBand(
+                    builder, rainbow.band.reversed(), axis, sideways, over,
+                    rainbow.secondaryRadiusDegrees, rainbow.secondaryWidthDegrees, Rainbow.SECONDARY_KEEPS,
+                )
+            }
+            if (written == 0) return BowArc(null, 0)
+            builder.buildOrThrow().use { mesh ->
+                val buffer = RenderSystem.getDevice()
+                    .createBuffer({ "Ephemeris rainbow arc" }, GpuBuffer.USAGE_VERTEX, mesh.vertexBuffer())
+                return BowArc(buffer, written / VERTICES_PER_QUAD * QUAD_INDICES)
+            }
+        }
+    }
+
+    /**
+     * One band of colour laid around [axis], answering how many vertices it wrote.
+     *
+     * [band] is read outermost inward, so its first colour lands on the outside of the arc — and a second
+     * bow, handed the same list reversed, comes out reversed with nothing here knowing which it is drawing.
+     */
+    private fun layBand(
+        builder: BufferBuilder,
+        band: List<Rgba>,
+        axis: Vector3f,
+        sideways: Vector3f,
+        over: Vector3f,
+        radiusDegrees: Float,
+        widthDegrees: Float,
+        keeps: Float,
+    ): Int {
+        fun towards(ring: Int, across: Int): Vector3f {
+            val around = ring.toDouble() / BOW_RING_STEPS * Math.PI * 2.0
+            val out = radiusDegrees + widthDegrees * (HALF - across.toFloat() / BOW_RADIAL_STEPS)
+            val swung = Math.toRadians(out.toDouble())
+            val along = Vector3f(sideways).mul(Math.cos(around).toFloat())
+                .fma(Math.sin(around).toFloat(), over)
+            return Vector3f(axis).mul(Math.cos(swung).toFloat()).fma(Math.sin(swung).toFloat(), along)
+        }
+
+        val corners = BOW_RADIAL_STEPS + 1
+        val places = Array((BOW_RING_STEPS + 1) * corners) { at -> towards(at / corners, at % corners) }
+        fun placeOf(ring: Int, across: Int) = places[ring * corners + across]
+        fun fadeOf(place: Vector3f) = (place.y / HORIZON_FADE_SINE).coerceIn(0.0f, 1.0f)
+
+        var written = 0
+        for (ring in 0..<BOW_RING_STEPS) {
+            for (across in 0..<BOW_RADIAL_STEPS) {
+                val cell = listOf(
+                    ring to across,
+                    ring + 1 to across,
+                    ring + 1 to across + 1,
+                    ring to across + 1,
+                )
+                if (cell.none { (atRing, atAcross) -> fadeOf(placeOf(atRing, atAcross)) > 0.0f }) continue
+                for ((atRing, atAcross) in cell) {
+                    val place = placeOf(atRing, atAcross)
+                    val across01 = atAcross.toFloat() / BOW_RADIAL_STEPS
+                    // Nothing at either edge and full in the middle, so a band has no cut sides.
+                    val profile = Math.sin(across01 * Math.PI).toFloat()
+                    val tint = colourAcross(band, across01)
+                        .copy(alpha = profile * fadeOf(place) * keeps)
+                    builder.addVertex(place.x * BOW_DISTANCE, place.y * BOW_DISTANCE, place.z * BOW_DISTANCE)
+                        .setColor(tint.packed())
+                }
+                written += VERTICES_PER_QUAD
+            }
+        }
+        return written
+    }
+
+    /** [band] read as a ramp, [across] of the way through it from the outside in. */
+    private fun colourAcross(band: List<Rgba>, across: Float): Rgba {
+        if (band.size == 1) return band[0]
+        val place = across.coerceIn(0.0f, 1.0f) * (band.size - 1)
+        val below = place.toInt().coerceAtMost(band.size - 2)
+        return band[below].lerp(band[below + 1], place - below)
+    }
+
+    /** Below this a bow is not worth a draw call, as below `FAINTEST_GLOW` a sunrise is not. */
+    private const val FAINTEST_BOW = 0.004f
+
+    /** Vanilla's own sky radius, which is where every other body is drawn. */
+    private const val BOW_DISTANCE = 100.0f
+
+    /** Segments the whole way round. The arc is a shallow curve, so this is finer than it sounds. */
+    private const val BOW_RING_STEPS = 96
+
+    /** Steps across the band. Enough that vertex colours read as a gradient rather than as stripes. */
+    private const val BOW_RADIAL_STEPS = 6
+
+    /** How finely the light's height is followed, in degrees — one mesh per step, built as it passes. */
+    private const val BOW_ALTITUDE_STEP = 2.0f
+
+    /** How far above the horizon a bow's legs are fully present. */
+    private const val HORIZON_FADE_DEGREES = 4.0f
+
+    private val HORIZON_FADE_SINE = Math.sin(Math.toRadians(HORIZON_FADE_DEGREES.toDouble())).toFloat()
+
+    /** A primary and a secondary, which is as many as one light casts. */
+    private const val BOWS_AT_MOST = 2
+
+    private const val VERTICES_PER_QUAD = 4
+
+    private const val HALF = 0.5f
+
+    /** How near parallel to the vertical the antisolar axis may lie before crossing it says nothing. */
+    private const val STRAIGHT_UP = 1.0e-6f
+
     private fun rampOf(colours: List<Rgba>): DynamicTexture = ramps.getOrPut(colours) { bakeRamp(colours) }
 
     /**

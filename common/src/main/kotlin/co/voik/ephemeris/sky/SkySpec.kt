@@ -22,6 +22,8 @@ data class SkySpec(
     val decks: List<CloudDeck> = emptyList(),
     /** The curtain that stands in it on some nights, or null for the great majority that have none. */
     val aurora: Aurora? = null,
+    /** The bow that stands opposite its light in the right weather, or null where nothing asked for one. */
+    val rainbow: Rainbow? = null,
 ) {
 
     /**
@@ -33,10 +35,10 @@ data class SkySpec(
      * not something vanilla cannot draw. A star **reveal** is, so it counts — [decks] do not, because the
      * cloud renderer draws those and a level may have them over an otherwise unremarkable sky.
      *
-     * **[aurora] does not count either, and that is the point of drawing one on an overlay.** An aurora is
-     * something vanilla cannot draw, but it is not a reason to take vanilla's sun and moon away from a
-     * level that wanted neither changed: the overlay runs whether this renderer claimed the sky or vanilla
-     * drew it, so an otherwise unremarkable sky keeps vanilla's own and gains a curtain.
+     * **[aurora] and [rainbow] do not count either, and that is the point of drawing them on an overlay.**
+     * Both are things vanilla cannot draw, and neither is a reason to take vanilla's sun and moon away from
+     * a level that wanted neither changed: the overlay runs whether this renderer claimed the sky or
+     * vanilla drew it, so an otherwise unremarkable sky keeps vanilla's own and gains a curtain or a bow.
      */
     val isOrdinary: Boolean
         get() {
@@ -104,6 +106,20 @@ data class SkySpec(
                 curtain.bearingDegrees,
             )
         },
+        // Outermost first, likewise — the order it was written, reported and drawn in.
+        rainbow?.let { bow ->
+            val band = bow.colours.joinToString(" then ") { colour -> colour.packed().toUInt().toString(16) }
+            val second = if (bow.secondary) " with a second bow" else ""
+            "rainbow %s radius %.0f width %.1f glow %.2f needing %.0f%% rain on %.0f%% of days%s".format(
+                band,
+                bow.radiusDegrees,
+                bow.widthDegrees,
+                bow.glow,
+                bow.needsRain * 100.0f,
+                bow.frequency * 100.0f,
+                second,
+            )
+        },
         "stars ${stars.count}" + if (stars.glow == ORDINARY_STAR_GLOW) "" else
             " burning %.2f times vanilla's".format(stars.glow),
         stars.reveal?.let { "— hidden below %.0f, fully shown above %.0f".format(it.hiddenBelow, it.fullyShownAbove) },
@@ -144,7 +160,11 @@ data class SkySpec(
                 CloudDeck.CODEC.listOf().optionalFieldOf("decks", emptyList()).forGetter(SkySpec::decks),
                 Aurora.CODEC.optionalFieldOf("aurora")
                     .forGetter { spec -> java.util.Optional.ofNullable(spec.aurora) },
-            ).apply(instance) { bodies, stars, decks, aurora -> SkySpec(bodies, stars, decks, aurora.orElse(null)) }
+                Rainbow.CODEC.optionalFieldOf("rainbow")
+                    .forGetter { spec -> java.util.Optional.ofNullable(spec.rainbow) },
+            ).apply(instance) { bodies, stars, decks, aurora, rainbow ->
+                SkySpec(bodies, stars, decks, aurora.orElse(null), rainbow.orElse(null))
+            }
         }
 
         /**

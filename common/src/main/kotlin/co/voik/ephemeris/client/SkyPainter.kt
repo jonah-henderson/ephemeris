@@ -16,6 +16,7 @@ import net.minecraft.client.Minecraft
 import net.minecraft.world.attribute.EnvironmentAttributes
 import net.minecraft.world.level.MoonPhase
 import org.joml.Quaternionf
+import org.joml.Vector3f
 
 /**
  * The batteries: whatever suns, moons and stars a level's [SkySpec] asks for, drawn.
@@ -235,6 +236,17 @@ object SkyPainter {
         val alongPath = orientationOf(body, clockTime, sunAngle, moonAngle)
         return Quaternionf(alongPath).rotateY(body.path.levellingTurnAt(clockTime))
     }
+
+    /**
+     * Where [body] actually stands at [clockTime], as a unit direction — **the drawn position and not a
+     * second reckoning of it**.
+     *
+     * Public because a bow is placed opposite a light and must be opposite the light the viewer can see: a
+     * body on vanilla's path takes vanilla's own angle here, so anything reconstructing the position for
+     * itself would sit a degree off whatever this drew. See [RainbowPainter].
+     */
+    fun directionOf(body: CelestialBody, clockTime: Long, sunAngle: Float, moonAngle: Float): Vector3f =
+        orientationOf(body, clockTime, sunAngle, moonAngle).transform(Vector3f(0.0f, 1.0f, 0.0f))
 
     private fun orientationOf(
         body: CelestialBody,

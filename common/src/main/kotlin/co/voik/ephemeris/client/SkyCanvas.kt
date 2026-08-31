@@ -3,6 +3,7 @@ package co.voik.ephemeris.client
 import co.voik.ephemeris.Rgba
 import co.voik.ephemeris.sky.Aurora
 import co.voik.ephemeris.sky.CloudDeck
+import co.voik.ephemeris.sky.Rainbow
 import net.minecraft.resources.Identifier
 import net.minecraft.world.phys.Vec3
 import org.joml.Quaternionf
@@ -77,4 +78,24 @@ interface SkyCanvas {
      * far slower than a frame and a fraction added to a counter that may not have moved ratchets.
      */
     fun drawAurora(aurora: Aurora, strength: Float, timeTicks: Float)
+
+    /**
+     * A bow of [Rainbow.radiusDegrees] standing opposite a light at [lightAltitudeDegrees] and
+     * [lightBearingDegrees], at [strength] of its full presence.
+     *
+     * **The light rather than the bow is what is passed**, because a bow has no place of its own: it is a
+     * circle about the point exactly opposite whatever is lighting it, and that is the only thing anybody
+     * has to be told. Two suns up at once are two calls, and the sky gets two bows with nothing here
+     * knowing there was more than one.
+     *
+     * How high the light stands is what makes the arc, not merely where it is drawn: the antisolar point is
+     * as far below the horizon as the light is above it, so a climbing light sinks its own bow. A caller
+     * that has already declined to draw one ([Rainbow.castAt]) never gets here.
+     */
+    fun drawRainbow(
+        rainbow: Rainbow,
+        lightAltitudeDegrees: Float,
+        lightBearingDegrees: Float,
+        strength: Float,
+    )
 }

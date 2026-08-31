@@ -56,6 +56,13 @@ class HorizonPainterCheck : FunSpec({
         override fun drawCloudDeck(deck: co.voik.ephemeris.sky.CloudDeck, eye: Vec3, timeTicks: Float) = Unit
 
         override fun drawAurora(aurora: co.voik.ephemeris.sky.Aurora, strength: Float, timeTicks: Float) = Unit
+
+        override fun drawRainbow(
+            rainbow: co.voik.ephemeris.sky.Rainbow,
+            lightAltitudeDegrees: Float,
+            lightBearingDegrees: Float,
+            strength: Float,
+        ) = Unit
     }
 
     fun sun(orbit: Orbit, tint: Rgba = Rgba.WHITE) =
