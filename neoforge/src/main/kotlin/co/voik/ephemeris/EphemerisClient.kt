@@ -30,6 +30,7 @@ class EphemerisClient(eventBus: IEventBus) {
             SkyPainter.draw(
                 Blaze3dSkyCanvas,
                 moment.level,
+                moment.camera,
                 moment.sunAngle,
                 moment.moonAngle,
                 moment.starAngle,

@@ -147,10 +147,11 @@ OffscreenLevelRender.drawing(previewLevel, onto = panelTarget, from = orbitCamer
 }
 ```
 
-Renderers registered above never need it — a `SkyMoment` already carries its `level` and its `target`, so
-read those rather than reaching for `Minecraft` and your renderer works off-screen for free. The scope is
-for what cannot be reached that way: deciding which level a moment is *for*, giving a shared singleton
-canvas somewhere to draw, and answering where the eye is.
+Renderers registered above never need it. **Every moment carries the level being drawn, the target being
+drawn onto, and the camera it is seen through** — read those rather than reaching for `Minecraft` and your
+renderer works off-screen for free, with nothing to remember and nothing to revisit when the next one is
+written. The scope is only for what cannot be reached that way: deciding which level a moment is *for*, and
+giving a shared singleton canvas somewhere to draw.
 
 Render thread only, and it nests. **One known gap:** block colours are asked for during section
 compilation, on a worker thread, so a leaf in an off-screen level is tinted for the player's level instead.

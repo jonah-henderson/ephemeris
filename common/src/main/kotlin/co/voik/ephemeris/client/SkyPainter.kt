@@ -13,6 +13,7 @@ import co.voik.ephemeris.sky.Orbit
 import co.voik.ephemeris.sky.SkyRules
 import co.voik.ephemeris.sky.VanillasBody
 import co.voik.ephemeris.sky.SkySpec
+import net.minecraft.client.Camera
 import net.minecraft.client.multiplayer.ClientLevel
 import net.minecraft.world.attribute.EnvironmentAttributes
 import net.minecraft.world.level.MoonPhase
@@ -69,6 +70,8 @@ object SkyPainter {
         canvas: SkyCanvas,
         /** The level being drawn. Off the moment, so this works for a level that is not the player's. */
         level: ClientLevel,
+        /** The camera it is seen through — likewise off the moment, and likewise not always the player's. */
+        camera: Camera,
         sunAngle: Float,
         moonAngle: Float,
         starAngle: Float,
@@ -86,7 +89,7 @@ object SkyPainter {
         // away with it: all of its bodies add, so stars laid over a moon merely brighten it. A body that
         // *covers* is painted over by anything drawn after — which is how stars came to shine through a full
         // moon. The sky pass writes no depth, so order is the whole of what decides.
-        val revealed = stars.reveal?.visibilityAt(eyeHeight()) ?: 1.0f
+        val revealed = stars.reveal?.visibilityAt(eyeHeight(camera)) ?: 1.0f
         // **The stars follow the light, not the hour.** `STAR_BRIGHTNESS` is a timeline track and
         // `SKY_LIGHT_FACTOR` is another, and vanilla keeps them in antiphase by writing both — which is
         // exact for one sun on vanilla's path and wrong for every sky it could not have drawn. An Age with
@@ -108,7 +111,7 @@ object SkyPainter {
         }
 
         val skyLit = 1.0f - nightliness
-        drawBodies(canvas, spec, clockTime, sunAngle, moonAngle, moonPhase, rainBrightness, look.rules, skyLit)
+        drawBodies(canvas, camera, spec, clockTime, sunAngle, moonAngle, moonPhase, rainBrightness, look.rules, skyLit)
         return true
     }
 
@@ -118,7 +121,7 @@ object SkyPainter {
      * The *camera*, not the player: in third person or spectator the sky should answer to where it is
      * being looked at from, and that is also the only position available while no player is embodied.
      */
-    private fun eyeHeight(): Double = OffscreenLevelRender.cameraBeingDrawnFrom().position().y
+    private fun eyeHeight(camera: Camera): Double = camera.position().y
 
     /**
      * Every sun and moon the level has, **farthest first**, which is what lets a moon cover a sun behind it:
@@ -127,6 +130,7 @@ object SkyPainter {
      */
     private fun drawBodies(
         canvas: SkyCanvas,
+        camera: Camera,
         spec: SkySpec,
         clockTime: Long,
         sunAngle: Float,
@@ -158,7 +162,7 @@ object SkyPainter {
             // than opening a hole in the body. A luminous body keeps vanilla's own fade, which is a dimming.
             val survives = survivesTheAir * rainBrightness
             val tint = if (adds) plain.copy(alpha = plain.alpha * rainBrightness) else plain.dimmed(survives)
-            val veil = if (adds) Rgba.CLEAR else airOver(altitude, (1.0f - survives) * plain.alpha)
+            val veil = if (adds) Rgba.CLEAR else airOver(camera, altitude, (1.0f - survives) * plain.alpha)
             canvas.drawBody(
                 shape = shape,
                 orientation = facingOf(body, clockTime, sunAngle, moonAngle),
@@ -179,8 +183,8 @@ object SkyPainter {
      * along the horizon, where you look through all of it and the fog colour already *is* what that looks
      * like. Getting this wrong shows as a moon the wrong colour rather than as a moon in the wrong place.
      */
-    private fun airOver(altitudeDegrees: Float, strength: Float): Rgba {
-        val probe = OffscreenLevelRender.cameraBeingDrawnFrom().attributeProbe()
+    private fun airOver(camera: Camera, altitudeDegrees: Float, strength: Float): Rgba {
+        val probe = camera.attributeProbe()
         // Whole ticks: both are keyframed over minutes, and a partial tick is not worth threading through
         // the canvas to smooth a colour that cannot be seen to step.
         val sky = Rgba.of(probe.getValue(EnvironmentAttributes.SKY_COLOR, WHOLE_TICK))

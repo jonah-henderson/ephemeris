@@ -49,9 +49,16 @@ public class SkyRendererMixin {
         if (level == null) {
             return;
         }
-        var target = OffscreenLevelRender.INSTANCE.targetBeingDrawnOnto();
         var moment = new SkyMoment(
-                level, target, sunAngle, moonAngle, starAngle, moonPhase, rainBrightness, starBrightness);
+                level,
+                OffscreenLevelRender.INSTANCE.targetBeingDrawnOnto(),
+                OffscreenLevelRender.INSTANCE.cameraBeingDrawnFrom(),
+                sunAngle,
+                moonAngle,
+                starAngle,
+                moonPhase,
+                rainBrightness,
+                starBrightness);
         if (LevelRendering.INSTANCE.drawSky(moment)) {
             LevelRendering.INSTANCE.drawSkyOverlays(moment);
             callback.cancel();
@@ -77,6 +84,7 @@ public class SkyRendererMixin {
                 new SkyMoment(
                         level,
                         OffscreenLevelRender.INSTANCE.targetBeingDrawnOnto(),
+                        OffscreenLevelRender.INSTANCE.cameraBeingDrawnFrom(),
                         sunAngle,
                         moonAngle,
                         starAngle,

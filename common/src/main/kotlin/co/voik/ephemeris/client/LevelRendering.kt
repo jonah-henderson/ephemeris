@@ -2,6 +2,7 @@ package co.voik.ephemeris.client
 
 import co.voik.ephemeris.RuntimeLevelLog
 import com.mojang.blaze3d.pipeline.RenderTarget
+import net.minecraft.client.Camera
 import net.minecraft.client.multiplayer.ClientLevel
 import net.minecraft.world.attribute.EnvironmentAttributeSystem
 import net.minecraft.world.level.MoonPhase
@@ -25,6 +26,12 @@ import net.minecraft.world.phys.Vec3
  * `false` means "not mine", and the next renderer is asked; if none claims it, vanilla draws its own.
  *
  * **Registration order is the order asked**, and the first claim wins.
+ *
+ * **A renderer should read its moment and never the game.** Every moment carries the level being drawn, the
+ * target being drawn onto and the camera it is seen through, so a renderer that takes them from there works
+ * unchanged when something renders a level off-screen — a portal, a mirror, a preview panel. Reaching for
+ * `Minecraft.getInstance()` instead is the one mistake this seam cannot protect you from, and it fails
+ * silently: the sky drawn is the player's, and only ever looks wrong to somebody else.
  */
 object LevelRendering {
 
@@ -129,6 +136,13 @@ class SkyMoment(
     val level: ClientLevel,
     /** Where this frame is being drawn. The window's own target in ordinary play. */
     val target: RenderTarget,
+    /**
+     * The camera this frame is seen through.
+     *
+     * Ask this for the eye position, the look direction, or an environment attribute where the eye is —
+     * never `gameRenderer.mainCamera`, which is the *player's* however the frame came to be drawn.
+     */
+    val camera: Camera,
     /** Vanilla's own angles, in radians, so a body on its path needs nothing reconstructed. */
     val sunAngle: Float,
     val moonAngle: Float,
@@ -175,6 +189,13 @@ class HorizonMoment(
     val level: ClientLevel,
     /** Where this frame is being drawn. The window's own target in ordinary play. */
     val target: RenderTarget,
+    /**
+     * The camera this frame is seen through.
+     *
+     * Ask this for the eye position, the look direction, or an environment attribute where the eye is —
+     * never `gameRenderer.mainCamera`, which is the *player's* however the frame came to be drawn.
+     */
+    val camera: Camera,
     /** Vanilla's own sun angle, in radians. */
     val sunAngle: Float,
     val vanillaColour: Int,
@@ -196,6 +217,13 @@ class CloudMoment(
      * transparency chain is on.
      */
     val target: RenderTarget,
+    /**
+     * The camera this frame is seen through.
+     *
+     * Ask this for the eye position, the look direction, or an environment attribute where the eye is —
+     * never `gameRenderer.mainCamera`, which is the *player's* however the frame came to be drawn.
+     */
+    val camera: Camera,
     val colour: Int,
     val status: net.minecraft.client.CloudStatus,
     val bottomY: Float,

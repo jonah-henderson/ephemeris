@@ -41,7 +41,12 @@ public class SunriseSunsetMixin {
         if (level == null) {
             return;
         }
-        if (LevelRendering.INSTANCE.drawHorizon(new HorizonMoment(level, OffscreenLevelRender.INSTANCE.targetBeingDrawnOnto(), sunAngle, sunriseAndSunsetColor))) {
+        if (LevelRendering.INSTANCE.drawHorizon(new HorizonMoment(
+                level,
+                OffscreenLevelRender.INSTANCE.targetBeingDrawnOnto(),
+                OffscreenLevelRender.INSTANCE.cameraBeingDrawnFrom(),
+                sunAngle,
+                sunriseAndSunsetColor))) {
             callback.cancel();
         }
     }

@@ -37,6 +37,7 @@ public class CloudRendererMixin {
         var moment = new CloudMoment(
                 level,
                 OffscreenLevelRender.INSTANCE.cloudTargetBeingDrawnOnto(),
+                OffscreenLevelRender.INSTANCE.cameraBeingDrawnFrom(),
                 color,
                 cloudStatus,
                 bottomY,
