@@ -54,7 +54,13 @@ private fun registerTheBuiltInPainters() {
     LevelRendering.clouds { moment -> CloudPainter.draw(Blaze3dSkyCanvas, moment.level, moment.cameraPosition, moment.time) }
     LevelRendering.horizon { moment -> HorizonPainter.draw(Blaze3dSkyCanvas, moment.level) }
     LevelRendering.skyOverlay { moment ->
-        AuroraPainter.draw(Blaze3dSkyCanvas, moment.level, moment.rainBrightness, moment.starBrightness)
+        AuroraPainter.draw(
+            Blaze3dSkyCanvas,
+            moment.level,
+            moment.camera,
+            moment.rainBrightness,
+            moment.starBrightness,
+        )
     }
     LevelRendering.skyOverlay { moment ->
         RainbowPainter.draw(

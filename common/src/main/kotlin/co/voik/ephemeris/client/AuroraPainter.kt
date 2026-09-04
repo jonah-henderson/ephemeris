@@ -6,7 +6,7 @@ import co.voik.ephemeris.sky.AuroraGround
 import co.voik.ephemeris.sky.LevelDaylight
 import co.voik.ephemeris.sky.LevelLook
 import co.voik.ephemeris.sky.LevelLooks
-import net.minecraft.client.Minecraft
+import net.minecraft.client.Camera
 import net.minecraft.client.multiplayer.ClientLevel
 import net.minecraft.world.phys.Vec3
 
@@ -43,7 +43,7 @@ object AuroraPainter {
      * *reasons* was the second, and it cost another walk (Jonah, 2026-08-30). A number that is nought says
      * only that something is, which is the one thing already known by the time anybody looks.
      */
-    fun draw(canvas: SkyCanvas, level: ClientLevel, rainBrightness: Float, starBrightness: Float) {
+    fun draw(canvas: SkyCanvas, level: ClientLevel, camera: Camera, rainBrightness: Float, starBrightness: Float) {
         if (level == null) return sayIt("nowhere", "no level to draw in")
         val where = level.dimension().identifier()
         val look = LevelLooks.of(level.dimension())
@@ -67,7 +67,7 @@ object AuroraPainter {
         val clearSky = rainBrightness
         if (clearSky <= WORTH_DRAWING) return sayIt("weather", "a curtain is up tonight, but the weather has it")
 
-        val ground = groundUnder(aurora, level)
+        val ground = groundUnder(aurora, level, camera)
         if (ground <= WORTH_DRAWING) {
             return sayIt("warm", "a curtain is up tonight, but nothing within sight of you is cold enough")
         }
@@ -83,13 +83,12 @@ object AuroraPainter {
     }
 
     /** How much of the ground around the viewer answers this curtain's rule, `1` where it asks for none. */
-    private fun groundUnder(aurora: Aurora, level: ClientLevel): Float = when (aurora.ground) {
+    private fun groundUnder(aurora: Aurora, level: ClientLevel, camera: Camera): Float = when (aurora.ground) {
         AuroraGround.ANYWHERE -> 1.0f
-        AuroraGround.WHERE_IT_SNOWS -> SnowLine.shareSeenFrom(level, eye())
+        // The camera rather than the player: a spectator sees what they are looking from, and a level being
+        // drawn off-screen is looked at from somewhere the player is not.
+        AuroraGround.WHERE_IT_SNOWS -> SnowLine.shareSeenFrom(level, camera.position())
     }
-
-    /** Where the viewer is. The camera rather than the player, so a spectator sees what they are looking from. */
-    private fun eye(): Vec3 = Minecraft.getInstance().gameRenderer.mainCamera.position()
 
     /**
      * One line whenever the *reason* changes, and nothing while it stays the same.
