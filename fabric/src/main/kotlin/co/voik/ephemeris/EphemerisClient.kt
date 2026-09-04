@@ -41,6 +41,7 @@ private fun registerTheBuiltInPainters() {
     LevelRendering.sky { moment ->
         SkyPainter.draw(
             Blaze3dSkyCanvas,
+            moment.level,
             moment.sunAngle,
             moment.moonAngle,
             moment.starAngle,
@@ -49,14 +50,15 @@ private fun registerTheBuiltInPainters() {
             moment.starBrightness,
         )
     }
-    LevelRendering.clouds { moment -> CloudPainter.draw(Blaze3dSkyCanvas, moment.cameraPosition, moment.time) }
-    LevelRendering.horizon { HorizonPainter.draw(Blaze3dSkyCanvas) }
+    LevelRendering.clouds { moment -> CloudPainter.draw(Blaze3dSkyCanvas, moment.level, moment.cameraPosition, moment.time) }
+    LevelRendering.horizon { moment -> HorizonPainter.draw(Blaze3dSkyCanvas, moment.level) }
     LevelRendering.skyOverlay { moment ->
-        AuroraPainter.draw(Blaze3dSkyCanvas, moment.rainBrightness, moment.starBrightness)
+        AuroraPainter.draw(Blaze3dSkyCanvas, moment.level, moment.rainBrightness, moment.starBrightness)
     }
     LevelRendering.skyOverlay { moment ->
         RainbowPainter.draw(
             Blaze3dSkyCanvas,
+            moment.level,
             moment.sunAngle,
             moment.moonAngle,
             moment.rainBrightness,

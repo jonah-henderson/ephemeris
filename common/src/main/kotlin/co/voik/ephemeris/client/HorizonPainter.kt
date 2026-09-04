@@ -33,8 +33,7 @@ object HorizonPainter {
      * False leaves vanilla's own keyframed glow running, which is right for a level nothing has described
      * and for one whose sky vanilla could already draw — better its own curve than an imitation.
      */
-    fun draw(canvas: SkyCanvas): Boolean {
-        val level = Minecraft.getInstance().level ?: return false
+    fun draw(canvas: SkyCanvas, level: ClientLevel): Boolean {
         val look = LevelLooks.of(level.dimension()) ?: return false
         return paint(canvas, look, level.defaultClockTime)
     }

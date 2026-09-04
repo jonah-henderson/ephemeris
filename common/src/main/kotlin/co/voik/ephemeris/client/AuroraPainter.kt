@@ -43,8 +43,7 @@ object AuroraPainter {
      * *reasons* was the second, and it cost another walk (Jonah, 2026-08-30). A number that is nought says
      * only that something is, which is the one thing already known by the time anybody looks.
      */
-    fun draw(canvas: SkyCanvas, rainBrightness: Float, starBrightness: Float) {
-        val level = Minecraft.getInstance().level
+    fun draw(canvas: SkyCanvas, level: ClientLevel, rainBrightness: Float, starBrightness: Float) {
         if (level == null) return sayIt("nowhere", "no level to draw in")
         val where = level.dimension().identifier()
         val look = LevelLooks.of(level.dimension())

@@ -1175,13 +1175,17 @@ object Blaze3dSkyCanvas : SkyCanvas {
         (value - Math.floor(value / period) * period).toFloat()
 
     /** A pass onto the main render target, which is where the sky pass is already drawing. */
-    private fun renderPass(label: String): RenderPass? = passOnto(label, Minecraft.getInstance().mainRenderTarget)
+    /**
+     * **Where a pass goes is [OffscreenLevelRender]'s to say, not `Minecraft`'s.** A canvas is a singleton
+     * shared by every level, so it cannot hold a target of its own; the scope is what a portal, a mirror or
+     * a preview panel sets so that this draws into their frame instead of the window's.
+     */
+    private fun renderPass(label: String): RenderPass? =
+        passOnto(label, OffscreenLevelRender.targetBeingDrawnOnto())
 
     /** The target vanilla's clouds use, which has its own when the setting calls for one. */
-    private fun cloudPass(): RenderPass? {
-        val minecraft = Minecraft.getInstance()
-        return passOnto("Ephemeris cloud deck", minecraft.levelRenderer.cloudsTarget ?: minecraft.mainRenderTarget)
-    }
+    private fun cloudPass(): RenderPass? =
+        passOnto("Ephemeris cloud deck", OffscreenLevelRender.cloudTargetBeingDrawnOnto())
 
     /** Null when the target has no colour attachment, which nothing can be drawn into. */
     private fun passOnto(label: String, target: RenderTarget): RenderPass? {

@@ -129,6 +129,33 @@ This rung exists because 26.1 closed every other one: `DimensionSpecialEffects` 
 `DimensionRenderingRegistry`, and a dimension type still cannot carry appearance to the client. Every mod
 that wants a sky of its own writes the same two Mixins, and two mods that do fight over the same seam.
 
+### Rendering a level that is not the player's
+
+Portals, mirrors, camera feeds and preview panels all draw a level into a target that is not the window,
+and **nothing in the client renderer says which level a frame is for**:
+`SkyRenderer.renderSunMoonAndStars` takes angles and no level, `LevelRenderer.renderLevel` reaches
+`Minecraft.getMainRenderTarget()` for itself, and `gameRenderer.mainCamera` is the player's wherever you
+read it. Code hanging off those seams asks `Minecraft.getInstance()` and is right only while there is one
+of everything — so a second level breaks all of it at once, and *silently*, drawing the player's sky into
+somebody else's window.
+
+Declare the missing context and everything downstream follows it:
+
+```kotlin
+OffscreenLevelRender.drawing(previewLevel, onto = panelTarget, from = orbitCamera) {
+    previewRenderer.renderLevel(…)
+}
+```
+
+Renderers registered above never need it — a `SkyMoment` already carries its `level` and its `target`, so
+read those rather than reaching for `Minecraft` and your renderer works off-screen for free. The scope is
+for what cannot be reached that way: deciding which level a moment is *for*, giving a shared singleton
+canvas somewhere to draw, and answering where the eye is.
+
+Render thread only, and it nests. **One known gap:** block colours are asked for during section
+compilation, on a worker thread, so a leaf in an off-screen level is tinted for the player's level instead.
+That wants the level threaded through section compilation, which is vanilla's to give and does not.
+
 ## Using it
 
 Ephemeris is **a mod, not a plain library**, on both loaders — because on NeoForge a nested library jar

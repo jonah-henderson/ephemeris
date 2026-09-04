@@ -1,6 +1,7 @@
 package co.voik.ephemeris.client
 
 import co.voik.ephemeris.RuntimeLevelLog
+import com.mojang.blaze3d.pipeline.RenderTarget
 import net.minecraft.client.multiplayer.ClientLevel
 import net.minecraft.world.attribute.EnvironmentAttributeSystem
 import net.minecraft.world.level.MoonPhase
@@ -117,9 +118,17 @@ object LevelRendering {
     ): EnvironmentAttributeSystem.Builder = environments.fold(layers) { built, each -> each.paint(level, built) }
 }
 
-/** Everything vanilla knows at the instant it is about to draw a sky. */
+/**
+ * Everything vanilla knows at the instant it is about to draw a sky.
+ *
+ * [level] and [target] together are what let a renderer work for a level that is not the player's and a
+ * frame that is not the window — a preview panel, a portal, a camera. Read them rather than reaching for
+ * `Minecraft`, and a renderer costs nothing to reuse off-screen.
+ */
 class SkyMoment(
     val level: ClientLevel,
+    /** Where this frame is being drawn. The window's own target in ordinary play. */
+    val target: RenderTarget,
     /** Vanilla's own angles, in radians, so a body on its path needs nothing reconstructed. */
     val sunAngle: Float,
     val moonAngle: Float,
@@ -164,6 +173,8 @@ fun interface LevelSkyOverlay {
  */
 class HorizonMoment(
     val level: ClientLevel,
+    /** Where this frame is being drawn. The window's own target in ordinary play. */
+    val target: RenderTarget,
     /** Vanilla's own sun angle, in radians. */
     val sunAngle: Float,
     val vanillaColour: Int,
@@ -178,6 +189,13 @@ fun interface LevelHorizonRenderer {
 /** Everything vanilla knows at the instant it is about to draw clouds. */
 class CloudMoment(
     val level: ClientLevel,
+    /**
+     * Where the cloud pass is being drawn.
+     *
+     * Not always the same target as the rest of the frame: vanilla gives clouds one of their own when the
+     * transparency chain is on.
+     */
+    val target: RenderTarget,
     val colour: Int,
     val status: net.minecraft.client.CloudStatus,
     val bottomY: Float,

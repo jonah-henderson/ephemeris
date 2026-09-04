@@ -1,7 +1,7 @@
 package co.voik.ephemeris.client
 
 import co.voik.ephemeris.sky.LevelLooks
-import net.minecraft.client.Minecraft
+import net.minecraft.client.multiplayer.ClientLevel
 import net.minecraft.world.phys.Vec3
 
 /**
@@ -15,8 +15,7 @@ import net.minecraft.world.phys.Vec3
 object CloudPainter {
 
     /** Draws the level's decks, or returns false having drawn nothing so vanilla's clouds run instead. */
-    fun draw(canvas: SkyCanvas, eye: Vec3, timeTicks: Float): Boolean {
-        val level = Minecraft.getInstance().level ?: return false
+    fun draw(canvas: SkyCanvas, level: ClientLevel, eye: Vec3, timeTicks: Float): Boolean {
         val spec = LevelLooks.of(level.dimension())?.sky ?: return false
         if (spec.decks.isEmpty()) return false
 

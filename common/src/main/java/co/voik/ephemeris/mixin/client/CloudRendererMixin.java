@@ -2,8 +2,8 @@ package co.voik.ephemeris.mixin.client;
 
 import co.voik.ephemeris.client.CloudMoment;
 import co.voik.ephemeris.client.LevelRendering;
+import co.voik.ephemeris.client.OffscreenLevelRender;
 import net.minecraft.client.CloudStatus;
-import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.CloudRenderer;
 import net.minecraft.world.phys.Vec3;
 import org.spongepowered.asm.mixin.Mixin;
@@ -30,12 +30,19 @@ public class CloudRendererMixin {
             long gameTime,
             float partialTicks,
             CallbackInfo callback) {
-        var level = Minecraft.getInstance().level;
+        var level = OffscreenLevelRender.INSTANCE.levelBeingDrawn();
         if (level == null) {
             return;
         }
         var moment = new CloudMoment(
-                level, color, cloudStatus, bottomY, range, cameraPosition, gameTime + partialTicks);
+                level,
+                OffscreenLevelRender.INSTANCE.cloudTargetBeingDrawnOnto(),
+                color,
+                cloudStatus,
+                bottomY,
+                range,
+                cameraPosition,
+                gameTime + partialTicks);
         if (LevelRendering.INSTANCE.drawClouds(moment)) {
             callback.cancel();
         }

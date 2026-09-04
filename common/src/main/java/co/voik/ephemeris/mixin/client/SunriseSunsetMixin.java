@@ -2,8 +2,8 @@ package co.voik.ephemeris.mixin.client;
 
 import co.voik.ephemeris.client.HorizonMoment;
 import co.voik.ephemeris.client.LevelRendering;
+import co.voik.ephemeris.client.OffscreenLevelRender;
 import com.mojang.blaze3d.vertex.PoseStack;
-import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.SkyRenderer;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
@@ -37,11 +37,11 @@ public class SunriseSunsetMixin {
     @Inject(method = "renderSunriseAndSunset", at = @At("HEAD"), cancellable = true)
     private void ephemeris$paintTheLevelsHorizon(
             PoseStack poseStack, float sunAngle, int sunriseAndSunsetColor, CallbackInfo callback) {
-        var level = Minecraft.getInstance().level;
+        var level = OffscreenLevelRender.INSTANCE.levelBeingDrawn();
         if (level == null) {
             return;
         }
-        if (LevelRendering.INSTANCE.drawHorizon(new HorizonMoment(level, sunAngle, sunriseAndSunsetColor))) {
+        if (LevelRendering.INSTANCE.drawHorizon(new HorizonMoment(level, OffscreenLevelRender.INSTANCE.targetBeingDrawnOnto(), sunAngle, sunriseAndSunsetColor))) {
             callback.cancel();
         }
     }

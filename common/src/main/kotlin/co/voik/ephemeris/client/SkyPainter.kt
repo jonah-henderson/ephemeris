@@ -13,7 +13,7 @@ import co.voik.ephemeris.sky.Orbit
 import co.voik.ephemeris.sky.SkyRules
 import co.voik.ephemeris.sky.VanillasBody
 import co.voik.ephemeris.sky.SkySpec
-import net.minecraft.client.Minecraft
+import net.minecraft.client.multiplayer.ClientLevel
 import net.minecraft.world.attribute.EnvironmentAttributes
 import net.minecraft.world.level.MoonPhase
 import org.joml.Quaternionf
@@ -67,6 +67,8 @@ object SkyPainter {
      */
     fun draw(
         canvas: SkyCanvas,
+        /** The level being drawn. Off the moment, so this works for a level that is not the player's. */
+        level: ClientLevel,
         sunAngle: Float,
         moonAngle: Float,
         starAngle: Float,
@@ -74,7 +76,6 @@ object SkyPainter {
         rainBrightness: Float,
         starBrightness: Float,
     ): Boolean {
-        val level = Minecraft.getInstance().level ?: return false
         val look = LevelLooks.of(level.dimension()) ?: return false
         val spec = look.sky
         if (spec.isOrdinary) return false
@@ -117,7 +118,7 @@ object SkyPainter {
      * The *camera*, not the player: in third person or spectator the sky should answer to where it is
      * being looked at from, and that is also the only position available while no player is embodied.
      */
-    private fun eyeHeight(): Double = Minecraft.getInstance().gameRenderer.mainCamera.position().y
+    private fun eyeHeight(): Double = OffscreenLevelRender.cameraBeingDrawnFrom().position().y
 
     /**
      * Every sun and moon the level has, **farthest first**, which is what lets a moon cover a sun behind it:
@@ -179,7 +180,7 @@ object SkyPainter {
      * like. Getting this wrong shows as a moon the wrong colour rather than as a moon in the wrong place.
      */
     private fun airOver(altitudeDegrees: Float, strength: Float): Rgba {
-        val probe = Minecraft.getInstance().gameRenderer.mainCamera.attributeProbe()
+        val probe = OffscreenLevelRender.cameraBeingDrawnFrom().attributeProbe()
         // Whole ticks: both are keyframed over minutes, and a partial tick is not worth threading through
         // the canvas to smooth a colour that cannot be seen to step.
         val sky = Rgba.of(probe.getValue(EnvironmentAttributes.SKY_COLOR, WHOLE_TICK))

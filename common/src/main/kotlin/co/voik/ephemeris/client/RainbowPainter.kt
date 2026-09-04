@@ -30,8 +30,7 @@ object RainbowPainter {
      * the discipline `AuroraPainter` had to learn twice, because a bow that is correct and invisible has
      * even more ways to be so than a curtain does.
      */
-    fun draw(canvas: SkyCanvas, sunAngle: Float, moonAngle: Float, rainBrightness: Float) {
-        val level = Minecraft.getInstance().level
+    fun draw(canvas: SkyCanvas, level: ClientLevel, sunAngle: Float, moonAngle: Float, rainBrightness: Float) {
         if (level == null) return sayIt("nowhere", "no level to draw in")
         val where = level.dimension().identifier()
         val look = LevelLooks.of(level.dimension())

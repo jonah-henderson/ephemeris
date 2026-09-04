@@ -1,9 +1,9 @@
 package co.voik.ephemeris.mixin.client;
 
 import co.voik.ephemeris.client.LevelRendering;
+import co.voik.ephemeris.client.OffscreenLevelRender;
 import co.voik.ephemeris.client.SkyMoment;
 import com.mojang.blaze3d.vertex.PoseStack;
-import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.SkyRenderer;
 import net.minecraft.world.level.MoonPhase;
 import org.spongepowered.asm.mixin.Mixin;
@@ -45,11 +45,13 @@ public class SkyRendererMixin {
             float rainBrightness,
             float starBrightness,
             CallbackInfo callback) {
-        var level = Minecraft.getInstance().level;
+        var level = OffscreenLevelRender.INSTANCE.levelBeingDrawn();
         if (level == null) {
             return;
         }
-        var moment = new SkyMoment(level, sunAngle, moonAngle, starAngle, moonPhase, rainBrightness, starBrightness);
+        var target = OffscreenLevelRender.INSTANCE.targetBeingDrawnOnto();
+        var moment = new SkyMoment(
+                level, target, sunAngle, moonAngle, starAngle, moonPhase, rainBrightness, starBrightness);
         if (LevelRendering.INSTANCE.drawSky(moment)) {
             LevelRendering.INSTANCE.drawSkyOverlays(moment);
             callback.cancel();
@@ -67,11 +69,19 @@ public class SkyRendererMixin {
             float rainBrightness,
             float starBrightness,
             CallbackInfo callback) {
-        var level = Minecraft.getInstance().level;
+        var level = OffscreenLevelRender.INSTANCE.levelBeingDrawn();
         if (level == null) {
             return;
         }
         LevelRendering.INSTANCE.drawSkyOverlays(
-                new SkyMoment(level, sunAngle, moonAngle, starAngle, moonPhase, rainBrightness, starBrightness));
+                new SkyMoment(
+                        level,
+                        OffscreenLevelRender.INSTANCE.targetBeingDrawnOnto(),
+                        sunAngle,
+                        moonAngle,
+                        starAngle,
+                        moonPhase,
+                        rainBrightness,
+                        starBrightness));
     }
 }

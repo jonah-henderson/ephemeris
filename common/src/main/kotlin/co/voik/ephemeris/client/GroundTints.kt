@@ -183,6 +183,12 @@ object GroundTints {
         // compile off the render thread, so this can be a tick stale while a player changes dimension —
         // and a stale answer is a leaf drawn the other level's colour until the section rebuilds, which it
         // is about to do anyway.
+        //
+        // **[OffscreenLevelRender] cannot help here, and this is the one place it cannot.** That scope
+        // lives on the render thread for the length of one frame; section compilation happens on a worker
+        // and asks for colours whenever it likes. So a level rendered off-screen gets *the player's* leaf
+        // tint in its chunks. Fixing it properly wants the level threaded through section compilation,
+        // which is vanilla's to give and does not.
         val here = net.minecraft.client.Minecraft.getInstance().level
         if (here == null) return declined("nowhere", "a leaf asked, and there is no level to answer for")
         val look = LevelLooks.of(here.dimension())
