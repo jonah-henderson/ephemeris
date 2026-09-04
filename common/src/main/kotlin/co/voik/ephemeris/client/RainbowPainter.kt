@@ -31,20 +31,20 @@ object RainbowPainter {
      * even more ways to be so than a curtain does.
      */
     fun draw(canvas: SkyCanvas, level: ClientLevel, sunAngle: Float, moonAngle: Float, rainBrightness: Float) {
-        if (level == null) return sayIt("nowhere", "no level to draw in")
+        if (level == null) return sayIt(level, "nowhere", "no level to draw in")
         val where = level.dimension().identifier()
         val look = LevelLooks.of(level.dimension())
-        if (look == null) return sayIt("untold", "nothing has said what $where looks like")
+        if (look == null) return sayIt(level, "untold", "nothing has said what $where looks like")
         val rainbow = look.sky.rainbow
-        if (rainbow == null) return sayIt("bare", "the look for $where carries no bow")
+        if (rainbow == null) return sayIt(level, "bare", "the look for $where carries no bow")
 
         val clockTime = level.defaultClockTime
         val today = rainbow.strengthOn(clockTime / TICKS_PER_DAY)
-        if (today <= WORTH_DRAWING) return sayIt("off", "a bow is written, but today is not one of its days")
+        if (today <= WORTH_DRAWING) return sayIt(level, "off", "a bow is written, but today is not one of its days")
 
         val wetEnough = rainbow.wetEnoughAt(wetnessIn(level, where, clockTime))
         if (wetEnough <= WORTH_DRAWING) {
-            return sayIt("dry", "a bow is written for today, but nothing has fallen to bend its light")
+            return sayIt(level, "dry", "a bow is written for today, but nothing has fallen to bend its light")
         }
 
         // **Used as it comes, not inverted** — `rainBrightness` is how much of the sky the weather is
@@ -52,7 +52,7 @@ object RainbowPainter {
         // during it: the air is still wet while the sky is opening, and only in that window are both high.
         // Nothing schedules the moment; it is where two curves cross.
         val clearing = rainBrightness
-        if (clearing <= WORTH_DRAWING) return sayIt("downpour", "a bow wants its light, and the weather has it")
+        if (clearing <= WORTH_DRAWING) return sayIt(level, "downpour", "a bow wants its light, and the weather has it")
 
         var drawn = 0
         var highest = -QUARTER_TURN
@@ -75,12 +75,13 @@ object RainbowPainter {
         }
         if (drawn == 0) {
             return sayIt(
+                level,
                 "nothing low enough",
                 "the air is wet and the day is right, but the highest light stands at %.0f° and a bow needs one under %.0f°"
                     .format(highest, rainbow.radiusDegrees),
             )
         }
-        sayIt("up", "drawing $drawn bow(s), the air %.2f wet".format(wetEnough))
+        sayIt(level, "up", "drawing $drawn bow(s), the air %.2f wet".format(wetEnough))
     }
 
     /**
@@ -117,13 +118,23 @@ object RainbowPainter {
      * Keyed on the reason rather than on the message, so a fading bow does not write a line a frame while a
      * changed answer is never swallowed.
      */
-    private fun sayIt(reason: String, message: String) {
-        if (reason == said) return
-        said = reason
+    private fun sayIt(level: ClientLevel?, reason: String, message: String) {
+        val where = level?.dimension()
+        if (said[where] == reason) return
+        said[where] = reason
         RuntimeLevelLog.info("Rainbow: $message")
     }
 
-    private var said: String? = null
+    /**
+     * Which reason was last given **for each level**, so only a change is worth saying.
+     *
+     * **Keyed by level and not one field, because more than one is drawn per frame now.** A preview panel
+     * renders its Age and the player's world in the same frame, so a single field flips between their two
+     * reasons every time and says both — nine thousand lines in forty seconds, the first time a panel was
+     * opened.
+     */
+    private val said =
+        mutableMapOf<net.minecraft.resources.ResourceKey<net.minecraft.world.level.Level>?, String>()
 
     /** Below this there is nothing on the screen and the pass is not worth opening. */
     private const val WORTH_DRAWING = 0.01f
