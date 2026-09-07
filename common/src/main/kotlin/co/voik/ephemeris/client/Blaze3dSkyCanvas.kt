@@ -523,6 +523,79 @@ object Blaze3dSkyCanvas : SkyCanvas {
     }
 
     /**
+     * The same shape a great many times over, in one pass.
+     *
+     * The colour moves from the transform uniform into the vertices, which is the whole difference: a
+     * uniform is per draw, so a hundred differently-lit glows would be a hundred draws. Everything else —
+     * the core, the halo, the adding — is [drawGlow]'s.
+     */
+    override fun drawGlows(glows: List<Glow>) {
+        val worthDrawing = glows.filter { it.tint.alpha > VEIL_WORTH_DRAWING }
+        if (worthDrawing.isEmpty()) return
+        val format = DefaultVertexFormat.POSITION_COLOR
+        val quads = worthDrawing.size * QUADS_PER_GLOW
+        ByteBufferBuilder.exactlySized(quads * QUAD_VERTICES * format.vertexSize).use { bytes ->
+            val builder = BufferBuilder(bytes, VertexFormat.Mode.QUADS, format)
+            for (glow in worthDrawing) {
+                addGlowQuad(builder, glow, glow.angularSize * HALO_SPREAD, glow.tint.dimmed(HALO_STRENGTH))
+                addGlowQuad(builder, glow, glow.angularSize, glow.tint)
+            }
+            builder.buildOrThrow().use { mesh ->
+                drawGlowMesh(format.uploadImmediateVertexBuffer(mesh.vertexBuffer()), quads * QUAD_INDICES)
+            }
+        }
+    }
+
+    private fun addGlowQuad(builder: BufferBuilder, glow: Glow, angularSize: Float, tint: Rgba) {
+        fun corner(acrossBy: Float, alongBy: Float) {
+            val at = glow.orientation.transform(Vector3f(acrossBy * angularSize, glow.distance, alongBy * angularSize))
+            builder.addVertex(at.x, at.y, at.z).setColor(tint.red, tint.green, tint.blue, tint.alpha)
+        }
+        corner(-ONE_WHOLE, -ONE_WHOLE)
+        corner(ONE_WHOLE, -ONE_WHOLE)
+        corner(ONE_WHOLE, ONE_WHOLE)
+        corner(-ONE_WHOLE, ONE_WHOLE)
+    }
+
+    private fun drawGlowMesh(vertices: GpuBuffer, indices: Int) {
+        val transforms = RenderSystem.getDynamicUniforms().writeTransform(
+            RenderSystem.getModelViewStack(),
+            UNTOUCHED,
+            Vector3f(),
+            Matrix4f(),
+        )
+        val quadIndices = RenderSystem.getSequentialBuffer(VertexFormat.Mode.QUADS)
+        renderPass("Ephemeris sky glows")?.use { pass ->
+            pass.setPipeline(GLOWS_PIPELINE)
+            RenderSystem.bindDefaultUniforms(pass)
+            pass.setUniform("DynamicTransforms", transforms)
+            pass.setVertexBuffer(0, vertices)
+            pass.setIndexBuffer(quadIndices.getBuffer(indices), quadIndices.type())
+            pass.drawIndexed(0, 0, indices, 1)
+        }
+    }
+
+    /** A core and a halo, which is what one glow is. */
+    private const val QUADS_PER_GLOW = 2
+
+    /** The colour is in the vertices here, so the modulator must leave it alone. */
+    private val UNTOUCHED = Vector4f(1.0f, 1.0f, 1.0f, 1.0f)
+
+    private const val ONE_WHOLE = 1.0f
+
+    /** [GLOW_PIPELINE] with the colour moved into the vertices. */
+    private val GLOWS_PIPELINE: RenderPipeline = RenderPipeline.builder()
+        .withLocation(Identifier.fromNamespaceAndPath(NAMESPACE, "pipeline/glows"))
+        .withVertexShader(Identifier.withDefaultNamespace("core/position_color"))
+        .withFragmentShader(Identifier.withDefaultNamespace("core/position_color"))
+        .withUniform("DynamicTransforms", UniformType.UNIFORM_BUFFER)
+        .withUniform("Projection", UniformType.UNIFORM_BUFFER)
+        .withColorTargetState(ColorTargetState(BlendFunction.ADDITIVE))
+        .withCull(false)
+        .withVertexFormat(DefaultVertexFormat.POSITION_COLOR, VertexFormat.Mode.QUADS)
+        .build()
+
+    /**
      * How much wider than its core a glow's halo reaches, and how much of the colour it keeps.
      *
      * **Tight, because the halo is most of what a caller sees.** A wide one turns a point of light into a

@@ -42,6 +42,8 @@ class HorizonPainterCheck : FunSpec({
             tint: Rgba,
         ) = Unit
 
+        override fun drawGlows(glows: List<Glow>) = Unit
+
         override fun drawBody(
             shape: Identifier,
             orientation: Quaternionf,

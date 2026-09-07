@@ -66,6 +66,15 @@ interface SkyCanvas {
     fun drawGlow(orientation: Quaternionf, distance: Float, angularSize: Float, tint: Rgba)
 
     /**
+     * Many of those in **one** submission.
+     *
+     * [drawGlow] costs a render pass a glow, which is fine for the handful a sky usually hangs and is not
+     * fine for a shower of a hundred — and a caller that caps the count to afford it draws the wrong ones:
+     * whichever it leaves out appear from nowhere, already grown, the moment a slot frees.
+     */
+    fun drawGlows(glows: List<Glow>)
+
+    /**
      * The level's stars, arranged by [seed] and turned up to [brightness]. Named by seed and count rather
      * than passed as points, the geometry never changing once built.
      *
@@ -113,3 +122,11 @@ interface SkyCanvas {
         strength: Float,
     )
 }
+
+/** One glow's worth of [SkyCanvas.drawGlow]'s arguments, so a great many can go in at once. */
+data class Glow(
+    val orientation: Quaternionf,
+    val distance: Float,
+    val angularSize: Float,
+    val tint: Rgba,
+)
