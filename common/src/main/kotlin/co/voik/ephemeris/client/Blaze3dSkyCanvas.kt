@@ -504,15 +504,69 @@ object Blaze3dSkyCanvas : SkyCanvas {
     private const val VEIL_WORTH_DRAWING = 0.002f
 
     /**
-     * A bare quad of light, which is [drawVeilQuad]'s geometry offered as a primitive of its own.
+     * A bare quad of light, which is [drawVeilQuad]'s geometry on an **adding** pipeline.
      *
-     * The two are the same draw and mean different things, which is why this is a method rather than a
-     * caller reaching for the veil: a veil is light laid *over* a body, and this is light with no body
-     * behind it at all.
+     * The two are nearly the same draw and mean opposite things, which is the whole reason this exists
+     * separately: a veil is light laid *over* something and blends, where this is light with nothing
+     * behind it and must **add**. Drawn on `RenderPipelines.STARS` it came out looking mixed into the sky
+     * rather than shining out of it (Jonah, walked) — `BlendFunction.OVERLAY` cannot make anything
+     * brighter than what it is drawn against, which is what "glowing" means.
+     *
+     * **A core and a halo**, because one quad reads as a shape and two read as a light. The halo is much
+     * wider and much fainter, and adding puts the two together into a falloff rather than a disc with a
+     * ring round it.
      */
     override fun drawGlow(orientation: Quaternionf, distance: Float, angularSize: Float, tint: Rgba) {
         if (tint.alpha <= VEIL_WORTH_DRAWING) return
-        drawVeilQuad(WHOLE_SPRITE, orientation, distance, angularSize, tint)
+        drawGlowQuad(orientation, distance, angularSize * HALO_SPREAD, tint.dimmed(HALO_STRENGTH))
+        drawGlowQuad(orientation, distance, angularSize, tint)
+    }
+
+    /** How much wider than its core a glow's halo reaches, and how much of the colour it keeps. */
+    private const val HALO_SPREAD = 2.6f
+    private const val HALO_STRENGTH = 0.30f
+
+    /**
+     * `RenderPipelines.STARS`' own arrangement — a position in, one flat colour out — with the blend
+     * swapped for one that adds. Nothing else about it differs, which is why it borrows vanilla's shaders
+     * rather than carrying any of its own.
+     */
+    private val GLOW_PIPELINE: RenderPipeline = RenderPipeline.builder()
+        .withLocation(Identifier.fromNamespaceAndPath(NAMESPACE, "pipeline/glow"))
+        .withVertexShader(Identifier.withDefaultNamespace("core/position"))
+        .withFragmentShader(Identifier.withDefaultNamespace("core/position"))
+        .withUniform("DynamicTransforms", UniformType.UNIFORM_BUFFER)
+        .withUniform("Projection", UniformType.UNIFORM_BUFFER)
+        .withColorTargetState(ColorTargetState(BlendFunction.ADDITIVE))
+        .withCull(false)
+        .withVertexFormat(DefaultVertexFormat.POSITION, VertexFormat.Mode.QUADS)
+        .build()
+
+    private fun drawGlowQuad(orientation: Quaternionf, distance: Float, angularSize: Float, tint: Rgba) {
+        val modelViewStack = RenderSystem.getModelViewStack()
+        modelViewStack.pushMatrix()
+        modelViewStack.rotate(orientation)
+        modelViewStack.translate(0.0f, distance, 0.0f)
+        modelViewStack.scale(angularSize, 1.0f, angularSize)
+
+        val transforms = RenderSystem.getDynamicUniforms().writeTransform(
+            modelViewStack,
+            Vector4f(tint.red, tint.green, tint.blue, tint.alpha),
+            Vector3f(),
+            Matrix4f(),
+        )
+        val quadIndices = RenderSystem.getSequentialBuffer(VertexFormat.Mode.QUADS)
+
+        renderPass("Ephemeris sky glow")?.use { pass ->
+            pass.setPipeline(GLOW_PIPELINE)
+            RenderSystem.bindDefaultUniforms(pass)
+            pass.setUniform("DynamicTransforms", transforms)
+            pass.setVertexBuffer(0, veilQuadOf(WHOLE_SPRITE))
+            pass.setIndexBuffer(quadIndices.getBuffer(QUAD_INDICES), quadIndices.type())
+            pass.drawIndexed(0, 0, QUAD_INDICES, 1)
+        }
+
+        modelViewStack.popMatrix()
     }
 
     private fun drawVeilQuad(
