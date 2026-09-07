@@ -522,9 +522,15 @@ object Blaze3dSkyCanvas : SkyCanvas {
         drawGlowQuad(orientation, distance, angularSize, tint)
     }
 
-    /** How much wider than its core a glow's halo reaches, and how much of the colour it keeps. */
-    private const val HALO_SPREAD = 2.6f
-    private const val HALO_STRENGTH = 0.30f
+    /**
+     * How much wider than its core a glow's halo reaches, and how much of the colour it keeps.
+     *
+     * **Tight, because the halo is most of what a caller sees.** A wide one turns a point of light into a
+     * soft disc — asked for a star, a caller got something read as the moon (Jonah, walked) — and a caller
+     * sizing its core against anything real has to be able to predict the apparent size from it.
+     */
+    private const val HALO_SPREAD = 1.9f
+    private const val HALO_STRENGTH = 0.38f
 
     /**
      * `RenderPipelines.STARS`' own arrangement — a position in, one flat colour out — with the blend
