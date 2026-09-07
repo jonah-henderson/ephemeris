@@ -52,6 +52,20 @@ interface SkyCanvas {
     )
 
     /**
+     * A plain quad of light — **no sprite, no texture, nothing but a colour**.
+     *
+     * The untextured sibling of [drawBody], and there for the case a body's sprite is working against you:
+     * a borrowed sun carries its own yellow into whatever it is tinted, and its edges carry the sprite's
+     * own alpha, so something meant to read as a bare point of light comes out as a small pale sun. This
+     * adds itself the way a star does — `RenderPipelines.STARS` is exactly that shader — so it is
+     * unambiguously light rather than a thing hanging in the sky.
+     *
+     * Positioned like a body: [orientation] is a rotation applied to a quad at `(0, distance, 0)`, and
+     * [angularSize] is its half-extent in the same units, vanilla's sun being 30 at a distance of 100.
+     */
+    fun drawGlow(orientation: Quaternionf, distance: Float, angularSize: Float, tint: Rgba)
+
+    /**
      * The level's stars, arranged by [seed] and turned up to [brightness]. Named by seed and count rather
      * than passed as points, the geometry never changing once built.
      *

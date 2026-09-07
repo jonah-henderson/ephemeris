@@ -35,6 +35,13 @@ class HorizonPainterCheck : FunSpec({
             glows += Painted(bearingDegrees, tint)
         }
 
+        override fun drawGlow(
+            orientation: Quaternionf,
+            distance: Float,
+            angularSize: Float,
+            tint: Rgba,
+        ) = Unit
+
         override fun drawBody(
             shape: Identifier,
             orientation: Quaternionf,

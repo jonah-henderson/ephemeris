@@ -503,6 +503,18 @@ object Blaze3dSkyCanvas : SkyCanvas {
     /** Below this the air over a body is not worth a draw of its own. */
     private const val VEIL_WORTH_DRAWING = 0.002f
 
+    /**
+     * A bare quad of light, which is [drawVeilQuad]'s geometry offered as a primitive of its own.
+     *
+     * The two are the same draw and mean different things, which is why this is a method rather than a
+     * caller reaching for the veil: a veil is light laid *over* a body, and this is light with no body
+     * behind it at all.
+     */
+    override fun drawGlow(orientation: Quaternionf, distance: Float, angularSize: Float, tint: Rgba) {
+        if (tint.alpha <= VEIL_WORTH_DRAWING) return
+        drawVeilQuad(WHOLE_SPRITE, orientation, distance, angularSize, tint)
+    }
+
     private fun drawVeilQuad(
         kept: Kept,
         orientation: Quaternionf,
