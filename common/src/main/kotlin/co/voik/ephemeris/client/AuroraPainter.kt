@@ -2,7 +2,6 @@ package co.voik.ephemeris.client
 
 import co.voik.ephemeris.RuntimeLevelLog
 import co.voik.ephemeris.sky.Aurora
-import co.voik.ephemeris.sky.AuroraGround
 import co.voik.ephemeris.sky.LevelDaylight
 import co.voik.ephemeris.sky.LevelLook
 import co.voik.ephemeris.sky.LevelLooks
@@ -83,11 +82,11 @@ object AuroraPainter {
     }
 
     /** How much of the ground around the viewer answers this curtain's rule, `1` where it asks for none. */
-    private fun groundUnder(aurora: Aurora, level: ClientLevel, camera: Camera): Float = when (aurora.ground) {
-        AuroraGround.ANYWHERE -> 1.0f
+    private fun groundUnder(aurora: Aurora, level: ClientLevel, camera: Camera): Float {
+        val warmest = aurora.warmestGround ?: return 1.0f
         // The camera rather than the player: a spectator sees what they are looking from, and a level being
         // drawn off-screen is looked at from somewhere the player is not.
-        AuroraGround.WHERE_IT_SNOWS -> SnowLine.shareSeenFrom(level, camera.position())
+        return GroundWarmth.shareSeenFrom(level, camera.position(), warmest)
     }
 
     /**

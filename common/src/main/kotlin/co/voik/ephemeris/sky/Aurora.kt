@@ -3,6 +3,7 @@ package co.voik.ephemeris.sky
 import co.voik.ephemeris.Rgba
 import com.mojang.serialization.Codec
 import com.mojang.serialization.codecs.RecordCodecBuilder
+import java.util.Optional
 
 /**
  * A curtain of light standing in a level's sky, on the nights it comes.
@@ -42,14 +43,23 @@ data class Aurora(
     /** Which way the band crosses the sky, in degrees clockwise from north. */
     val bearingDegrees: Float = 0.0f,
     /**
-     * The ground it may be seen over.
+     * How warm the ground under a viewer may be and still show this curtain, in vanilla's biome
+     * temperature, or **null for anywhere at all**.
      *
-     * **[AuroraGround.ANYWHERE] by default, and deliberately the neutral answer rather than the realistic
-     * one.** A library whose aurora silently never comes is a worse thing to meet first than one that comes
-     * everywhere, and a consumer who wants the polar rule is one field away from it. The realism this
-     * feature is aimed at lives in [ORDINARY_RAMP], where a default can be seen.
+     * **A ceiling rather than a rule**, which is the whole of what it buys over the two-case enum it
+     * replaces: `WHERE_IT_SNOWS` was `coldEnoughToSnow`, a fixed line at [SNOW_LINE], and a caller who
+     * wanted a curtain over temperate ground had nothing to say. A number says the same thing at
+     * [SNOW_LINE] and says the other things too.
+     *
+     * **Null by default, and deliberately the neutral answer rather than the realistic one.** A library
+     * whose aurora silently never comes is a worse thing to meet first than one that comes everywhere, and
+     * a consumer who wants the polar rule is one field away from it.
+     *
+     * It is read at a *position* rather than of a biome, so vanilla's height falloff comes with it and a
+     * cold enough peak in a temperate world will show one — which is the same reason snow lies on a
+     * mountain the plain below it never sees.
      */
-    val ground: AuroraGround = AuroraGround.ANYWHERE,
+    val warmestGround: Float? = null,
     /** Which nights it takes and which way its folds lie. Two levels alike still differ. */
     val seed: Long = 0L,
 ) {
@@ -99,6 +109,13 @@ data class Aurora(
         const val MOST_CURTAINS = 6
 
         /** About one night in three, which is often enough to be a feature of the Age and not of the week. */
+        /**
+         * Vanilla's own line between snow and rain, which `Biome.coldEnoughToSnow` compares against — so a
+         * curtain given this ceiling stands exactly where the snow does, and every player has already
+         * learned that boundary by walking over it.
+         */
+        const val SNOW_LINE = 0.15f
+
         const val ORDINARY_FREQUENCY = 0.35f
 
         /** How faint the least of its nights is. Above nothing, or a qualifying night would show nothing. */
@@ -116,9 +133,11 @@ data class Aurora(
                 Codec.INT.optionalFieldOf("curtains", ORDINARY_CURTAINS).forGetter(Aurora::curtains),
                 Codec.FLOAT.optionalFieldOf("frequency", ORDINARY_FREQUENCY).forGetter(Aurora::frequency),
                 Codec.FLOAT.optionalFieldOf("bearing", 0.0f).forGetter(Aurora::bearingDegrees),
-                AuroraGround.CODEC.optionalFieldOf("ground", AuroraGround.ANYWHERE).forGetter(Aurora::ground),
+                Codec.FLOAT.optionalFieldOf("warmest_ground").forGetter { Optional.ofNullable(it.warmestGround) },
                 Codec.LONG.optionalFieldOf("seed", 0L).forGetter(Aurora::seed),
-            ).apply(instance, ::Aurora)
+            ).apply(instance) { colours, glow, breadth, height, curtains, frequency, bearing, warmest, seed ->
+                Aurora(colours, glow, breadth, height, curtains, frequency, bearing, warmest.orElse(null), seed)
+            }
         }
     }
 }

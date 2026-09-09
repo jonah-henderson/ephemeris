@@ -22,3 +22,15 @@ accessible	field	net/minecraft/server/MinecraftServer	levels	Ljava/util/Map;
 accessible	field	net/minecraft/server/MinecraftServer	executor	Ljava/util/concurrent/Executor;
 accessible	field	net/minecraft/server/MinecraftServer	storageSource	Lnet/minecraft/world/level/storage/LevelStorageSource$LevelStorageAccess;
 accessible	field	net/minecraft/server/MinecraftServer	worldData	Lnet/minecraft/world/level/storage/WorldData;
+
+# So a curtain can be given a temperature CEILING rather than one of vanilla's two fixed lines
+# (co.voik.ephemeris.client.GroundWarmth, for `Aurora.warmestGround`).
+#
+# Vanilla exposes `coldEnoughToSnow` and `warmEnoughToRain` and not the number behind them, so the only
+# thresholds a caller can ask about are the two it happens to have picked. An aurora whose ceiling is
+# *stated* — the point of the field — needs the figure itself.
+#
+# It is the height-adjusted one deliberately, which is why `getBaseTemperature` will not do: a cold enough
+# peak in a temperate world should show a curtain for the same reason snow lies on it, and reimplementing
+# vanilla's falloff beside it is the thing that would drift.
+accessible	method	net/minecraft/world/level/biome/Biome	getTemperature	(Lnet/minecraft/core/BlockPos;I)F

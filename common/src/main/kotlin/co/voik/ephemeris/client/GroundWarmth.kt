@@ -1,5 +1,6 @@
 package co.voik.ephemeris.client
 
+import co.voik.ephemeris.sky.AuroraGroundRule
 import net.minecraft.client.Minecraft
 import net.minecraft.client.multiplayer.ClientLevel
 import net.minecraft.core.BlockPos
@@ -11,8 +12,13 @@ import kotlin.math.exp
 import kotlin.math.sin
 
 /**
- * How much of the ground around the viewer is cold enough to snow — the reader for
- * [co.voik.ephemeris.sky.AuroraGround.WHERE_IT_SNOWS].
+ * How much of the ground around the viewer is cool enough for a curtain — the reader for
+ * [co.voik.ephemeris.sky.Aurora.warmestGround].
+ *
+ * **A ceiling rather than vanilla's snow line**, which is the one thing that changed when the two-case
+ * enum this served became a number: `coldEnoughToSnow` is `getTemperature < 0.15` and a caller wanting a
+ * curtain over temperate ground could say nothing. `Aurora.SNOW_LINE` is that same figure, so a curtain
+ * given it stands exactly where it used to.
  *
  * **Sampled around the camera rather than under it**, and then **faded in time**, which are two different
  * softenings doing two different jobs. A single test at the camera flickers along a ragged biome edge, where
@@ -24,7 +30,7 @@ import kotlin.math.sin
  * with nothing to agree with anyone else about, and reading a clock beats threading a delta through a
  * renderer.
  */
-object SnowLine {
+object GroundWarmth {
 
     /**
      * What share of the ground seen from [eye] would take snow, `0..1`, faded toward wherever it is going.
@@ -32,19 +38,19 @@ object SnowLine {
      * Resampled a few times a second and interpolated between, because the walk between two samples is
      * shorter than the fade and nobody can see the difference.
      */
-    fun shareSeenFrom(level: ClientLevel, eye: Vec3): Float {
+    fun shareSeenFrom(level: ClientLevel, eye: Vec3, warmest: Float): Float {
         val now = System.currentTimeMillis()
         // Arriving somewhere is not a border you walked over: a level's own answer starts where it starts
         // rather than fading up out of the last one's.
         if (level.dimension() != sampledIn) {
             sampledIn = level.dimension()
-            sampled = shareAround(level, eye)
+            sampled = shareAround(level, eye, warmest)
             shown = sampled
             movedAt = now
             return shown
         }
         if (now - sampledAt >= BETWEEN_SAMPLES) {
-            sampled = shareAround(level, eye)
+            sampled = shareAround(level, eye, warmest)
             sampledAt = now
         }
         shown = faded(shown, sampled, now - movedAt)
@@ -56,14 +62,10 @@ object SnowLine {
      * The share of [ringAround] that would take snow, asked of the level directly. Impure and the only part
      * of this that is.
      */
-    private fun shareAround(level: ClientLevel, eye: Vec3): Float {
-        val seaLevel = level.seaLevel
-        fun takesSnow(at: Vec3): Boolean {
-            val position = BlockPos.containing(at)
-            return level.getBiome(position).value().coldEnoughToSnow(position, seaLevel)
-        }
+    private fun shareAround(level: ClientLevel, eye: Vec3, warmest: Float): Float {
+        fun isCoolEnough(at: Vec3) = AuroraGroundRule.isCoolEnough(level, BlockPos.containing(at), warmest)
         val asked = ringAround(eye, reach())
-        return asked.count(::takesSnow).toFloat() / asked.size
+        return asked.count(::isCoolEnough).toFloat() / asked.size
     }
 
     /**
