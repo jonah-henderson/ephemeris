@@ -1,5 +1,6 @@
 #version 330
 
+#moj_import <minecraft:fog.glsl>
 #moj_import <minecraft:dynamictransforms.glsl>
 #moj_import <minecraft:projection.glsl>
 
@@ -34,8 +35,19 @@ out vec2 worldSample;
 // their units (Jonah, 2026-08-06 and 2026-08-08, walked).
 out vec2 acrossTheSlab;
 
+// How far this corner stands from the eye, in blocks, for the fragment stage to fade against the fog.
+//
+// **Taken after ModelViewMat and not before.** `Position` is a unit corner; the matrix is what scales it
+// out to the deck's half-width, lifts it to the deck's height above the eye, and turns it into the
+// camera's view — and a rotation does not change a length, so the view-space position's own length is the
+// distance from the eye. Measuring the unit corner instead would have said `1.73` for every vertex of
+// every deck at every height.
+out float eyeDistance;
+
 void main() {
-    gl_Position = ProjMat * ModelViewMat * vec4(Position, 1.0);
+    vec4 eyeRelative = ModelViewMat * vec4(Position, 1.0);
+    gl_Position = ProjMat * eyeRelative;
+    eyeDistance = fog_spherical_distance(eyeRelative.xyz);
 
     faceBrightness = Color.r;
 

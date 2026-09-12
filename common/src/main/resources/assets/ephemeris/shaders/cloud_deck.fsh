@@ -1,5 +1,6 @@
 #version 330
 
+#moj_import <minecraft:fog.glsl>
 #moj_import <minecraft:dynamictransforms.glsl>
 
 layout(std140) uniform DeckInfo {
@@ -14,6 +15,7 @@ uniform sampler2D Sampler0;
 in float faceBrightness;
 in vec2 worldSample;
 in vec2 acrossTheSlab;
+in float eyeDistance;
 
 out vec4 fragColor;
 
@@ -71,6 +73,13 @@ void main() {
     // Taken here rather than in the vertex stage, which is the whole of why this works — see `cloud_deck.vsh`.
     float reach = length(acrossTheSlab);
     alpha *= 1.0 - smoothstep(RIM_BEGINS, 1.0, reach);
+
+    // **Faded out by the fog, not toward its colour** — vanilla's own clouds do exactly this, and it is the
+    // right one of the two: a deck is a translucent thing hanging in front of the sky, so what the fog takes
+    // from it should leave the sky behind it showing rather than paint a cloud-shaped patch of fog colour.
+    // `FogCloudsEnd` is the same number vanilla hands its own clouds — the water fog end when you are under
+    // it, and whatever `CLOUD_FOG_END_DISTANCE` a blizzard or a column of sand has asked for otherwise.
+    alpha *= 1.0 - linear_fog_value(eyeDistance, 0.0, FogCloudsEnd);
     if (alpha <= 0.0) discard;
 
     fragColor = vec4(tone, alpha) * ColorModulator;

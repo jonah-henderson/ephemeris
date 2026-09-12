@@ -3,6 +3,7 @@ package co.voik.ephemeris.mixin.client;
 import co.voik.ephemeris.client.LevelRendering;
 import co.voik.ephemeris.client.OffscreenLevelRender;
 import co.voik.ephemeris.client.SkyMoment;
+import co.voik.ephemeris.client.SkyThroughFog;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.renderer.SkyRenderer;
 import net.minecraft.world.level.MoonPhase;
@@ -31,6 +32,10 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  * cancel — which is to say exactly when vanilla drew the sky itself. Each path therefore draws the
  * overlays once and draws them last. A flag forwarded from the head would have said the same thing and
  * left a field on a Mixin to reason about.
+ *
+ * <p><b>Both paths are declined outright where the fog has closed in front of the sky</b> — see
+ * {@link co.voik.ephemeris.client.SkyThroughFog}. Cancelling from the head takes the overlays with it,
+ * which is the intent: what cannot be seen is not drawn, whoever was going to draw it.
  */
 @Mixin(SkyRenderer.class)
 public class SkyRendererMixin {
@@ -45,6 +50,14 @@ public class SkyRendererMixin {
             float rainBrightness,
             float starBrightness,
             CallbackInfo callback) {
+        var camera = OffscreenLevelRender.INSTANCE.cameraBeingDrawnFrom();
+        // Nothing of the sky could be seen from in here, so nothing of it is drawn — vanilla's bodies, a
+        // level's own, and every overlay over them alike. See SkyThroughFog for why the fog cannot say
+        // this for itself.
+        if (SkyThroughFog.INSTANCE.hidesTheSky(camera)) {
+            callback.cancel();
+            return;
+        }
         var level = OffscreenLevelRender.INSTANCE.levelBeingDrawn();
         if (level == null) {
             return;
@@ -52,7 +65,7 @@ public class SkyRendererMixin {
         var moment = new SkyMoment(
                 level,
                 OffscreenLevelRender.INSTANCE.targetBeingDrawnOnto(),
-                OffscreenLevelRender.INSTANCE.cameraBeingDrawnFrom(),
+                camera,
                 sunAngle,
                 moonAngle,
                 starAngle,

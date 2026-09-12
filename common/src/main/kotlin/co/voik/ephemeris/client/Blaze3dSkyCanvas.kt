@@ -159,6 +159,13 @@ object Blaze3dSkyCanvas : SkyCanvas {
         .withUniform("DynamicTransforms", UniformType.UNIFORM_BUFFER)
         .withUniform("Projection", UniformType.UNIFORM_BUFFER)
         .withUniform("DeckInfo", UniformType.UNIFORM_BUFFER)
+        // **Declared, where vanilla's own sky pipelines do not declare it** — a deck stands in the world at
+        // a height of its own, so what you are looking *through* to reach it is a real distance and the fog
+        // is entitled to eat it. Vanilla's `CLOUDS_SNIPPET` carries this for the same reason; it is only the
+        // sun, moon, stars and sunset fan that vanilla leaves unfogged, and `SkyThroughFog` answers those by
+        // declining to draw them at all. That answer cannot serve here: a deck's distance varies across
+        // itself, so it has to fade rather than vanish.
+        .withUniform("Fog", UniformType.UNIFORM_BUFFER)
         // The picture the deck is cut from. Declared even though a solid deck ignores it — one pipeline
         // that sometimes skips a sample beats two that each carry their own copy of the roil.
         .withSampler("Sampler0")

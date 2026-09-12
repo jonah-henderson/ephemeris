@@ -3,6 +3,7 @@ package co.voik.ephemeris.mixin.client;
 import co.voik.ephemeris.client.HorizonMoment;
 import co.voik.ephemeris.client.LevelRendering;
 import co.voik.ephemeris.client.OffscreenLevelRender;
+import co.voik.ephemeris.client.SkyThroughFog;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.renderer.SkyRenderer;
 import org.spongepowered.asm.mixin.Mixin;
@@ -37,6 +38,13 @@ public class SunriseSunsetMixin {
     @Inject(method = "renderSunriseAndSunset", at = @At("HEAD"), cancellable = true)
     private void ephemeris$paintTheLevelsHorizon(
             PoseStack poseStack, float sunAngle, int sunriseAndSunsetColor, CallbackInfo callback) {
+        var camera = OffscreenLevelRender.INSTANCE.cameraBeingDrawnFrom();
+        // The fan's lit vertex stands where the bodies do, so the same fog that hides them hides it — and
+        // it is the half of the sky that reads worst when it leaks, being a hundred degrees wide.
+        if (SkyThroughFog.INSTANCE.hidesTheSky(camera)) {
+            callback.cancel();
+            return;
+        }
         var level = OffscreenLevelRender.INSTANCE.levelBeingDrawn();
         if (level == null) {
             return;
@@ -44,7 +52,7 @@ public class SunriseSunsetMixin {
         if (LevelRendering.INSTANCE.drawHorizon(new HorizonMoment(
                 level,
                 OffscreenLevelRender.INSTANCE.targetBeingDrawnOnto(),
-                OffscreenLevelRender.INSTANCE.cameraBeingDrawnFrom(),
+                camera,
                 sunAngle,
                 sunriseAndSunsetColor))) {
             callback.cancel();
