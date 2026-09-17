@@ -143,6 +143,13 @@ class SkyMoment(
      * never `gameRenderer.mainCamera`, which is the *player's* however the frame came to be drawn.
      */
     val camera: Camera,
+    /**
+     * How far into the tick being drawn this frame is, `0..1`.
+     *
+     * Anything whose place is worked out from the level's clock wants this on top of it, or it moves in
+     * whole-tick steps at twenty a second however many frames are drawn between them.
+     */
+    val partOfATickOn: Float,
     /** Vanilla's own angles, in radians, so a body on its path needs nothing reconstructed. */
     val sunAngle: Float,
     val moonAngle: Float,

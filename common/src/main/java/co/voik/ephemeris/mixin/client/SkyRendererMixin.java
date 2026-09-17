@@ -5,6 +5,7 @@ import co.voik.ephemeris.client.OffscreenLevelRender;
 import co.voik.ephemeris.client.SkyMoment;
 import co.voik.ephemeris.client.SkyThroughFog;
 import com.mojang.blaze3d.vertex.PoseStack;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.SkyRenderer;
 import net.minecraft.world.level.MoonPhase;
 import org.spongepowered.asm.mixin.Mixin;
@@ -66,6 +67,7 @@ public class SkyRendererMixin {
                 level,
                 OffscreenLevelRender.INSTANCE.targetBeingDrawnOnto(),
                 camera,
+                partOfATickOn(),
                 sunAngle,
                 moonAngle,
                 starAngle,
@@ -98,11 +100,20 @@ public class SkyRendererMixin {
                         level,
                         OffscreenLevelRender.INSTANCE.targetBeingDrawnOnto(),
                         OffscreenLevelRender.INSTANCE.cameraBeingDrawnFrom(),
+                        partOfATickOn(),
                         sunAngle,
                         moonAngle,
                         starAngle,
                         moonPhase,
                         rainBrightness,
                         starBrightness));
+    }
+
+    /**
+     * How far into the tick this frame is. Frozen counts as a whole one, which is what vanilla's own
+     * renderers interpolate with.
+     */
+    private static float partOfATickOn() {
+        return Minecraft.getInstance().getDeltaTracker().getGameTimeDeltaPartialTick(false);
     }
 }
