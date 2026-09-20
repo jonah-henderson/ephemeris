@@ -7,8 +7,10 @@ import co.voik.ephemeris.sky.Aurora
 import co.voik.ephemeris.sky.CloudDeck
 import co.voik.ephemeris.sky.HorizonFan
 import co.voik.ephemeris.sky.Rainbow
+import com.mojang.blaze3d.PrimitiveTopology
 import com.mojang.blaze3d.buffers.GpuBuffer
 import com.mojang.blaze3d.buffers.Std140Builder
+import com.mojang.blaze3d.pipeline.BindGroupLayout
 import com.mojang.blaze3d.pipeline.BlendFunction
 import com.mojang.blaze3d.pipeline.ColorTargetState
 import com.mojang.blaze3d.pipeline.DepthStencilState
@@ -20,7 +22,6 @@ import com.mojang.blaze3d.systems.RenderSystem
 import com.mojang.blaze3d.vertex.BufferBuilder
 import com.mojang.blaze3d.vertex.ByteBufferBuilder
 import com.mojang.blaze3d.vertex.DefaultVertexFormat
-import com.mojang.blaze3d.vertex.VertexFormat
 import net.minecraft.client.Minecraft
 import net.minecraft.client.renderer.MappableRingBuffer
 import net.minecraft.client.renderer.RenderPipelines
@@ -36,8 +37,9 @@ import org.joml.Matrix4f
 import org.joml.Quaternionf
 import org.joml.Vector3f
 import org.joml.Vector4f
+import org.joml.Vector4fc
+import java.util.Optional
 import java.util.OptionalDouble
-import java.util.OptionalInt
 import java.util.Random
 
 /**
@@ -119,17 +121,32 @@ object Blaze3dSkyCanvas : SkyCanvas {
      * `POSITION`-only and whose shader writes one flat colour for the whole field — no per-star tint and
      * no twinkle. Blend and depth match vanilla's.
      */
+    /**
+     * The one vertex buffer every pipeline here binds. 26.2 numbers vertex bindings, where the old
+     * `withVertexFormat` took the single format it assumed.
+     */
+    private const val ONLY_VERTEX_BINDING = 0
+
+    /** A sky is drawn once, not instanced — what 26.2's draw calls now ask for explicitly. */
+    private const val ONE_INSTANCE = 1
+    private const val FROM_THE_FIRST_INSTANCE = 0
+
     private val STARFIELD_PIPELINE: RenderPipeline = RenderPipeline.builder()
         .withLocation(Identifier.fromNamespaceAndPath(NAMESPACE, "pipeline/starfield"))
         .withVertexShader(Identifier.fromNamespaceAndPath(NAMESPACE, "starfield"))
         .withFragmentShader(Identifier.fromNamespaceAndPath(NAMESPACE, "starfield"))
-        .withUniform("DynamicTransforms", UniformType.UNIFORM_BUFFER)
-        .withUniform("Projection", UniformType.UNIFORM_BUFFER)
-        .withUniform("StarfieldInfo", UniformType.UNIFORM_BUFFER)
+        .withBindGroupLayout(
+            BindGroupLayout.builder()
+                .withUniform("DynamicTransforms", UniformType.UNIFORM_BUFFER)
+                .withUniform("Projection", UniformType.UNIFORM_BUFFER)
+                .withUniform("StarfieldInfo", UniformType.UNIFORM_BUFFER)
+                .build(),
+        )
         .withColorTargetState(ColorTargetState(BlendFunction.OVERLAY))
         // Culling defaults to on, and `Sphere.tangentQuad` does not promise a winding.
         .withCull(false)
-        .withVertexFormat(DefaultVertexFormat.POSITION_TEX_COLOR, VertexFormat.Mode.QUADS)
+        .withVertexBinding(ONLY_VERTEX_BINDING, DefaultVertexFormat.POSITION_TEX_COLOR)
+        .withPrimitiveTopology(PrimitiveTopology.QUADS)
         .build()
 
     /** Where the twinkle may wrap without jumping — see [TWINKLE_RATES]. */
@@ -156,24 +173,29 @@ object Blaze3dSkyCanvas : SkyCanvas {
         .withLocation(Identifier.fromNamespaceAndPath(NAMESPACE, "pipeline/cloud_deck"))
         .withVertexShader(Identifier.fromNamespaceAndPath(NAMESPACE, "cloud_deck"))
         .withFragmentShader(Identifier.fromNamespaceAndPath(NAMESPACE, "cloud_deck"))
-        .withUniform("DynamicTransforms", UniformType.UNIFORM_BUFFER)
-        .withUniform("Projection", UniformType.UNIFORM_BUFFER)
-        .withUniform("DeckInfo", UniformType.UNIFORM_BUFFER)
-        // **Declared, where vanilla's own sky pipelines do not declare it** — a deck stands in the world at
-        // a height of its own, so what you are looking *through* to reach it is a real distance and the fog
-        // is entitled to eat it. Vanilla's `CLOUDS_SNIPPET` carries this for the same reason; it is only the
-        // sun, moon, stars and sunset fan that vanilla leaves unfogged, and `SkyThroughFog` answers those by
-        // declining to draw them at all. That answer cannot serve here: a deck's distance varies across
-        // itself, so it has to fade rather than vanish.
-        .withUniform("Fog", UniformType.UNIFORM_BUFFER)
-        // The picture the deck is cut from. Declared even though a solid deck ignores it — one pipeline
-        // that sometimes skips a sample beats two that each carry their own copy of the roil.
-        .withSampler("Sampler0")
+        .withBindGroupLayout(
+            BindGroupLayout.builder()
+                .withUniform("DynamicTransforms", UniformType.UNIFORM_BUFFER)
+                .withUniform("Projection", UniformType.UNIFORM_BUFFER)
+                .withUniform("DeckInfo", UniformType.UNIFORM_BUFFER)
+                // **Declared, where vanilla's own sky pipelines do not declare it** — a deck stands in the
+                // world at a height of its own, so what you are looking *through* to reach it is a real
+                // distance and the fog is entitled to eat it. Vanilla's `CLOUDS_SNIPPET` carries this for the
+                // same reason; it is only the sun, moon, stars and sunset fan that vanilla leaves unfogged,
+                // and `SkyThroughFog` answers those by declining to draw them at all. That answer cannot
+                // serve here: a deck's distance varies across itself, so it has to fade rather than vanish.
+                .withUniform("Fog", UniformType.UNIFORM_BUFFER)
+                // The picture the deck is cut from. Declared even though a solid deck ignores it — one
+                // pipeline that sometimes skips a sample beats two that each carry their own copy of the roil.
+                .withSampler("Sampler0")
+                .build(),
+        )
         .withColorTargetState(ColorTargetState(BlendFunction.TRANSLUCENT))
         .withDepthStencilState(DepthStencilState.DEFAULT)
         // The viewer stands inside the slab as often as outside it, so neither face may be dropped.
         .withCull(false)
-        .withVertexFormat(DefaultVertexFormat.POSITION_COLOR, VertexFormat.Mode.QUADS)
+        .withVertexBinding(ONLY_VERTEX_BINDING, DefaultVertexFormat.POSITION_COLOR)
+        .withPrimitiveTopology(PrimitiveTopology.QUADS)
         .build()
 
     /**
@@ -190,11 +212,16 @@ object Blaze3dSkyCanvas : SkyCanvas {
         .withLocation(Identifier.fromNamespaceAndPath(NAMESPACE, "pipeline/occluding_body"))
         .withVertexShader(Identifier.withDefaultNamespace("core/position_tex"))
         .withFragmentShader(Identifier.withDefaultNamespace("core/position_tex"))
-        .withSampler("Sampler0")
-        .withUniform("DynamicTransforms", UniformType.UNIFORM_BUFFER)
-        .withUniform("Projection", UniformType.UNIFORM_BUFFER)
+        .withBindGroupLayout(
+            BindGroupLayout.builder()
+                .withSampler("Sampler0")
+                .withUniform("DynamicTransforms", UniformType.UNIFORM_BUFFER)
+                .withUniform("Projection", UniformType.UNIFORM_BUFFER)
+                .build(),
+        )
         .withColorTargetState(ColorTargetState(BlendFunction.TRANSLUCENT))
-        .withVertexFormat(DefaultVertexFormat.POSITION_TEX, VertexFormat.Mode.QUADS)
+        .withVertexBinding(ONLY_VERTEX_BINDING, DefaultVertexFormat.POSITION_TEX)
+        .withPrimitiveTopology(PrimitiveTopology.QUADS)
         .build()
 
     /**
@@ -206,15 +233,20 @@ object Blaze3dSkyCanvas : SkyCanvas {
         .withLocation(Identifier.fromNamespaceAndPath(NAMESPACE, "pipeline/aurora"))
         .withVertexShader(Identifier.fromNamespaceAndPath(NAMESPACE, "aurora"))
         .withFragmentShader(Identifier.fromNamespaceAndPath(NAMESPACE, "aurora"))
-        .withUniform("DynamicTransforms", UniformType.UNIFORM_BUFFER)
-        .withUniform("Projection", UniformType.UNIFORM_BUFFER)
-        .withUniform("AuroraInfo", UniformType.UNIFORM_BUFFER)
-        // The colour ramp, built per ramp rather than shipped — see [rampOf].
-        .withSampler("Sampler0")
+        .withBindGroupLayout(
+            BindGroupLayout.builder()
+                .withUniform("DynamicTransforms", UniformType.UNIFORM_BUFFER)
+                .withUniform("Projection", UniformType.UNIFORM_BUFFER)
+                .withUniform("AuroraInfo", UniformType.UNIFORM_BUFFER)
+                // The colour ramp, built per ramp rather than shipped — see [rampOf].
+                .withSampler("Sampler0")
+                .build(),
+        )
         .withColorTargetState(ColorTargetState(BlendFunction.OVERLAY))
         // The viewer is inside the band, and the grid below promises no winding.
         .withCull(false)
-        .withVertexFormat(DefaultVertexFormat.POSITION_TEX, VertexFormat.Mode.QUADS)
+        .withVertexBinding(ONLY_VERTEX_BINDING, DefaultVertexFormat.POSITION_TEX)
+        .withPrimitiveTopology(PrimitiveTopology.QUADS)
         .build()
 
     /**
@@ -432,8 +464,8 @@ object Blaze3dSkyCanvas : SkyCanvas {
             pass.setPipeline(RenderPipelines.SUNRISE_SUNSET)
             RenderSystem.bindDefaultUniforms(pass)
             pass.setUniform("DynamicTransforms", transforms)
-            pass.setVertexBuffer(0, horizonFan())
-            pass.draw(0, GLOW_FAN_VERTICES)
+            pass.setVertexBuffer(ONLY_VERTEX_BINDING, horizonFan().slice())
+            pass.draw(0, GLOW_FAN_VERTICES, ONE_INSTANCE, FROM_THE_FIRST_INSTANCE)
         }
         modelViewStack.popMatrix()
     }
@@ -450,7 +482,7 @@ object Blaze3dSkyCanvas : SkyCanvas {
     private fun buildGlowFan(): GpuBuffer {
         val vertexSize = DefaultVertexFormat.POSITION_COLOR.vertexSize
         ByteBufferBuilder.exactlySized(GLOW_FAN_VERTICES * vertexSize).use { bytes ->
-            val builder = BufferBuilder(bytes, VertexFormat.Mode.TRIANGLE_FAN, DefaultVertexFormat.POSITION_COLOR)
+            val builder = BufferBuilder(bytes, PrimitiveTopology.TRIANGLE_FAN, DefaultVertexFormat.POSITION_COLOR)
             builder.addVertex(0.0f, GLOW_CENTRE_HEIGHT, 0.0f).setColor(-1)
             for (step in 0..GLOW_FAN_STEPS) {
                 val angle = step * (Math.PI * 2.0).toFloat() / GLOW_FAN_STEPS
@@ -542,13 +574,18 @@ object Blaze3dSkyCanvas : SkyCanvas {
         val format = DefaultVertexFormat.POSITION_COLOR
         val quads = worthDrawing.size * QUADS_PER_GLOW
         ByteBufferBuilder.exactlySized(quads * QUAD_VERTICES * format.vertexSize).use { bytes ->
-            val builder = BufferBuilder(bytes, VertexFormat.Mode.QUADS, format)
+            val builder = BufferBuilder(bytes, PrimitiveTopology.QUADS, format)
             for (glow in worthDrawing) {
                 addGlowQuad(builder, glow, glow.angularSize * HALO_SPREAD, glow.tint.dimmed(HALO_STRENGTH))
                 addGlowQuad(builder, glow, glow.angularSize, glow.tint)
             }
             builder.buildOrThrow().use { mesh ->
-                drawGlowMesh(format.uploadImmediateVertexBuffer(mesh.vertexBuffer()), quads * QUAD_INDICES)
+                // **Closed here, where the immediate buffer it replaces was vanilla's to recycle.** 26.2
+                // took the upload off `VertexFormat`, and what stands in its place allocates, so a glow
+                // drawn every frame would leak a buffer a frame without this.
+                RenderSystem.getDevice()
+                    .createBuffer({ "Ephemeris glow mesh" }, GpuBuffer.USAGE_VERTEX, mesh.vertexBuffer())
+                    .use { vertices -> drawGlowMesh(vertices, quads * QUAD_INDICES) }
             }
         }
     }
@@ -571,14 +608,14 @@ object Blaze3dSkyCanvas : SkyCanvas {
             Vector3f(),
             Matrix4f(),
         )
-        val quadIndices = RenderSystem.getSequentialBuffer(VertexFormat.Mode.QUADS)
+        val quadIndices = RenderSystem.getSequentialBuffer(PrimitiveTopology.QUADS)
         renderPass("Ephemeris sky glows")?.use { pass ->
             pass.setPipeline(GLOWS_PIPELINE)
             RenderSystem.bindDefaultUniforms(pass)
             pass.setUniform("DynamicTransforms", transforms)
-            pass.setVertexBuffer(0, vertices)
+            pass.setVertexBuffer(ONLY_VERTEX_BINDING, vertices.slice())
             pass.setIndexBuffer(quadIndices.getBuffer(indices), quadIndices.type())
-            pass.drawIndexed(0, 0, indices, 1)
+            pass.drawIndexed(0, 0, indices, 1, FROM_THE_FIRST_INSTANCE)
         }
     }
 
@@ -595,11 +632,16 @@ object Blaze3dSkyCanvas : SkyCanvas {
         .withLocation(Identifier.fromNamespaceAndPath(NAMESPACE, "pipeline/glows"))
         .withVertexShader(Identifier.withDefaultNamespace("core/position_color"))
         .withFragmentShader(Identifier.withDefaultNamespace("core/position_color"))
-        .withUniform("DynamicTransforms", UniformType.UNIFORM_BUFFER)
-        .withUniform("Projection", UniformType.UNIFORM_BUFFER)
+        .withBindGroupLayout(
+            BindGroupLayout.builder()
+                .withUniform("DynamicTransforms", UniformType.UNIFORM_BUFFER)
+                .withUniform("Projection", UniformType.UNIFORM_BUFFER)
+                .build(),
+        )
         .withColorTargetState(ColorTargetState(BlendFunction.ADDITIVE))
         .withCull(false)
-        .withVertexFormat(DefaultVertexFormat.POSITION_COLOR, VertexFormat.Mode.QUADS)
+        .withVertexBinding(ONLY_VERTEX_BINDING, DefaultVertexFormat.POSITION_COLOR)
+        .withPrimitiveTopology(PrimitiveTopology.QUADS)
         .build()
 
     /**
@@ -621,11 +663,16 @@ object Blaze3dSkyCanvas : SkyCanvas {
         .withLocation(Identifier.fromNamespaceAndPath(NAMESPACE, "pipeline/glow"))
         .withVertexShader(Identifier.withDefaultNamespace("core/position"))
         .withFragmentShader(Identifier.withDefaultNamespace("core/position"))
-        .withUniform("DynamicTransforms", UniformType.UNIFORM_BUFFER)
-        .withUniform("Projection", UniformType.UNIFORM_BUFFER)
+        .withBindGroupLayout(
+            BindGroupLayout.builder()
+                .withUniform("DynamicTransforms", UniformType.UNIFORM_BUFFER)
+                .withUniform("Projection", UniformType.UNIFORM_BUFFER)
+                .build(),
+        )
         .withColorTargetState(ColorTargetState(BlendFunction.ADDITIVE))
         .withCull(false)
-        .withVertexFormat(DefaultVertexFormat.POSITION, VertexFormat.Mode.QUADS)
+        .withVertexBinding(ONLY_VERTEX_BINDING, DefaultVertexFormat.POSITION)
+        .withPrimitiveTopology(PrimitiveTopology.QUADS)
         .build()
 
     private fun drawGlowQuad(orientation: Quaternionf, distance: Float, angularSize: Float, tint: Rgba) {
@@ -641,15 +688,15 @@ object Blaze3dSkyCanvas : SkyCanvas {
             Vector3f(),
             Matrix4f(),
         )
-        val quadIndices = RenderSystem.getSequentialBuffer(VertexFormat.Mode.QUADS)
+        val quadIndices = RenderSystem.getSequentialBuffer(PrimitiveTopology.QUADS)
 
         renderPass("Ephemeris sky glow")?.use { pass ->
             pass.setPipeline(GLOW_PIPELINE)
             RenderSystem.bindDefaultUniforms(pass)
             pass.setUniform("DynamicTransforms", transforms)
-            pass.setVertexBuffer(0, veilQuadOf(WHOLE_SPRITE))
+            pass.setVertexBuffer(ONLY_VERTEX_BINDING, veilQuadOf(WHOLE_SPRITE).slice())
             pass.setIndexBuffer(quadIndices.getBuffer(QUAD_INDICES), quadIndices.type())
-            pass.drawIndexed(0, 0, QUAD_INDICES, 1)
+            pass.drawIndexed(0, 0, QUAD_INDICES, 1, FROM_THE_FIRST_INSTANCE)
         }
 
         modelViewStack.popMatrix()
@@ -674,15 +721,15 @@ object Blaze3dSkyCanvas : SkyCanvas {
             Vector3f(),
             Matrix4f(),
         )
-        val quadIndices = RenderSystem.getSequentialBuffer(VertexFormat.Mode.QUADS)
+        val quadIndices = RenderSystem.getSequentialBuffer(PrimitiveTopology.QUADS)
 
         renderPass("Ephemeris sky body veil")?.use { pass ->
             pass.setPipeline(RenderPipelines.STARS)
             RenderSystem.bindDefaultUniforms(pass)
             pass.setUniform("DynamicTransforms", transforms)
-            pass.setVertexBuffer(0, veilQuadOf(kept))
+            pass.setVertexBuffer(ONLY_VERTEX_BINDING, veilQuadOf(kept).slice())
             pass.setIndexBuffer(quadIndices.getBuffer(QUAD_INDICES), quadIndices.type())
-            pass.drawIndexed(0, 0, QUAD_INDICES, 1)
+            pass.drawIndexed(0, 0, QUAD_INDICES, 1, FROM_THE_FIRST_INSTANCE)
         }
 
         modelViewStack.popMatrix()
@@ -699,7 +746,7 @@ object Blaze3dSkyCanvas : SkyCanvas {
         val reach = kept.to - kept.from
         val format = DefaultVertexFormat.POSITION
         ByteBufferBuilder.exactlySized(QUAD_VERTICES * format.vertexSize).use { bytes ->
-            val builder = BufferBuilder(bytes, VertexFormat.Mode.QUADS, format)
+            val builder = BufferBuilder(bytes, PrimitiveTopology.QUADS, format)
             builder.addVertex(-reach, 0.0f, -reach)
             builder.addVertex(reach, 0.0f, -reach)
             builder.addVertex(reach, 0.0f, reach)
@@ -738,16 +785,16 @@ object Blaze3dSkyCanvas : SkyCanvas {
             Vector3f(),
             Matrix4f(),
         )
-        val quadIndices = RenderSystem.getSequentialBuffer(VertexFormat.Mode.QUADS)
+        val quadIndices = RenderSystem.getSequentialBuffer(PrimitiveTopology.QUADS)
 
         renderPass("Ephemeris sky body")?.use { pass ->
             pass.setPipeline(pipelineFor(shape, emitsOwnLight))
             RenderSystem.bindDefaultUniforms(pass)
             pass.setUniform("DynamicTransforms", transforms)
             pass.bindTexture("Sampler0", atlas.textureView, atlas.sampler)
-            pass.setVertexBuffer(0, quad.buffer)
+            pass.setVertexBuffer(ONLY_VERTEX_BINDING, quad.buffer.slice())
             pass.setIndexBuffer(quadIndices.getBuffer(QUAD_INDICES), quadIndices.type())
-            pass.drawIndexed(0, 0, QUAD_INDICES, 1)
+            pass.drawIndexed(0, 0, QUAD_INDICES, 1, FROM_THE_FIRST_INSTANCE)
         }
 
         modelViewStack.popMatrix()
@@ -786,16 +833,16 @@ object Blaze3dSkyCanvas : SkyCanvas {
             Matrix4f(),
         )
         writeStarfieldInfo(timeTicks)
-        val quadIndices = RenderSystem.getSequentialBuffer(VertexFormat.Mode.QUADS)
+        val quadIndices = RenderSystem.getSequentialBuffer(PrimitiveTopology.QUADS)
 
         renderPass("Ephemeris sky stars")?.use { pass ->
             pass.setPipeline(STARFIELD_PIPELINE)
             RenderSystem.bindDefaultUniforms(pass)
             pass.setUniform("DynamicTransforms", transforms)
             pass.setUniform("StarfieldInfo", starfieldInfo.currentBuffer())
-            pass.setVertexBuffer(0, field.buffer)
+            pass.setVertexBuffer(ONLY_VERTEX_BINDING, field.buffer.slice())
             pass.setIndexBuffer(quadIndices.getBuffer(field.indexCount), quadIndices.type())
-            pass.drawIndexed(0, 0, field.indexCount, 1)
+            pass.drawIndexed(0, 0, field.indexCount, 1, FROM_THE_FIRST_INSTANCE)
         }
         starfieldInfo.rotate()
 
@@ -803,7 +850,7 @@ object Blaze3dSkyCanvas : SkyCanvas {
     }
 
     private fun writeStarfieldInfo(timeTicks: Long) {
-        RenderSystem.getDevice().createCommandEncoder().mapBuffer(starfieldInfo.currentBuffer(), false, true)
+        starfieldInfo.currentBuffer().map(false, true)
             .use { view ->
                 Std140Builder.intoBuffer(view.data())
                     .putVec4(wrapped(timeTicks.toDouble(), TWINKLE_PERIOD), STAR_TWINKLE_DIP, 0.0f, 0.0f)
@@ -824,7 +871,7 @@ object Blaze3dSkyCanvas : SkyCanvas {
             Matrix4f(),
         )
         writeDeckInfo(deck, eye, timeTicks)
-        val quadIndices = RenderSystem.getSequentialBuffer(VertexFormat.Mode.QUADS)
+        val quadIndices = RenderSystem.getSequentialBuffer(PrimitiveTopology.QUADS)
 
         // **Bound whether or not it is read.** A pipeline declaring a sampler needs one, so a solid deck
         // binds vanilla's picture too and the shader is told to ignore it — which is cheaper than a second
@@ -836,9 +883,9 @@ object Blaze3dSkyCanvas : SkyCanvas {
             pass.setUniform("DynamicTransforms", transforms)
             pass.setUniform("DeckInfo", deckInfo.currentBuffer())
             pass.bindTexture("Sampler0", picture.textureView, picture.sampler)
-            pass.setVertexBuffer(0, slab())
+            pass.setVertexBuffer(ONLY_VERTEX_BINDING, slab().slice())
             pass.setIndexBuffer(quadIndices.getBuffer(SLAB_INDICES), quadIndices.type())
-            pass.drawIndexed(0, 0, SLAB_INDICES, 1)
+            pass.drawIndexed(0, 0, SLAB_INDICES, 1, FROM_THE_FIRST_INSTANCE)
         }
         // Per deck, not per frame: each draw needs its own copy of the uniforms to survive until it runs.
         deckInfo.rotate()
@@ -911,7 +958,7 @@ object Blaze3dSkyCanvas : SkyCanvas {
             Matrix4f(),
         )
         writeAuroraInfo(aurora, curtain, many, showing, drifted)
-        val quadIndices = RenderSystem.getSequentialBuffer(VertexFormat.Mode.QUADS)
+        val quadIndices = RenderSystem.getSequentialBuffer(PrimitiveTopology.QUADS)
 
         val pass = renderPass("Ephemeris aurora")
         // **A null pass draws nothing and says nothing**, which is the one silent failure left in this
@@ -926,9 +973,9 @@ object Blaze3dSkyCanvas : SkyCanvas {
             pass.setUniform("DynamicTransforms", transforms)
             pass.setUniform("AuroraInfo", auroraInfo.currentBuffer())
             pass.bindTexture("Sampler0", ramp.textureView, ramp.sampler)
-            pass.setVertexBuffer(0, curtain())
+            pass.setVertexBuffer(ONLY_VERTEX_BINDING, curtain().slice())
             pass.setIndexBuffer(quadIndices.getBuffer(AURORA_INDICES), quadIndices.type())
-            pass.drawIndexed(0, 0, AURORA_INDICES, 1)
+            pass.drawIndexed(0, 0, AURORA_INDICES, 1, FROM_THE_FIRST_INSTANCE)
         }
         auroraInfo.rotate()
 
@@ -951,7 +998,7 @@ object Blaze3dSkyCanvas : SkyCanvas {
         // air stops the electrons, which is not a thing a writer moves. Never stubby — the floor is high
         // because a short curtain reads as a ribbon rather than as a modest aurora.
         val reaches = LOWEST_KM + (HIGHEST_KM - LOWEST_KM) * aurora.height.coerceIn(0.5f, 1.0f)
-        RenderSystem.getDevice().createCommandEncoder().mapBuffer(auroraInfo.currentBuffer(), false, true)
+        auroraInfo.currentBuffer().map(false, true)
             .use { view ->
                 Std140Builder.intoBuffer(view.data())
                     .putVec4(showing, drifted, aurora.breadth.coerceIn(0.05f, 1.0f), 0.0f)
@@ -993,12 +1040,17 @@ object Blaze3dSkyCanvas : SkyCanvas {
         .withLocation(Identifier.fromNamespaceAndPath(NAMESPACE, "pipeline/rainbow"))
         .withVertexShader(Identifier.withDefaultNamespace("core/position_color"))
         .withFragmentShader(Identifier.withDefaultNamespace("core/position_color"))
-        .withUniform("DynamicTransforms", UniformType.UNIFORM_BUFFER)
-        .withUniform("Projection", UniformType.UNIFORM_BUFFER)
+        .withBindGroupLayout(
+            BindGroupLayout.builder()
+                .withUniform("DynamicTransforms", UniformType.UNIFORM_BUFFER)
+                .withUniform("Projection", UniformType.UNIFORM_BUFFER)
+                .build(),
+        )
         .withColorTargetState(ColorTargetState(BlendFunction.OVERLAY))
         // The viewer stands under the arc, and a ring laid out by angle promises no winding.
         .withCull(false)
-        .withVertexFormat(DefaultVertexFormat.POSITION_COLOR, VertexFormat.Mode.QUADS)
+        .withVertexBinding(ONLY_VERTEX_BINDING, DefaultVertexFormat.POSITION_COLOR)
+        .withPrimitiveTopology(PrimitiveTopology.QUADS)
         .build()
 
     override fun drawRainbow(
@@ -1032,14 +1084,14 @@ object Blaze3dSkyCanvas : SkyCanvas {
             Vector3f(),
             Matrix4f(),
         )
-        val quadIndices = RenderSystem.getSequentialBuffer(VertexFormat.Mode.QUADS)
+        val quadIndices = RenderSystem.getSequentialBuffer(PrimitiveTopology.QUADS)
         renderPass("Ephemeris rainbow")?.use { pass ->
             pass.setPipeline(RAINBOW_PIPELINE)
             RenderSystem.bindDefaultUniforms(pass)
             pass.setUniform("DynamicTransforms", transforms)
-            pass.setVertexBuffer(0, mesh)
+            pass.setVertexBuffer(ONLY_VERTEX_BINDING, mesh.slice())
             pass.setIndexBuffer(quadIndices.getBuffer(arc.indices), quadIndices.type())
-            pass.drawIndexed(0, 0, arc.indices, 1)
+            pass.drawIndexed(0, 0, arc.indices, 1, FROM_THE_FIRST_INSTANCE)
         }
         modelViewStack.popMatrix()
     }
@@ -1080,7 +1132,7 @@ object Blaze3dSkyCanvas : SkyCanvas {
         val vertexSize = DefaultVertexFormat.POSITION_COLOR.vertexSize
         val most = BOW_RING_STEPS * BOW_RADIAL_STEPS * VERTICES_PER_QUAD * BOWS_AT_MOST
         ByteBufferBuilder.exactlySized(most * vertexSize).use { bytes ->
-            val builder = BufferBuilder(bytes, VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_COLOR)
+            val builder = BufferBuilder(bytes, PrimitiveTopology.QUADS, DefaultVertexFormat.POSITION_COLOR)
             var written = layBand(
                 builder, rainbow.band, axis, sideways, over,
                 rainbow.radiusDegrees, rainbow.widthDegrees, 1.0f,
@@ -1245,7 +1297,7 @@ object Blaze3dSkyCanvas : SkyCanvas {
     private fun buildCurtain(): GpuBuffer {
         val format = DefaultVertexFormat.POSITION_TEX
         return ByteBufferBuilder.exactlySized(AURORA_QUADS * QUAD_VERTICES * format.vertexSize).use { bytes ->
-            val builder = BufferBuilder(bytes, VertexFormat.Mode.QUADS, format)
+            val builder = BufferBuilder(bytes, PrimitiveTopology.QUADS, format)
 
             fun corner(along: Int, up: Int) {
                 val alongSheet = along.toFloat() / AURORA_ALONG
@@ -1271,7 +1323,7 @@ object Blaze3dSkyCanvas : SkyCanvas {
 
     /** The deck's parameters, laid out to match `DeckInfo` in the shaders. */
     private fun writeDeckInfo(deck: CloudDeck, eye: Vec3, timeTicks: Float) {
-        RenderSystem.getDevice().createCommandEncoder().mapBuffer(deckInfo.currentBuffer(), false, true).use { view ->
+        deckInfo.currentBuffer().map(false, true).use { view ->
             Std140Builder.intoBuffer(view.data())
                 .putVec4(deck.low.red, deck.low.green, deck.low.blue, deck.low.alpha)
                 .putVec4(deck.high.red, deck.high.green, deck.high.blue, deck.high.alpha)
@@ -1345,7 +1397,8 @@ object Blaze3dSkyCanvas : SkyCanvas {
         return RenderSystem.getDevice().createCommandEncoder().createRenderPass(
             { label },
             colorAttachment,
-            OptionalInt.empty(),
+            // A clear colour is a vector in 26.2 rather than a packed int; empty still means "do not clear".
+            Optional.empty<Vector4fc>(),
             target.depthTextureView,
             OptionalDouble.empty(),
         )
@@ -1373,7 +1426,7 @@ object Blaze3dSkyCanvas : SkyCanvas {
 
         val format = DefaultVertexFormat.POSITION_TEX
         val built = ByteBufferBuilder.exactlySized(QUAD_VERTICES * format.vertexSize).use { bytes ->
-            val builder = BufferBuilder(bytes, VertexFormat.Mode.QUADS, format)
+            val builder = BufferBuilder(bytes, PrimitiveTopology.QUADS, format)
             // Vanilla's own corner and UV order, so a body on a one-day orbit is indistinguishable from
             // vanilla's sun rather than mirrored or upside down.
             builder.addVertex(-reach, 0.0f, -reach).setUv(u0, v0)
@@ -1435,7 +1488,7 @@ object Blaze3dSkyCanvas : SkyCanvas {
     private fun buildSlab(): GpuBuffer {
         val format = DefaultVertexFormat.POSITION_COLOR
         return ByteBufferBuilder.exactlySized(SLAB_QUADS * QUAD_VERTICES * format.vertexSize).use { bytes ->
-            val builder = BufferBuilder(bytes, VertexFormat.Mode.QUADS, format)
+            val builder = BufferBuilder(bytes, PrimitiveTopology.QUADS, format)
 
             fun corner(x: Float, y: Float, z: Float, brightness: Float) {
                 builder.addVertex(x, y, z).setColor(brightness, brightness, brightness, 1.0f)
@@ -1479,7 +1532,7 @@ object Blaze3dSkyCanvas : SkyCanvas {
         val starSphere = Sphere(STAR_DISTANCE)
         val format = DefaultVertexFormat.POSITION_TEX_COLOR
         return ByteBufferBuilder.exactlySized(count * QUAD_VERTICES * format.vertexSize).use { bytes ->
-            val builder = BufferBuilder(bytes, VertexFormat.Mode.QUADS, format)
+            val builder = BufferBuilder(bytes, PrimitiveTopology.QUADS, format)
             repeat(count) {
                 val center = starSphere.randomSurfacePoint(random)
                 val halfSize = MIN_STAR_SIZE + random.nextDouble() * STAR_SIZE_VARIATION

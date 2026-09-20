@@ -1,27 +1,27 @@
 [versions]
 java = "25"
 kotlin = "2.4.0"
-moddev = "2.0.143"
+moddev = "2.0.147"
 loom = "1.17.17"
 # Dokka 2 is not optional at this Java level: 1.9.20 embeds a Kotlin compiler whose `isAtLeastJava9`
 # cannot parse a "25.0.4" version string and throws, so `dokkaJavadoc` fails on Java 25 before it reads a
 # line of source. 2.x is also a different plugin — see the two ids in `multiloader-common.gradle`.
 dokka = "2.2.0"
 
-minecraft = "26.1.2"
-minecraftRange = "[26.1.2, 26.2)"
+minecraft = "26.2"
+minecraftRange = "[26.2, 26.3)"
 
 # NO PARCHMENT, and none is needed: Mojang removed obfuscation from Java Edition, 1.21.11 being the last
 # obfuscated release and 26.1 the first unobfuscated one. There is nothing left for it to deobfuscate.
 
-neoforge = "26.1.2.93"
-neoforgeRange = "[26.1, 26.2)"
-neoForm = "26.1.2-1"
+neoforge = "26.2.0.88"
+neoforgeRange = "[26.2, 26.3)"
+neoForm = "26.2-1"
 kff = "6.3.0"
 kffRange = "[6.3, )"
 
 fabricLoader = "0.19.3"
-fabricApi = "0.155.2+26.1.2"
+fabricApi = "0.161.0+26.2"
 flk = "1.13.13+kotlin.2.4.10"
 
 mixin = "0.8.5"

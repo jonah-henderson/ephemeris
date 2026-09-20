@@ -157,7 +157,13 @@ object GroundTints {
         val level = minecraft.level ?: return
         if (level.dimension() != dimension) return
         level.clearTintCaches()
-        minecraft.levelRenderer.allChanged()
+        // 26.2 renamed `allChanged` and made it ask for what it used to reach for itself.
+        minecraft.levelRenderer.invalidateCompiledGeometry(
+            level,
+            minecraft.options,
+            minecraft.gameRenderer.mainCamera(),
+            minecraft.blockColors,
+        )
     }
 
     /**

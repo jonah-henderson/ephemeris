@@ -87,7 +87,8 @@ object OffscreenLevelRender {
     fun levelBeingDrawn(): ClientLevel? = drawnLevel ?: Minecraft.getInstance().level
 
     /** Where this frame is going: the target [drawing] named, or the window's own outside any scope. */
-    fun targetBeingDrawnOnto(): RenderTarget = drawnTarget ?: Minecraft.getInstance().mainRenderTarget
+    fun targetBeingDrawnOnto(): RenderTarget =
+        drawnTarget ?: Minecraft.getInstance().gameRenderer.mainRenderTarget()
 
     /**
      * Where the cloud pass is going.
@@ -99,7 +100,7 @@ object OffscreenLevelRender {
     fun cloudTargetBeingDrawnOnto(): RenderTarget {
         drawnTarget?.let { return drawnCloudTarget ?: it }
         val minecraft = Minecraft.getInstance()
-        return minecraft.levelRenderer.cloudsTarget ?: minecraft.mainRenderTarget
+        return minecraft.levelRenderer.cloudsTarget() ?: minecraft.gameRenderer.mainRenderTarget()
     }
 
     /**
@@ -108,7 +109,7 @@ object OffscreenLevelRender {
      * Wanted by anything asking where the eye is or what the air is like where it stands — both of which
      * answer for the *player* if taken from `Minecraft` while another level is being drawn.
      */
-    fun cameraBeingDrawnFrom(): Camera = drawnCamera ?: Minecraft.getInstance().gameRenderer.mainCamera
+    fun cameraBeingDrawnFrom(): Camera = drawnCamera ?: Minecraft.getInstance().gameRenderer.mainCamera()
 
     /** Whether a level other than the player's is being drawn — for a caller that wants to skip work. */
     fun isDrawingElsewhere(): Boolean = drawnLevel != null
