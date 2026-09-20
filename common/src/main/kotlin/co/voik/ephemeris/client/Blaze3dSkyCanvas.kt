@@ -131,6 +131,17 @@ object Blaze3dSkyCanvas : SkyCanvas {
     private const val ONE_INSTANCE = 1
     private const val FROM_THE_FIRST_INSTANCE = 0
 
+    /**
+     * 26.2's draw calls are `vkCmdDraw` and `vkCmdDrawIndexed` verbatim, so the **count leads** and the
+     * offsets follow it — where 26.1 took `(baseVertex, firstIndex, indexCount, instanceCount)`, the offsets
+     * first. A call left in the old order asks for a count of zero and draws nothing, silently.
+     */
+    private const val FROM_THE_FIRST_VERTEX = 0
+    private const val FROM_THE_FIRST_INDEX = 0
+
+    /** Every buffer here is drawn from its own start, so no index is displaced. */
+    private const val NO_VERTEX_OFFSET = 0
+
     private val STARFIELD_PIPELINE: RenderPipeline = RenderPipeline.builder()
         .withLocation(Identifier.fromNamespaceAndPath(NAMESPACE, "pipeline/starfield"))
         .withVertexShader(Identifier.fromNamespaceAndPath(NAMESPACE, "starfield"))
@@ -465,7 +476,7 @@ object Blaze3dSkyCanvas : SkyCanvas {
             RenderSystem.bindDefaultUniforms(pass)
             pass.setUniform("DynamicTransforms", transforms)
             pass.setVertexBuffer(ONLY_VERTEX_BINDING, horizonFan().slice())
-            pass.draw(0, GLOW_FAN_VERTICES, ONE_INSTANCE, FROM_THE_FIRST_INSTANCE)
+            pass.draw(GLOW_FAN_VERTICES, ONE_INSTANCE, FROM_THE_FIRST_VERTEX, FROM_THE_FIRST_INSTANCE)
         }
         modelViewStack.popMatrix()
     }
@@ -615,7 +626,13 @@ object Blaze3dSkyCanvas : SkyCanvas {
             pass.setUniform("DynamicTransforms", transforms)
             pass.setVertexBuffer(ONLY_VERTEX_BINDING, vertices.slice())
             pass.setIndexBuffer(quadIndices.getBuffer(indices), quadIndices.type())
-            pass.drawIndexed(0, 0, indices, 1, FROM_THE_FIRST_INSTANCE)
+            pass.drawIndexed(
+                indices,
+                ONE_INSTANCE,
+                FROM_THE_FIRST_INDEX,
+                NO_VERTEX_OFFSET,
+                FROM_THE_FIRST_INSTANCE,
+            )
         }
     }
 
@@ -696,7 +713,13 @@ object Blaze3dSkyCanvas : SkyCanvas {
             pass.setUniform("DynamicTransforms", transforms)
             pass.setVertexBuffer(ONLY_VERTEX_BINDING, veilQuadOf(WHOLE_SPRITE).slice())
             pass.setIndexBuffer(quadIndices.getBuffer(QUAD_INDICES), quadIndices.type())
-            pass.drawIndexed(0, 0, QUAD_INDICES, 1, FROM_THE_FIRST_INSTANCE)
+            pass.drawIndexed(
+                QUAD_INDICES,
+                ONE_INSTANCE,
+                FROM_THE_FIRST_INDEX,
+                NO_VERTEX_OFFSET,
+                FROM_THE_FIRST_INSTANCE,
+            )
         }
 
         modelViewStack.popMatrix()
@@ -729,7 +752,13 @@ object Blaze3dSkyCanvas : SkyCanvas {
             pass.setUniform("DynamicTransforms", transforms)
             pass.setVertexBuffer(ONLY_VERTEX_BINDING, veilQuadOf(kept).slice())
             pass.setIndexBuffer(quadIndices.getBuffer(QUAD_INDICES), quadIndices.type())
-            pass.drawIndexed(0, 0, QUAD_INDICES, 1, FROM_THE_FIRST_INSTANCE)
+            pass.drawIndexed(
+                QUAD_INDICES,
+                ONE_INSTANCE,
+                FROM_THE_FIRST_INDEX,
+                NO_VERTEX_OFFSET,
+                FROM_THE_FIRST_INSTANCE,
+            )
         }
 
         modelViewStack.popMatrix()
@@ -794,7 +823,13 @@ object Blaze3dSkyCanvas : SkyCanvas {
             pass.bindTexture("Sampler0", atlas.textureView, atlas.sampler)
             pass.setVertexBuffer(ONLY_VERTEX_BINDING, quad.buffer.slice())
             pass.setIndexBuffer(quadIndices.getBuffer(QUAD_INDICES), quadIndices.type())
-            pass.drawIndexed(0, 0, QUAD_INDICES, 1, FROM_THE_FIRST_INSTANCE)
+            pass.drawIndexed(
+                QUAD_INDICES,
+                ONE_INSTANCE,
+                FROM_THE_FIRST_INDEX,
+                NO_VERTEX_OFFSET,
+                FROM_THE_FIRST_INSTANCE,
+            )
         }
 
         modelViewStack.popMatrix()
@@ -842,7 +877,13 @@ object Blaze3dSkyCanvas : SkyCanvas {
             pass.setUniform("StarfieldInfo", starfieldInfo.currentBuffer())
             pass.setVertexBuffer(ONLY_VERTEX_BINDING, field.buffer.slice())
             pass.setIndexBuffer(quadIndices.getBuffer(field.indexCount), quadIndices.type())
-            pass.drawIndexed(0, 0, field.indexCount, 1, FROM_THE_FIRST_INSTANCE)
+            pass.drawIndexed(
+                field.indexCount,
+                ONE_INSTANCE,
+                FROM_THE_FIRST_INDEX,
+                NO_VERTEX_OFFSET,
+                FROM_THE_FIRST_INSTANCE,
+            )
         }
         starfieldInfo.rotate()
 
@@ -885,7 +926,13 @@ object Blaze3dSkyCanvas : SkyCanvas {
             pass.bindTexture("Sampler0", picture.textureView, picture.sampler)
             pass.setVertexBuffer(ONLY_VERTEX_BINDING, slab().slice())
             pass.setIndexBuffer(quadIndices.getBuffer(SLAB_INDICES), quadIndices.type())
-            pass.drawIndexed(0, 0, SLAB_INDICES, 1, FROM_THE_FIRST_INSTANCE)
+            pass.drawIndexed(
+                SLAB_INDICES,
+                ONE_INSTANCE,
+                FROM_THE_FIRST_INDEX,
+                NO_VERTEX_OFFSET,
+                FROM_THE_FIRST_INSTANCE,
+            )
         }
         // Per deck, not per frame: each draw needs its own copy of the uniforms to survive until it runs.
         deckInfo.rotate()
@@ -975,7 +1022,13 @@ object Blaze3dSkyCanvas : SkyCanvas {
             pass.bindTexture("Sampler0", ramp.textureView, ramp.sampler)
             pass.setVertexBuffer(ONLY_VERTEX_BINDING, curtain().slice())
             pass.setIndexBuffer(quadIndices.getBuffer(AURORA_INDICES), quadIndices.type())
-            pass.drawIndexed(0, 0, AURORA_INDICES, 1, FROM_THE_FIRST_INSTANCE)
+            pass.drawIndexed(
+                AURORA_INDICES,
+                ONE_INSTANCE,
+                FROM_THE_FIRST_INDEX,
+                NO_VERTEX_OFFSET,
+                FROM_THE_FIRST_INSTANCE,
+            )
         }
         auroraInfo.rotate()
 
@@ -1091,7 +1144,13 @@ object Blaze3dSkyCanvas : SkyCanvas {
             pass.setUniform("DynamicTransforms", transforms)
             pass.setVertexBuffer(ONLY_VERTEX_BINDING, mesh.slice())
             pass.setIndexBuffer(quadIndices.getBuffer(arc.indices), quadIndices.type())
-            pass.drawIndexed(0, 0, arc.indices, 1, FROM_THE_FIRST_INSTANCE)
+            pass.drawIndexed(
+                arc.indices,
+                ONE_INSTANCE,
+                FROM_THE_FIRST_INDEX,
+                NO_VERTEX_OFFSET,
+                FROM_THE_FIRST_INSTANCE,
+            )
         }
         modelViewStack.popMatrix()
     }
