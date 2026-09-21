@@ -954,7 +954,7 @@ object Blaze3dSkyCanvas : SkyCanvas {
      * into one quarter — and gets its own phase, lean and length besides, so what is drawn several times is
      * never the same curtain twice.
      */
-    override fun drawAurora(aurora: Aurora, strength: Float, timeTicks: Float) {
+    override fun drawAurora(aurora: Aurora, strength: Float, timeTicks: Long) {
         if (strength <= NOTHING_TO_DRAW) return
         val ramp = rampOf(aurora.ramp)
         val drifted = wrapped(timeTicks.toDouble() * AURORA_DRIFT, AURORA_TIME_WRAP)

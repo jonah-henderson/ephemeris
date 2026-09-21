@@ -64,7 +64,7 @@ class HorizonPainterCheck : FunSpec({
 
         override fun drawCloudDeck(deck: co.voik.ephemeris.sky.CloudDeck, eye: Vec3, timeTicks: Double) = Unit
 
-        override fun drawAurora(aurora: co.voik.ephemeris.sky.Aurora, strength: Float, timeTicks: Float) = Unit
+        override fun drawAurora(aurora: co.voik.ephemeris.sky.Aurora, strength: Float, timeTicks: Long) = Unit
 
         override fun drawRainbow(
             rainbow: co.voik.ephemeris.sky.Rainbow,

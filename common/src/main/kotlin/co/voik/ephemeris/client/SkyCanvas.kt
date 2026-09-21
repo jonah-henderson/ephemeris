@@ -100,7 +100,7 @@ interface SkyCanvas {
      * [timeTicks] drives the fold and carries no partial tick, as [drawStarfield]'s does not — the motion is
      * far slower than a frame and a fraction added to a counter that may not have moved ratchets.
      */
-    fun drawAurora(aurora: Aurora, strength: Float, timeTicks: Float)
+    fun drawAurora(aurora: Aurora, strength: Float, timeTicks: Long)
 
     /**
      * A bow of [Rainbow.radiusDegrees] standing opposite a light at [lightAltitudeDegrees] and
