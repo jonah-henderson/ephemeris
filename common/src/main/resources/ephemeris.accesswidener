@@ -33,4 +33,9 @@ accessible	field	net/minecraft/server/MinecraftServer	worldData	Lnet/minecraft/w
 # It is the height-adjusted one deliberately, which is why `getBaseTemperature` will not do: a cold enough
 # peak in a temperate world should show a curtain for the same reason snow lies on it, and reimplementing
 # vanilla's falloff beside it is the thing that would drift.
-accessible	method	net/minecraft/world/level/biome/Biome	getTemperature	(Lnet/minecraft/core/BlockPos;I)F
+#
+# **`getHeightAdjustedTemperature` and not `getTemperature`**, which 26.2 deprecated. The two answer the
+# same number: the deprecated one is a 1024-entry thread-local cache wrapped around this one and nothing
+# else. Losing the cache costs nothing here -- `GroundWarmth` asks nine positions twice a second, and a
+# moving eye rarely asks the same block twice anyway.
+accessible	method	net/minecraft/world/level/biome/Biome	getHeightAdjustedTemperature	(Lnet/minecraft/core/BlockPos;I)F

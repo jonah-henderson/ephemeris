@@ -26,11 +26,19 @@ import net.neoforged.neoforge.network.registration.NetworkRegistry
  */
 class NeoForgeRuntimeLevelPlatform : RuntimeLevelPlatform {
 
+    /**
+     * **`markWorldsDirty` is marked NeoForge-internal, and is called anyway.** Its own note says what it is
+     * for — protecting the world tick loop against the level map changing under it — which is precisely
+     * what opening a dimension at runtime does. There is no public API for that because neither vanilla
+     * nor NeoForge has one; owning the technique is the whole of why this project exists.
+     */
+    @Suppress("DEPRECATION")
     override fun levelOpened(server: MinecraftServer, level: ServerLevel) {
         server.markWorldsDirty()
         NeoForge.EVENT_BUS.post(LevelEvent.Load(level))
     }
 
+    @Suppress("DEPRECATION")
     override fun levelClosing(server: MinecraftServer, level: ServerLevel) {
         NeoForge.EVENT_BUS.post(LevelEvent.Unload(level))
         server.markWorldsDirty()
