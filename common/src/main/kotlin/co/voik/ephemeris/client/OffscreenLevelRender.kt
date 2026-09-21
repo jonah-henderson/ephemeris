@@ -99,8 +99,9 @@ object OffscreenLevelRender {
      */
     fun cloudTargetBeingDrawnOnto(): RenderTarget {
         drawnTarget?.let { return drawnCloudTarget ?: it }
-        val minecraft = Minecraft.getInstance()
-        return minecraft.levelRenderer.cloudsTarget() ?: minecraft.gameRenderer.mainRenderTarget()
+        // 26.3 gave clouds order-independent transparency and took their own colour target away with it
+        // (`LevelTargetBundle` keeps only `oitCloudDepth`), so there is one target again.
+        return Minecraft.getInstance().gameRenderer.mainRenderTarget()
     }
 
     /**

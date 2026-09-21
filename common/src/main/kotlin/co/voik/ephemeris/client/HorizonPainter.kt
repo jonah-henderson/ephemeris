@@ -1,5 +1,7 @@
 package co.voik.ephemeris.client
 
+import org.joml.Vector4fc
+import org.joml.Vector4f
 import co.voik.ephemeris.Rgba
 import co.voik.ephemeris.sky.Appearance
 import co.voik.ephemeris.sky.BodyReading
@@ -72,7 +74,8 @@ object HorizonPainter {
     }
 
     /** Fully transparent, which is what `SkyRenderer` and the fog both read as "no sunrise here". */
-    private const val UNLIT_HORIZON = 0
+    /** Nothing at all, which 26.3 says as a vector where 26.2 said it as a packed zero. */
+    private val UNLIT_HORIZON: Vector4fc = Vector4f(0.0f, 0.0f, 0.0f, 0.0f)
 
     /**
      * The same, given the appearance and the hour outright — **so it can be checked without a game running**.

@@ -4,6 +4,7 @@ import net.minecraft.core.Holder
 import net.minecraft.util.Mth
 import net.minecraft.world.attribute.EnvironmentAttribute
 import net.minecraft.world.attribute.EnvironmentAttributes
+import net.minecraft.world.clock.ClockInstance
 import net.minecraft.world.clock.ClockManager
 import net.minecraft.world.clock.WorldClock
 import net.minecraft.world.level.Level
@@ -164,14 +165,31 @@ object LevelClock {
         private var askedAbout = Long.MIN_VALUE
         private var answered = Long.MIN_VALUE
 
-        override fun getTotalTicks(definition: Holder<WorldClock>): Long {
-            val actual = real.getTotalTicks(definition)
+        override fun getInstance(definition: Holder<WorldClock>): ClockInstance =
+            MovedHour(real.getInstance(definition))
+
+        private fun moved(actual: Long): Long {
             val look = LevelLooks.anywhere(level) ?: return actual
             if (actual != askedAbout) {
                 askedAbout = actual
                 answered = vanillaEquivalent(look, actual) ?: actual
             }
             return answered
+        }
+
+        /**
+         * The real clock's reading with only its **hour** moved.
+         *
+         * 26.3 hands a whole [ClockInstance] where 26.2 answered a tick count, so the move now has to say
+         * what it leaves alone as well as what it changes: the rate, the pause and the fraction through the
+         * tick are the level's own and are passed straight through. Only the total moves, which is what
+         * this class always did — the wider interface simply made the rest explicit.
+         */
+        private inner class MovedHour(private val actual: ClockInstance) : ClockInstance {
+            override fun totalTicks(): Long = moved(actual.totalTicks())
+            override fun partialTick(): Float = actual.partialTick()
+            override fun rate(): Float = actual.rate()
+            override fun isPaused(): Boolean = actual.isPaused()
         }
     }
 }

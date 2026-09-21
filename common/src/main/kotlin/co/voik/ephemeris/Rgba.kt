@@ -1,5 +1,6 @@
 package co.voik.ephemeris
 
+import org.joml.Vector3fc
 import com.mojang.serialization.Codec
 import com.mojang.serialization.codecs.RecordCodecBuilder
 
@@ -75,6 +76,12 @@ data class Rgba(val red: Float, val green: Float, val blue: Float, val alpha: Fl
         private const val SEEN_AS_RED = 0.2126f
         private const val SEEN_AS_GREEN = 0.7152f
         private const val SEEN_AS_BLUE = 0.0722f
+
+        /**
+         * A colour vanilla handed over as a vector, which is how 26.3 carries an environment attribute's
+         * colour where 26.2 packed it into an `Int`. Three components: an attribute names no alpha.
+         */
+        fun of(colour: Vector3fc): Rgba = Rgba(colour.x(), colour.y(), colour.z())
 
         /** A packed colour taken apart again — the inverse of [packed], for a value vanilla handed us. */
         fun of(packed: Int): Rgba = Rgba(

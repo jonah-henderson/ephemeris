@@ -7,17 +7,17 @@ import co.voik.ephemeris.sky.Aurora
 import co.voik.ephemeris.sky.CloudDeck
 import co.voik.ephemeris.sky.HorizonFan
 import co.voik.ephemeris.sky.Rainbow
-import com.mojang.blaze3d.PrimitiveTopology
-import com.mojang.blaze3d.buffers.GpuBuffer
+import com.mojang.renderpearl.api.pipeline.PrimitiveTopology
+import com.mojang.renderpearl.api.buffers.GpuBuffer
 import com.mojang.blaze3d.buffers.Std140Builder
-import com.mojang.blaze3d.pipeline.BindGroupLayout
-import com.mojang.blaze3d.pipeline.BlendFunction
-import com.mojang.blaze3d.pipeline.ColorTargetState
-import com.mojang.blaze3d.pipeline.DepthStencilState
-import com.mojang.blaze3d.pipeline.RenderPipeline
+import com.mojang.renderpearl.api.pipeline.BindGroupLayout
+import com.mojang.renderpearl.api.pipeline.BlendFunction
+import com.mojang.renderpearl.api.pipeline.ColorTargetState
+import com.mojang.renderpearl.api.pipeline.DepthStencilState
+import com.mojang.renderpearl.api.pipeline.RenderPipeline
 import com.mojang.blaze3d.pipeline.RenderTarget
-import com.mojang.blaze3d.shaders.UniformType
-import com.mojang.blaze3d.systems.RenderPass
+import com.mojang.renderpearl.api.pipeline.UniformType
+import com.mojang.renderpearl.api.commands.RenderPass
 import com.mojang.blaze3d.systems.RenderSystem
 import com.mojang.blaze3d.vertex.BufferBuilder
 import com.mojang.blaze3d.vertex.ByteBufferBuilder
@@ -198,7 +198,7 @@ object Blaze3dSkyCanvas : SkyCanvas {
                 .withUniform("Fog", UniformType.UNIFORM_BUFFER)
                 // The picture the deck is cut from. Declared even though a solid deck ignores it — one
                 // pipeline that sometimes skips a sample beats two that each carry their own copy of the roil.
-                .withSampler("Sampler0")
+                .withUniform("Sampler0", UniformType.COMBINED_IMAGE_SAMPLER)
                 .build(),
         )
         .withColorTargetState(ColorTargetState(BlendFunction.TRANSLUCENT))
@@ -225,7 +225,7 @@ object Blaze3dSkyCanvas : SkyCanvas {
         .withFragmentShader(Identifier.withDefaultNamespace("core/position_tex"))
         .withBindGroupLayout(
             BindGroupLayout.builder()
-                .withSampler("Sampler0")
+                .withUniform("Sampler0", UniformType.COMBINED_IMAGE_SAMPLER)
                 .withUniform("DynamicTransforms", UniformType.UNIFORM_BUFFER)
                 .withUniform("Projection", UniformType.UNIFORM_BUFFER)
                 .build(),
@@ -250,7 +250,7 @@ object Blaze3dSkyCanvas : SkyCanvas {
                 .withUniform("Projection", UniformType.UNIFORM_BUFFER)
                 .withUniform("AuroraInfo", UniformType.UNIFORM_BUFFER)
                 // The colour ramp, built per ramp rather than shipped — see [rampOf].
-                .withSampler("Sampler0")
+                .withUniform("Sampler0", UniformType.COMBINED_IMAGE_SAMPLER)
                 .build(),
         )
         .withColorTargetState(ColorTargetState(BlendFunction.OVERLAY))
@@ -472,7 +472,7 @@ object Blaze3dSkyCanvas : SkyCanvas {
         )
 
         renderPass("Ephemeris horizon glow")?.use { pass ->
-            pass.setPipeline(RenderPipelines.SUNRISE_SUNSET)
+            pass.setPipeline(RenderSystem.getCompiledPipeline(RenderPipelines.SUNRISE_SUNSET))
             RenderSystem.bindDefaultUniforms(pass)
             pass.setUniform("DynamicTransforms", transforms)
             pass.setVertexBuffer(ONLY_VERTEX_BINDING, horizonFan().slice())
@@ -621,7 +621,7 @@ object Blaze3dSkyCanvas : SkyCanvas {
         )
         val quadIndices = RenderSystem.getSequentialBuffer(PrimitiveTopology.QUADS)
         renderPass("Ephemeris sky glows")?.use { pass ->
-            pass.setPipeline(GLOWS_PIPELINE)
+            pass.setPipeline(RenderSystem.getCompiledPipeline(GLOWS_PIPELINE))
             RenderSystem.bindDefaultUniforms(pass)
             pass.setUniform("DynamicTransforms", transforms)
             pass.setVertexBuffer(ONLY_VERTEX_BINDING, vertices.slice())
@@ -708,7 +708,7 @@ object Blaze3dSkyCanvas : SkyCanvas {
         val quadIndices = RenderSystem.getSequentialBuffer(PrimitiveTopology.QUADS)
 
         renderPass("Ephemeris sky glow")?.use { pass ->
-            pass.setPipeline(GLOW_PIPELINE)
+            pass.setPipeline(RenderSystem.getCompiledPipeline(GLOW_PIPELINE))
             RenderSystem.bindDefaultUniforms(pass)
             pass.setUniform("DynamicTransforms", transforms)
             pass.setVertexBuffer(ONLY_VERTEX_BINDING, veilQuadOf(WHOLE_SPRITE).slice())
@@ -747,7 +747,7 @@ object Blaze3dSkyCanvas : SkyCanvas {
         val quadIndices = RenderSystem.getSequentialBuffer(PrimitiveTopology.QUADS)
 
         renderPass("Ephemeris sky body veil")?.use { pass ->
-            pass.setPipeline(RenderPipelines.STARS)
+            pass.setPipeline(RenderSystem.getCompiledPipeline(RenderPipelines.STARS))
             RenderSystem.bindDefaultUniforms(pass)
             pass.setUniform("DynamicTransforms", transforms)
             pass.setVertexBuffer(ONLY_VERTEX_BINDING, veilQuadOf(kept).slice())
@@ -817,10 +817,10 @@ object Blaze3dSkyCanvas : SkyCanvas {
         val quadIndices = RenderSystem.getSequentialBuffer(PrimitiveTopology.QUADS)
 
         renderPass("Ephemeris sky body")?.use { pass ->
-            pass.setPipeline(pipelineFor(shape, emitsOwnLight))
+            pass.setPipeline(RenderSystem.getCompiledPipeline(pipelineFor(shape, emitsOwnLight)))
             RenderSystem.bindDefaultUniforms(pass)
             pass.setUniform("DynamicTransforms", transforms)
-            pass.bindTexture("Sampler0", atlas.textureView, atlas.sampler)
+            pass.setUniform("Sampler0", atlas.textureView, atlas.sampler)
             pass.setVertexBuffer(ONLY_VERTEX_BINDING, quad.buffer.slice())
             pass.setIndexBuffer(quadIndices.getBuffer(QUAD_INDICES), quadIndices.type())
             pass.drawIndexed(
@@ -871,7 +871,7 @@ object Blaze3dSkyCanvas : SkyCanvas {
         val quadIndices = RenderSystem.getSequentialBuffer(PrimitiveTopology.QUADS)
 
         renderPass("Ephemeris sky stars")?.use { pass ->
-            pass.setPipeline(STARFIELD_PIPELINE)
+            pass.setPipeline(RenderSystem.getCompiledPipeline(STARFIELD_PIPELINE))
             RenderSystem.bindDefaultUniforms(pass)
             pass.setUniform("DynamicTransforms", transforms)
             pass.setUniform("StarfieldInfo", starfieldInfo.currentBuffer())
@@ -921,11 +921,11 @@ object Blaze3dSkyCanvas : SkyCanvas {
         // binds vanilla's picture too and the shader is told to ignore it — which is cheaper than a second
         // pipeline and a second copy of the roil to keep in step with this one.
         cloudPass()?.use { pass ->
-            pass.setPipeline(CLOUD_DECK_PIPELINE)
+            pass.setPipeline(RenderSystem.getCompiledPipeline(CLOUD_DECK_PIPELINE))
             RenderSystem.bindDefaultUniforms(pass)
             pass.setUniform("DynamicTransforms", transforms)
             pass.setUniform("DeckInfo", deckInfo.currentBuffer())
-            pass.bindTexture("Sampler0", picture.textureView, picture.sampler)
+            pass.setUniform("Sampler0", picture.textureView, picture.sampler)
             pass.setVertexBuffer(ONLY_VERTEX_BINDING, slab().slice())
             pass.setIndexBuffer(quadIndices.getBuffer(SLAB_INDICES), quadIndices.type())
             pass.drawIndexed(
@@ -1017,11 +1017,11 @@ object Blaze3dSkyCanvas : SkyCanvas {
             RuntimeLevelLog.warn("An aurora had no colour attachment to draw onto, so none was drawn")
         }
         pass?.use { pass ->
-            pass.setPipeline(AURORA_PIPELINE)
+            pass.setPipeline(RenderSystem.getCompiledPipeline(AURORA_PIPELINE))
             RenderSystem.bindDefaultUniforms(pass)
             pass.setUniform("DynamicTransforms", transforms)
             pass.setUniform("AuroraInfo", auroraInfo.currentBuffer())
-            pass.bindTexture("Sampler0", ramp.textureView, ramp.sampler)
+            pass.setUniform("Sampler0", ramp.textureView, ramp.sampler)
             pass.setVertexBuffer(ONLY_VERTEX_BINDING, curtain().slice())
             pass.setIndexBuffer(quadIndices.getBuffer(AURORA_INDICES), quadIndices.type())
             pass.drawIndexed(
@@ -1141,7 +1141,7 @@ object Blaze3dSkyCanvas : SkyCanvas {
         )
         val quadIndices = RenderSystem.getSequentialBuffer(PrimitiveTopology.QUADS)
         renderPass("Ephemeris rainbow")?.use { pass ->
-            pass.setPipeline(RAINBOW_PIPELINE)
+            pass.setPipeline(RenderSystem.getCompiledPipeline(RAINBOW_PIPELINE))
             RenderSystem.bindDefaultUniforms(pass)
             pass.setUniform("DynamicTransforms", transforms)
             pass.setVertexBuffer(ONLY_VERTEX_BINDING, mesh.slice())
