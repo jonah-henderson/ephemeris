@@ -898,7 +898,7 @@ object Blaze3dSkyCanvas : SkyCanvas {
             }
     }
 
-    override fun drawCloudDeck(deck: CloudDeck, eye: Vec3, timeTicks: Float) {
+    override fun drawCloudDeck(deck: CloudDeck, eye: Vec3, timeTicks: Double) {
         // **Looked up before the stack is touched**, so there is no way back out of this method between a
         // push and its pop. A deck is the one shape here that needs something which might not have loaded.
         val picture = cloudTexture(deck.texture ?: CloudDeck.VANILLA_CLOUDS) ?: return
@@ -1384,7 +1384,7 @@ object Blaze3dSkyCanvas : SkyCanvas {
     }
 
     /** The deck's parameters, laid out to match `DeckInfo` in the shaders. */
-    private fun writeDeckInfo(deck: CloudDeck, eye: Vec3, timeTicks: Float) {
+    private fun writeDeckInfo(deck: CloudDeck, eye: Vec3, timeTicks: Double) {
         deckInfo.currentBuffer().map(false, true).use { view ->
             Std140Builder.intoBuffer(view.data())
                 .putVec4(deck.low.red, deck.low.green, deck.low.blue, deck.low.alpha)
@@ -1420,8 +1420,8 @@ object Blaze3dSkyCanvas : SkyCanvas {
      * other stirs their *tone*, and a deck reading one number for both could not have a still sky with a
      * churning surface, or racing clouds with an even one.
      */
-    private fun cloudScroll(timeTicks: Float): Float =
-        wrapped(timeTicks.toDouble() * VANILLA_BLOCKS_PER_TICK, SCROLL_WRAP)
+    private fun cloudScroll(timeTicks: Double): Float =
+        wrapped(timeTicks * VANILLA_BLOCKS_PER_TICK, SCROLL_WRAP)
 
     /** Vanilla's `BLOCKS_PER_SECOND = 0.6`, per tick. */
     private const val VANILLA_BLOCKS_PER_TICK = 0.6 / 20.0
@@ -1430,8 +1430,8 @@ object Blaze3dSkyCanvas : SkyCanvas {
     private const val SCROLL_WRAP = 256.0 * 12.0
 
     /** How far the roil has drifted, wrapped at [ROIL_PERIOD]. */
-    private fun driftedTime(timeTicks: Float, driftSpeed: Float): Float =
-        wrapped(timeTicks.toDouble() * driftSpeed, ROIL_PERIOD)
+    private fun driftedTime(timeTicks: Double, driftSpeed: Float): Float =
+        wrapped(timeTicks * driftSpeed, ROIL_PERIOD)
 
     /**
      * [value] brought back into `0..period`. The shaders read time as a float and game time does not stop,

@@ -236,9 +236,21 @@ class CloudMoment(
     val bottomY: Float,
     val range: Int,
     val cameraPosition: Vec3,
-    /** The game time with the partial tick already added, so movement is smooth without doing that again. */
-    val time: Float,
-)
+    /** The level's clock, in whole ticks. */
+    val gameTime: Long,
+    /**
+     * How far into the tick being drawn this frame is, `0..1`, as [SkyMoment.partOfATickOn].
+     *
+     * Kept apart from [gameTime] rather than added into it, because the sum does not fit a `Float`: game
+     * time passes 2^24 after a few weeks of play and a float has no room left for a fraction, so a single
+     * `gameTime + partialTicks` quantises the drift long before that and then stops moving within a tick
+     * at all. [time] does the addition in a `Double`, where it costs nothing.
+     */
+    val partOfATickOn: Float,
+) {
+    /** The clock with this frame's fraction on it — what anything drifting with time should read. */
+    val time: Double get() = gameTime + partOfATickOn.toDouble()
+}
 
 /** Draws a level's overcast. */
 fun interface LevelCloudRenderer {

@@ -43,7 +43,8 @@ public class CloudRendererMixin {
                 bottomY,
                 range,
                 cameraPosition,
-                gameTime + partialTicks);
+                gameTime,
+                partialTicks);
         if (LevelRendering.INSTANCE.drawClouds(moment)) {
             callback.cancel();
         }

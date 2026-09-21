@@ -87,7 +87,7 @@ interface SkyCanvas {
      * One overcast layer, as a slab centred on the viewer. [eye] places it and also anchors the roil, which
      * is read in world coordinates so the pattern stays put as the player moves through it.
      */
-    fun drawCloudDeck(deck: CloudDeck, eye: Vec3, timeTicks: Float)
+    fun drawCloudDeck(deck: CloudDeck, eye: Vec3, timeTicks: Double)
 
     /**
      * A curtain of light crossing the sky at [Aurora.bearingDegrees], burning [Aurora.colours] crown to hem.
