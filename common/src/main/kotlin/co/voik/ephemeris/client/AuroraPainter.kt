@@ -78,7 +78,10 @@ object AuroraPainter {
         if (budget <= NONE_DRAWN) return sayIt(level, "budget", "a curtain is up, but this client is drawing none")
         val within = aurora.copy(curtains = aurora.curtains.coerceAtMost(budget))
         sayIt(level, "up", "a curtain is up, drawing ${within.curtains} at %.3f".format(strength))
-        canvas.drawAurora(within, strength, level.defaultClockTime)
+        // The fold drifts; which night this is, just above, is a question about the world and keeps the
+        // real clock. See [SkyDrift].
+        val folded = SkyDrift.steady(level, SkyPainter.SKY_DRIFT, level.defaultClockTime.toDouble()).toLong()
+        canvas.drawAurora(within, strength, folded)
     }
 
     /** How much of the ground around the viewer answers this curtain's rule, `1` where it asks for none. */

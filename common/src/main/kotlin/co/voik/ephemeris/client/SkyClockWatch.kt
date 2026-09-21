@@ -29,8 +29,15 @@ object SkyClockWatch {
     /** After this many lines about one clock, the summaries are the only readable thing left. */
     private const val ENOUGH_LINES = 40
 
-    /** How often to restate what a clock's steps have averaged, in steps. */
-    private const val SUMMARISE_EVERY = 10
+    /**
+     * Steps at which a clock restates what its steps have averaged.
+     *
+     * Thinning rather than periodic, because the thing that trips this is usually **not** going to stop: a
+     * server that cannot keep up corrects the client's clock every couple of seconds for as long as it is
+     * behind, and a line every tenth correction is a line a minute for the rest of the session. The first
+     * few summaries are the ones that carry the diagnosis; after that the log should go quiet on its own.
+     */
+    private val WORTH_SUMMARISING_AT = setOf(10, 100, 1_000, 10_000)
 
     /** Readings before a level says how its clocks have been running. Around twenty seconds of frames. */
     private const val WATCHED_LONG_ENOUGH = 1200
@@ -62,7 +69,7 @@ object SkyClockWatch {
                     .format(step, where, gap, readingsIn(where)),
             )
         }
-        if (clock.stepsBack % SUMMARISE_EVERY == 0) {
+        if (clock.stepsBack in WORTH_SUMMARISING_AT) {
             RuntimeLevelLog.warn(
                 "Sky clock `${clock.name}` in %s: %d steps back, %.4f ticks each, one every %.2fs"
                     .format(where, clock.stepsBack, clock.meanStepBack, clock.meanSecondsBetweenSteps),

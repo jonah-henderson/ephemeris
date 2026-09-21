@@ -41,6 +41,12 @@ object SkyPainter {
     private const val STARS_WORTH_DRAWING = 0.01f
 
     /**
+     * The drift the sky's own clock feeds, shared with [AuroraPainter] because both read `defaultClockTime`
+     * — one name for one clock, or the two would carry it forward twice a frame.
+     */
+    internal const val SKY_DRIFT = "sky"
+
+    /**
      * **How bright vanilla's own stars ever get, and it is half** — `Timelines.OVERWORLD_DAY` keyframes
      * `STAR_BRIGHTNESS` to a midnight peak of `0.5`.
      *
@@ -107,7 +113,10 @@ object SkyPainter {
             ?: (starBrightness / VANILLAS_BRIGHTEST_STARS)
         val visibility = nightliness * VANILLAS_BRIGHTEST_STARS * stars.glow * revealed
         if (stars.count > 0 && visibility > STARS_WORTH_DRAWING) {
-            canvas.drawStarfield(stars.seed, stars.count, aroundVanillasAxis(starAngle), visibility, clockTime)
+            // **The twinkle drifts and the field's position tells the hour**, so only the first of the two
+            // takes the steady clock — see [SkyDrift]. `starAngle` is vanilla's and stays exactly as given.
+            val twinkle = SkyDrift.steady(level, SKY_DRIFT, clockTime.toDouble()).toLong()
+            canvas.drawStarfield(stars.seed, stars.count, aroundVanillasAxis(starAngle), visibility, twinkle)
         }
 
         val skyLit = 1.0f - nightliness

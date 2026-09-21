@@ -19,8 +19,10 @@ object CloudPainter {
         val spec = LevelLooks.of(level.dimension())?.sky ?: return false
         if (spec.decks.isEmpty()) return false
 
+        // **The roil drifts, it does not tell the time**, so a server correction must not drag it backwards.
+        val drifted = SkyDrift.steady(level, "clouds", timeTicks)
         // Outermost last: the decks write depth, so the near one must be drawn after the far one to occlude it.
-        for (deck in spec.decks) canvas.drawCloudDeck(deck, eye, timeTicks)
+        for (deck in spec.decks) canvas.drawCloudDeck(deck, eye, drifted)
         return true
     }
 }
