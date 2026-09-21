@@ -92,40 +92,8 @@ object LevelRendering {
     // `internal` — the name is mangled — and not because a consumer has any business calling them.
 
     /** Asked by the sky Mixin. Registering a renderer is the way in; this is the way out. */
-    fun drawSky(moment: SkyMoment): Boolean {
-        watchTheClocks(moment)
-        return skies.any { it.draw(moment) }
-    }
+    fun drawSky(moment: SkyMoment): Boolean = skies.any { it.draw(moment) }
 
-    /**
-     * What the sky is drawn from, checked for running backwards — see [SkyClockWatch].
-     *
-     * Read at the seams rather than inside a painter, so the numbers watched are the ones vanilla handed
-     * over and not something a painter has already done arithmetic to.
-     */
-    private fun watchTheClocks(moment: SkyMoment) {
-        SkyClockWatch.reading(moment.level, "defaultClock", moment.level.defaultClockTime.toDouble())
-        // The raw angles, not the steadied ones — the watch reports what vanilla handed over, and
-        // `SkyDrift.turning` is what the sky is actually drawn from. Summary only: a step here is the
-        // clock's step seen again.
-        SkyClockWatch.reading(
-            moment.level, "starAngle", moment.starAngle.toDouble(), A_WHOLE_TURN, saysEachStep = false,
-        )
-        SkyClockWatch.reading(
-            moment.level, "sunAngle", moment.sunAngle.toDouble(), A_WHOLE_TURN, saysEachStep = false,
-        )
-    }
-
-    /**
-     * The cloud seam's own two. `defaultClock` is deliberately **not** read again here: one clock wants one
-     * reader, or its per-frame average comes out halved by being sampled twice a frame.
-     */
-    private fun watchTheClocks(moment: CloudMoment) {
-        SkyClockWatch.reading(moment.level, "gameTime", moment.gameTime.toDouble())
-        SkyClockWatch.reading(moment.level, "cloudTime", moment.time)
-    }
-
-    private const val A_WHOLE_TURN = 2.0 * Math.PI
 
     /**
      * Asked by the sky Mixin, from **both** of its injectors — once where a renderer claimed the sky, and
@@ -146,10 +114,7 @@ object LevelRendering {
     private var saidTheSeamRan = false
 
     /** Asked by the cloud Mixin. */
-    fun drawClouds(moment: CloudMoment): Boolean {
-        watchTheClocks(moment)
-        return clouds.any { it.draw(moment) }
-    }
+    fun drawClouds(moment: CloudMoment): Boolean = clouds.any { it.draw(moment) }
 
     /** Asked by the sunrise Mixin. */
     fun drawHorizon(moment: HorizonMoment): Boolean = horizons.any { it.draw(moment) }

@@ -8,7 +8,7 @@ import net.minecraft.client.multiplayer.ClientLevel
  * A client runs its own clock forward at twenty ticks a second and the server corrects it. While the server
  * keeps up there is nothing to correct, but a server running behind drops ticks, so the correction arrives
  * as a **step backwards** — measured at 25 ticks every 2.3 seconds on an overloaded one, which is more than
- * a second of motion undone several times a minute (`SkyClockWatch`, 2026-09-20).
+ * a second of motion undone several times a minute (measured over the Spire, 2026-09-20).
  *
  * The roil, the twinkle and an aurora's fold have no business following that. They are not *telling* the
  * time — nothing about them answers a question, and a viewer comparing them against the clock is not a
