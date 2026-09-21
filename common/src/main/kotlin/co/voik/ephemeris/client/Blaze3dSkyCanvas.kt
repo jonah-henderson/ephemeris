@@ -465,7 +465,7 @@ object Blaze3dSkyCanvas : SkyCanvas {
         modelViewStack.scale(1.0f, 1.0f, tint.alpha)
 
         val transforms = RenderSystem.getDynamicUniforms().writeTransform(
-            modelViewStack,
+            modelViewNow(),
             Vector4f(tint.red, tint.green, tint.blue, tint.alpha),
             Vector3f(),
             Matrix4f(),
@@ -614,7 +614,7 @@ object Blaze3dSkyCanvas : SkyCanvas {
 
     private fun drawGlowMesh(vertices: GpuBuffer, indices: Int) {
         val transforms = RenderSystem.getDynamicUniforms().writeTransform(
-            RenderSystem.getModelViewStack(),
+            modelViewNow(),
             UNTOUCHED,
             Vector3f(),
             Matrix4f(),
@@ -700,7 +700,7 @@ object Blaze3dSkyCanvas : SkyCanvas {
         modelViewStack.scale(angularSize, 1.0f, angularSize)
 
         val transforms = RenderSystem.getDynamicUniforms().writeTransform(
-            modelViewStack,
+            modelViewNow(),
             Vector4f(tint.red, tint.green, tint.blue, tint.alpha),
             Vector3f(),
             Matrix4f(),
@@ -739,7 +739,7 @@ object Blaze3dSkyCanvas : SkyCanvas {
         modelViewStack.scale(angularSize, 1.0f, angularSize)
 
         val transforms = RenderSystem.getDynamicUniforms().writeTransform(
-            modelViewStack,
+            modelViewNow(),
             Vector4f(veil.red, veil.green, veil.blue, veil.alpha),
             Vector3f(),
             Matrix4f(),
@@ -809,7 +809,7 @@ object Blaze3dSkyCanvas : SkyCanvas {
         modelViewStack.scale(angularSize, 1.0f, angularSize)
 
         val transforms = RenderSystem.getDynamicUniforms().writeTransform(
-            modelViewStack,
+            modelViewNow(),
             Vector4f(tint.red, tint.green, tint.blue, tint.alpha),
             Vector3f(),
             Matrix4f(),
@@ -862,7 +862,7 @@ object Blaze3dSkyCanvas : SkyCanvas {
 
         // The field's overall brightness; each star's own tint and twinkle ride on its vertices.
         val transforms = RenderSystem.getDynamicUniforms().writeTransform(
-            modelViewStack,
+            modelViewNow(),
             Vector4f(brightness, brightness, brightness, brightness),
             Vector3f(),
             Matrix4f(),
@@ -910,7 +910,7 @@ object Blaze3dSkyCanvas : SkyCanvas {
         modelViewStack.scale(DECK_RADIUS, deck.halfThickness, DECK_RADIUS)
 
         val transforms = RenderSystem.getDynamicUniforms().writeTransform(
-            modelViewStack,
+            modelViewNow(),
             Vector4f(1.0f, 1.0f, 1.0f, 1.0f),
             Vector3f(),
             Matrix4f(),
@@ -1002,7 +1002,7 @@ object Blaze3dSkyCanvas : SkyCanvas {
         modelViewStack.rotate(Quaternionf().rotateY(Math.toRadians(-leaning.toDouble()).toFloat()))
 
         val transforms = RenderSystem.getDynamicUniforms().writeTransform(
-            modelViewStack,
+            modelViewNow(),
             Vector4f(1.0f, 1.0f, 1.0f, 1.0f),
             Vector3f(),
             Matrix4f(),
@@ -1135,7 +1135,7 @@ object Blaze3dSkyCanvas : SkyCanvas {
         modelViewStack.rotate(Quaternionf().rotateX(Math.toRadians(-lightAltitudeDegrees.toDouble()).toFloat()))
 
         val transforms = RenderSystem.getDynamicUniforms().writeTransform(
-            modelViewStack,
+            modelViewNow(),
             Vector4f(1.0f, 1.0f, 1.0f, showing.coerceAtMost(1.0f)),
             Vector3f(),
             Matrix4f(),
@@ -1384,6 +1384,18 @@ object Blaze3dSkyCanvas : SkyCanvas {
     }
 
     /** The deck's parameters, laid out to match `DeckInfo` in the shaders. */
+    /**
+     * The modelview as it stands, **copied** — never the stack itself.
+     *
+     * `DynamicUniforms` keeps the last uniform it wrote and hands the *same slice* back to the next caller
+     * whose uniform equals it, holding the matrix **by reference**. Given the live stack it therefore ends
+     * up comparing against a matrix the drawing method is about to pop, so the next draw whose matrix
+     * matches the restored one is handed *this* draw's block instead of its own — and inherits whatever
+     * turn or scale was in it. Vanilla passes `getModelViewMatrixCopy()` at every one of its own call
+     * sites, which is what this is.
+     */
+    private fun modelViewNow(): Matrix4f = RenderSystem.getModelViewMatrixCopy()
+
     private fun writeDeckInfo(deck: CloudDeck, eye: Vec3, timeTicks: Double) {
         deckInfo.currentBuffer().map(false, true).use { view ->
             Std140Builder.intoBuffer(view.data())
