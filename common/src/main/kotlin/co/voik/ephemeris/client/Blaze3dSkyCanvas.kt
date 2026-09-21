@@ -899,6 +899,10 @@ object Blaze3dSkyCanvas : SkyCanvas {
     }
 
     override fun drawCloudDeck(deck: CloudDeck, eye: Vec3, timeTicks: Float) {
+        // **Looked up before the stack is touched**, so there is no way back out of this method between a
+        // push and its pop. A deck is the one shape here that needs something which might not have loaded.
+        val picture = cloudTexture(deck.texture ?: CloudDeck.VANILLA_CLOUDS) ?: return
+
         val modelViewStack = RenderSystem.getModelViewStack()
         modelViewStack.pushMatrix()
         // Half a block up: a deck at a whole Y is coplanar with that block's face and z-fights as you move.
@@ -917,7 +921,6 @@ object Blaze3dSkyCanvas : SkyCanvas {
         // **Bound whether or not it is read.** A pipeline declaring a sampler needs one, so a solid deck
         // binds vanilla's picture too and the shader is told to ignore it — which is cheaper than a second
         // pipeline and a second copy of the roil to keep in step with this one.
-        val picture = cloudTexture(deck.texture ?: CloudDeck.VANILLA_CLOUDS) ?: return
         cloudPass()?.use { pass ->
             pass.setPipeline(CLOUD_DECK_PIPELINE)
             RenderSystem.bindDefaultUniforms(pass)
