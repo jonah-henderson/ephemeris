@@ -899,9 +899,8 @@ object Blaze3dSkyCanvas : SkyCanvas {
     }
 
     override fun drawCloudDeck(deck: CloudDeck, eye: Vec3, timeTicks: Double) {
-        // **Looked up before the stack is touched**, so there is no way back out of this method between a
-        // push and its pop. A deck is the one shape here that needs something which might not have loaded.
-        val picture = cloudTexture(deck.texture ?: CloudDeck.VANILLA_CLOUDS) ?: return
+        // Looked up before the stack is touched, so nothing can return between a push and its pop.
+        val picture = cloudTexture(deck.texture ?: CloudDeck.VANILLA_CLOUDS)
 
         val modelViewStack = RenderSystem.getModelViewStack()
         modelViewStack.pushMatrix()
@@ -1417,10 +1416,12 @@ object Blaze3dSkyCanvas : SkyCanvas {
     }
 
     /**
-     * The picture a deck is cut from, or null if it has not loaded.
+     * The picture a deck is cut from.
      *
      * Vanilla's texture manager owns it, so a resource pack that retextures the overworld's clouds
-     * retextures every deck cut from them — which is the right answer and costs nothing.
+     * retextures every deck cut from them — which is the right answer and costs nothing. **It never
+     * answers null**: a miss registers the texture rather than declining, which is why the caller has no
+     * branch for one.
      */
     private fun cloudTexture(texture: Identifier) =
         Minecraft.getInstance().textureManager.getTexture(texture)

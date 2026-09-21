@@ -31,7 +31,6 @@ object RainbowPainter {
      * even more ways to be so than a curtain does.
      */
     fun draw(canvas: SkyCanvas, level: ClientLevel, sunAngle: Float, moonAngle: Float, rainBrightness: Float) {
-        if (level == null) return sayIt(level, "nowhere", "no level to draw in")
         val where = level.dimension().identifier()
         val look = LevelLooks.of(level.dimension())
         if (look == null) return sayIt(level, "untold", "nothing has said what $where looks like")

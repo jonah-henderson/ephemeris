@@ -43,7 +43,6 @@ object AuroraPainter {
      * only that something is, which is the one thing already known by the time anybody looks.
      */
     fun draw(canvas: SkyCanvas, level: ClientLevel, camera: Camera, rainBrightness: Float, starBrightness: Float) {
-        if (level == null) return sayIt(level, "nowhere", "no level to draw in")
         val where = level.dimension().identifier()
         val look = LevelLooks.of(level.dimension())
         if (look == null) return sayIt(level, "untold", "nothing has said what $where looks like")
