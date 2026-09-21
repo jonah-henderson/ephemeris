@@ -63,14 +63,7 @@ object RainbowPainter {
             // nothing.
             if (light.blending != Blending.ADDS) continue
             if (drawn >= MOST_BOWS) break
-            // The same steadying the bodies themselves got, or a bow would stand opposite where the sun
-            // was rather than where it is drawn (see [SkyDrift.turning]).
-            val direction = SkyPainter.directionOf(
-                light,
-                clockTime,
-                SkyDrift.turning(level, "sun", sunAngle),
-                SkyDrift.turning(level, "moon", moonAngle),
-            )
+            val direction = SkyPainter.directionOf(light, clockTime, sunAngle, moonAngle)
             val altitude = CelestialPath.altitudeOf(direction)
             highest = Math.max(highest, altitude)
             val cast = rainbow.castAt(altitude)
