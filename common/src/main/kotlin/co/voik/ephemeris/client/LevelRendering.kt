@@ -105,8 +105,15 @@ object LevelRendering {
      */
     private fun watchTheClocks(moment: SkyMoment) {
         SkyClockWatch.reading(moment.level, "defaultClock", moment.level.defaultClockTime.toDouble())
-        SkyClockWatch.reading(moment.level, "starAngle", moment.starAngle.toDouble(), wrapsAt = A_WHOLE_TURN)
-        SkyClockWatch.reading(moment.level, "sunAngle", moment.sunAngle.toDouble(), wrapsAt = A_WHOLE_TURN)
+        // The raw angles, not the steadied ones — the watch reports what vanilla handed over, and
+        // `SkyDrift.turning` is what the sky is actually drawn from. Summary only: a step here is the
+        // clock's step seen again.
+        SkyClockWatch.reading(
+            moment.level, "starAngle", moment.starAngle.toDouble(), A_WHOLE_TURN, saysEachStep = false,
+        )
+        SkyClockWatch.reading(
+            moment.level, "sunAngle", moment.sunAngle.toDouble(), A_WHOLE_TURN, saysEachStep = false,
+        )
     }
 
     /**

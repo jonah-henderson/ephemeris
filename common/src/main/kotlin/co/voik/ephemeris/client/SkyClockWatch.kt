@@ -53,11 +53,23 @@ object SkyClockWatch {
      * [wrapsAt] is the period of a clock that returns to zero — `2π` for an angle — and zero for one that
      * only ever climbs.
      */
-    fun reading(level: ClientLevel, name: String, value: Double, wrapsAt: Double = 0.0) {
+    fun reading(
+        level: ClientLevel,
+        name: String,
+        value: Double,
+        wrapsAt: Double = 0.0,
+        /**
+         * **False for a reading worked out from a clock already watched**, such as a sky angle. A step in
+         * one of those is the same event as the clock's, seen again, so a line per step would treble the
+         * noise and carry nothing. It still earns its place in the summary, where the ratio of its ordinary
+         * step to its backwards one is exactly what says whether a correction is visible.
+         */
+        saysEachStep: Boolean = true,
+    ) {
         val where = level.dimension().identifier().toString()
         val clock = clocks.getOrPut("$where|$name") { Clock(name, wrapsAt) }
         val step = clock.take(value)
-        if (step != null) reportStepBack(clock, where, step)
+        if (step != null && saysEachStep) reportStepBack(clock, where, step)
         if (clock.readings == WATCHED_LONG_ENOUGH && summarised.add(where)) summarise(where)
     }
 

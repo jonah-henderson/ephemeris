@@ -78,9 +78,9 @@ object SkyPainter {
         level: ClientLevel,
         /** The camera it is seen through — likewise off the moment, and likewise not always the player's. */
         camera: Camera,
-        sunAngle: Float,
-        moonAngle: Float,
-        starAngle: Float,
+        vanillasSunAngle: Float,
+        vanillasMoonAngle: Float,
+        vanillasStarAngle: Float,
         moonPhase: MoonPhase,
         rainBrightness: Float,
         starBrightness: Float,
@@ -88,6 +88,12 @@ object SkyPainter {
         val look = LevelLooks.of(level.dimension()) ?: return false
         val spec = look.sky
         if (spec.isOrdinary) return false
+
+        // **All three together**, before anything is placed by them — see [SkyDrift.turning]. Steadying one
+        // and not the others would let a sun and the stars behind it hold by different amounts.
+        val sunAngle = SkyDrift.turning(level, "sun", vanillasSunAngle)
+        val moonAngle = SkyDrift.turning(level, "moon", vanillasMoonAngle)
+        val starAngle = SkyDrift.turning(level, "stars", vanillasStarAngle)
 
         val clockTime = level.defaultClockTime
         val stars = spec.stars
