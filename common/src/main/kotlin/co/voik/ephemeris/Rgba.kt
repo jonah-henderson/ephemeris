@@ -1,6 +1,9 @@
 package co.voik.ephemeris
 
+import org.joml.Vector3f
 import org.joml.Vector3fc
+import org.joml.Vector4f
+import org.joml.Vector4fc
 import com.mojang.serialization.Codec
 import com.mojang.serialization.codecs.RecordCodecBuilder
 
@@ -30,6 +33,15 @@ data class Rgba(val red: Float, val green: Float, val blue: Float, val alpha: Fl
      * representation.
      */
     fun packed(): Int = (byteOf(alpha) shl 24) or (byteOf(red) shl 16) or (byteOf(green) shl 8) or byteOf(blue)
+
+    /**
+     * The three colour components, which is what an environment attribute takes in 26.3 where it took a
+     * packed `Int` before. The alpha is dropped — an attribute of this kind names none.
+     */
+    fun rgb(): Vector3fc = Vector3f(red, green, blue)
+
+    /** The same with the alpha kept, for the two attributes that carry one. */
+    fun rgba(): Vector4fc = Vector4f(red, green, blue, alpha)
 
     private fun byteOf(channel: Float): Int = (channel.coerceIn(0.0f, 1.0f) * FULL).toInt()
 
