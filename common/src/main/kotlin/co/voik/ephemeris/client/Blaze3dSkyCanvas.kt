@@ -447,6 +447,87 @@ object Blaze3dSkyCanvas : SkyCanvas {
 
     private var slabBuffer: GpuBuffer? = null
 
+    override fun drawDome(overhead: Rgba, underfoot: Rgba?) {
+        drawDisc(skyDisc(), overhead, lift = 0.0f, label = "Ephemeris sky dome")
+        // **Lifted, and that is vanilla's own oddity rather than a rounding of ours.** The disc is built at
+        // -16 and then translated 12 back up, which leaves it four blocks under the eye — near enough to
+        // read as "the world ends here" and far enough not to clip the camera.
+        underfoot?.let { drawDisc(voidDisc(), it, lift = VOID_DISC_LIFT, label = "Ephemeris sky underside") }
+    }
+
+    /**
+     * One of the two discs, tinted through the transform uniform.
+     *
+     * The colour rides in `DynamicTransforms` rather than in the vertices, which is what lets one buffer
+     * serve every sky: the mesh is positions and nothing else, and a level's colour is a uniform write.
+     */
+    private fun drawDisc(mesh: GpuBuffer, tint: Rgba, lift: Float, label: String) {
+        val modelViewStack = RenderSystem.getModelViewStack()
+        modelViewStack.pushMatrix()
+        if (lift != 0.0f) modelViewStack.translate(0.0f, lift, 0.0f)
+        // `modelViewNow` rather than the live stack — see there for what sharing a slice costs.
+        val transforms = RenderSystem.getDynamicUniforms()
+            .writeTransform(modelViewNow(), Vector4f(tint.red, tint.green, tint.blue, tint.alpha))
+        renderPass(label)?.use { pass ->
+            pass.setPipeline(RenderSystem.getCompiledPipeline(RenderPipelines.SKY))
+            RenderSystem.bindDefaultUniforms(pass)
+            pass.setUniform("DynamicTransforms", transforms)
+            pass.setVertexBuffer(ONLY_VERTEX_BINDING, mesh.slice())
+            pass.draw(DOME_VERTICES, ONE_INSTANCE, FROM_THE_FIRST_VERTEX, FROM_THE_FIRST_INSTANCE)
+        }
+        modelViewStack.popMatrix()
+    }
+
+    private fun skyDisc(): GpuBuffer = overheadDisc ?: buildDisc(DOME_HEIGHT, "Ephemeris sky disc").also {
+        overheadDisc = it
+    }
+
+    private fun voidDisc(): GpuBuffer = undersideDisc ?: buildDisc(-DOME_HEIGHT, "Ephemeris void disc").also {
+        undersideDisc = it
+    }
+
+    /**
+     * A disc at [y]: its centre, then a ring of rim vertices, as a triangle fan. Vanilla's `buildSkyDisc`,
+     * rebuilt because its buffers are private to `SkyRenderer`.
+     *
+     * **The radius takes the sign of [y], which is not decoration.** It mirrors the rim in x, reversing the
+     * fan's winding, so the disc below faces down as the disc above faces up — one builder for both, where
+     * writing the loop twice would have been two chances to get a facing wrong.
+     *
+     * Built once and kept: nothing about it depends on the frame.
+     */
+    private fun buildDisc(y: Float, label: String): GpuBuffer {
+        val vertexSize = DefaultVertexFormat.POSITION.vertexSize
+        ByteBufferBuilder.exactlySized(DOME_VERTICES * vertexSize).use { bytes ->
+            val builder = BufferBuilder(bytes, PrimitiveTopology.TRIANGLE_FAN, DefaultVertexFormat.POSITION)
+            val radius = Math.signum(y) * DOME_RADIUS
+            builder.addVertex(0.0f, y, 0.0f)
+            var degrees = -HALF_TURN_DEGREES
+            while (degrees <= HALF_TURN_DEGREES) {
+                val radians = (degrees * Mth.DEG_TO_RAD).toDouble()
+                builder.addVertex(radius * Mth.cos(radians), y, DOME_RADIUS * Mth.sin(radians))
+                degrees += DOME_SEGMENT_DEGREES
+            }
+            builder.buildOrThrow().use { mesh ->
+                return RenderSystem.getDevice()
+                    .createBuffer({ label }, GpuBuffer.USAGE_VERTEX, mesh.vertexBuffer())
+            }
+        }
+    }
+
+    private var overheadDisc: GpuBuffer? = null
+    private var undersideDisc: GpuBuffer? = null
+
+    /** Vanilla's own numbers for the two discs, which is why they are not round. */
+    private const val DOME_RADIUS = 512.0f
+    private const val DOME_HEIGHT = 16.0f
+    private const val VOID_DISC_LIFT = 12.0f
+    private const val DOME_SEGMENT_DEGREES = 45
+    private const val HALF_TURN_DEGREES = 180
+
+    /** The centre, plus a rim vertex every [DOME_SEGMENT_DEGREES] from -180 to 180 inclusive. */
+    private const val DOME_VERTICES = 1 + (2 * HALF_TURN_DEGREES / DOME_SEGMENT_DEGREES) + 1
+
     override fun drawHorizonGlow(bearingDegrees: Float, tint: Rgba) {
         if (tint.alpha <= FAINTEST_GLOW) return
 

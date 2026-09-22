@@ -18,6 +18,27 @@ import org.joml.Quaternionf
 interface SkyCanvas {
 
     /**
+     * **The sky's own colour: everything else here is drawn onto this.**
+     *
+     * It is what a level sees when it looks up at nothing, and until a writer says otherwise it is exactly
+     * what vanilla would have drawn — which is why the shape below is vanilla's numbers rather than ours.
+     *
+     * **A dome in name only.** Vanilla draws two flat discs, not a hemisphere: one 512 blocks across at
+     * `y = +16` for the sky, and one at `y = -16`, lifted 12 back up, for the ground under the world. They
+     * are wider than the far plane and untextured, so a flat disc overhead reads as a whole sky — and being
+     * only nine segments round, the horizon is a faint nonagon anybody who goes looking can find.
+     *
+     * [overhead] is the sky's colour, which vanilla takes from the level's `sky_color` attribute and fogs
+     * toward the horizon. [underfoot] is the disc below; vanilla draws it black and only where the camera
+     * is high enough to see past the world's edge, and `null` is that "not this frame". **Its colour is
+     * ours to play with where vanilla's is fixed** — an Age standing on nothing may want to say so.
+     *
+     * Drawn before anything else in a frame and writing no depth, so every body, star and cloud lands on
+     * top of it whatever order they are asked for in.
+     */
+    fun drawDome(overhead: Rgba, underfoot: Rgba?)
+
+    /**
      * A band of light on the horizon at [bearingDegrees], clockwise from north — one sunrise or one sunset.
      *
      * **Placed by a real bearing, where vanilla's is placed by a coin toss.** Vanilla only ever needs east
