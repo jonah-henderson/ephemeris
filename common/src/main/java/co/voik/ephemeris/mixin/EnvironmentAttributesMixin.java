@@ -16,10 +16,15 @@ import org.spongepowered.asm.mixin.injection.Redirect;
  * day and <i>looked</i> like the overworld's night on the overworld's schedule, because none of that list
  * knows a second sun exists.
  *
- * <p>{@code addDefaultLayers} hands {@code level.clockManager()} to every sampler it bakes, so this one
+ * <p>{@code addDynamicLayers} hands {@code level.clockManager()} to every sampler it bakes, so this one
  * redirect moves all of them together, in vanilla's own curves, agreeing with each other for free. Restating
  * the tracks instead would mean picking a dozen colours by hand and keeping them in step with a version of
  * Minecraft that owns them.
+ *
+ * <p><b>It was {@code addDefaultLayers} until 26.3</b>, which split that method in two: the static layers,
+ * which take a {@code LevelAccessor} and know nothing of time, and the dynamic ones, which take the
+ * {@code Level} and are where the clock is read. The timelines went with the dynamic half, so the redirect
+ * follows them there and reaches the same single call.
  *
  * <p>No loader event comes near this, and no data can express it: a runtime level cannot be given a timeline
  * of its own, timelines being datapack content frozen at startup.
@@ -31,7 +36,7 @@ import org.spongepowered.asm.mixin.injection.Redirect;
 public class EnvironmentAttributesMixin {
 
     @Redirect(
-            method = "addDefaultLayers",
+            method = "addDynamicLayers",
             at = @At(value = "INVOKE", target = "Lnet/minecraft/world/level/Level;clockManager()Lnet/minecraft/world/clock/ClockManager;"))
     private static ClockManager ephemeris$readTheLevelsOwnHour(Level level) {
         return LevelClock.INSTANCE.forTimelines(level, level.clockManager());
