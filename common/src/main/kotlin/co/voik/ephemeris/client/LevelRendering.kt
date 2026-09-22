@@ -2,6 +2,7 @@ package co.voik.ephemeris.client
 
 import co.voik.ephemeris.Rgba
 import co.voik.ephemeris.RuntimeLevelLog
+import co.voik.ephemeris.sky.CloudDeck
 import co.voik.ephemeris.sky.LevelLooks
 import com.mojang.blaze3d.pipeline.RenderTarget
 import net.minecraft.client.Camera
@@ -133,6 +134,34 @@ object LevelRendering {
 
     /** Asked by the cloud Mixin. */
     fun drawClouds(moment: CloudMoment): Boolean = clouds.any { it.draw(moment) }
+
+    /**
+     * Whether this level's clouds are ours — the same question [drawClouds] answers, without drawing.
+     *
+     * **For the order-independent path, which asks three times for one frame.** `renderOit` is called once
+     * per `OitStage`, and a deck drawn on each would be drawn three times; so it is drawn on one of them
+     * and vanilla is silenced on all three, which is what this is for. [CloudPainter]'s own condition, for
+     * the reason [ownsTheSky] gives.
+     */
+    fun claimsClouds(moment: CloudMoment): Boolean = cloudDecksOf(moment.level).isNotEmpty()
+
+    /**
+     * The decks this level would draw, for the questions asked before one is.
+     *
+     * [LevelLooks] rather than the renderers, for the reason [ownsTheSky] gives.
+     */
+    fun cloudDecksOf(level: ClientLevel): List<CloudDeck> =
+        LevelLooks.of(level.dimension())?.sky?.decks.orEmpty()
+
+    /**
+     * Asked by the cloud Mixin at `prepare`, where no pass is open — see [LevelCloudRenderer.ready].
+     *
+     * Every renderer is asked, not just the one that will claim: which claims is not known until the draw,
+     * and a renderer that uploaded nothing has nothing to undo.
+     */
+    fun readyClouds(moment: CloudMoment) {
+        for (renderer in clouds) renderer.ready(moment)
+    }
 
     /** Asked by the sunrise Mixin. */
     fun drawHorizon(moment: HorizonMoment): Boolean = horizons.any { it.draw(moment) }
@@ -289,6 +318,23 @@ class CloudMoment(
 fun interface LevelCloudRenderer {
     /** **True** if this drew the clouds; **false** to pass. */
     fun draw(moment: CloudMoment): Boolean
+
+    /**
+     * Upload whatever [draw] will need — **the half of a cloud renderer that 26.3 made compulsory.**
+     *
+     * Clouds are drawn inside the transparency pass, which the game opens and hands down, and inside a pass
+     * a renderer may issue **pass commands and nothing else**. Loading a texture, mapping a buffer, writing
+     * a uniform or rotating a ring buffer are all refused there — *"Close the existing render pass before
+     * performing additional commands"* — and each of the three took the client down in turn before this
+     * existed.
+     *
+     * So this runs at `CloudRenderer.prepare`, where no pass is open and where vanilla builds its own mesh
+     * for exactly the same reason. The moment carries the same numbers [draw] will be given, so anything
+     * worked out from them can be worked out here.
+     *
+     * Nothing by default: a renderer drawing something that needs no upload has nothing to do here.
+     */
+    fun ready(moment: CloudMoment) = Unit
 }
 
 /**

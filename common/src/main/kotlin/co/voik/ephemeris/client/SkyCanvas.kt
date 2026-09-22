@@ -119,8 +119,24 @@ interface SkyCanvas {
     fun drawStarfield(seed: Long, count: Int, orientation: Quaternionf, brightness: Float, timeTicks: Long)
 
     /**
+     * Everything [drawCloudDeck] will need uploaded, **before the frame reaches a render pass**.
+     *
+     * Since 26.3 a deck is drawn inside the transparency pass, and inside a pass only pass commands are
+     * allowed: a texture that has to be loaded, a buffer that has to be mapped, a uniform that has to be
+     * written and a ring buffer that has to be rotated are all refused there. So they happen here, where
+     * `CloudRenderer.prepare` runs and no pass is open — the same split, for the same reason, that vanilla
+     * made for its own clouds.
+     *
+     * Given the same [eye] and [timeTicks] the draw will be given, so anything derived from them agrees.
+     */
+    fun readyCloudDeck(deck: CloudDeck, eye: Vec3, timeTicks: Double)
+
+    /**
      * One overcast layer, as a slab centred on the viewer. [eye] places it and also anchors the roil, which
      * is read in world coordinates so the pattern stays put as the player moves through it.
+     *
+     * Draws only: whatever this needed uploading was uploaded by [readyCloudDeck], and a deck that was not
+     * readied this frame is not drawn.
      */
     fun drawCloudDeck(deck: CloudDeck, eye: Vec3, timeTicks: Double)
 

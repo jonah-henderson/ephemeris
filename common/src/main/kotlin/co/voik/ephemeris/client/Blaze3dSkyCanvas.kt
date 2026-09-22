@@ -983,6 +983,9 @@ object Blaze3dSkyCanvas : SkyCanvas {
     override fun drawCloudDeck(deck: CloudDeck, eye: Vec3, timeTicks: Double) {
         // Looked up before the stack is touched, so nothing can return between a push and its pop.
         val picture = cloudTexture(deck.texture ?: CloudDeck.VANILLA_CLOUDS)
+        // **Readied, or not drawn.** The uniforms are written in `readyCloudDeck`, where no pass is open;
+        // a deck nothing prepared this frame has no block to bind and is left alone rather than guessed at.
+        val uniforms = readiedDecks[deck] ?: return
 
         val modelViewStack = RenderSystem.getModelViewStack()
         modelViewStack.pushMatrix()
@@ -996,7 +999,6 @@ object Blaze3dSkyCanvas : SkyCanvas {
             Vector3f(),
             Matrix4f(),
         )
-        writeDeckInfo(deck, eye, timeTicks)
         val quadIndices = RenderSystem.getSequentialBuffer(PrimitiveTopology.QUADS)
 
         // **Bound whether or not it is read.** A pipeline declaring a sampler needs one, so a solid deck
@@ -1006,7 +1008,7 @@ object Blaze3dSkyCanvas : SkyCanvas {
             pass.setPipeline(RenderSystem.getCompiledPipeline(CLOUD_DECK_PIPELINE))
             RenderSystem.bindDefaultUniforms(pass)
             pass.setUniform("DynamicTransforms", transforms)
-            pass.setUniform("DeckInfo", deckInfo.currentBuffer())
+            pass.setUniform("DeckInfo", uniforms)
             pass.setUniform("Sampler0", picture.textureView, picture.sampler)
             pass.setVertexBuffer(ONLY_VERTEX_BINDING, slab().slice())
             pass.setIndexBuffer(quadIndices.getBuffer(SLAB_INDICES), quadIndices.type())
@@ -1018,9 +1020,6 @@ object Blaze3dSkyCanvas : SkyCanvas {
                 FROM_THE_FIRST_INSTANCE,
             )
         }
-        // Per deck, not per frame: each draw needs its own copy of the uniforms to survive until it runs.
-        deckInfo.rotate()
-
         modelViewStack.popMatrix()
     }
 
@@ -1507,6 +1506,25 @@ object Blaze3dSkyCanvas : SkyCanvas {
      */
     private fun cloudTexture(texture: Identifier) =
         Minecraft.getInstance().textureManager.getTexture(texture)
+
+    override fun readyCloudDeck(deck: CloudDeck, eye: Vec3, timeTicks: Double) {
+        // The picture first: a texture vanilla has not loaded is *uploaded* on first ask, and an upload is
+        // one of the things a pass forbids.
+        cloudTexture(deck.texture ?: CloudDeck.VANILLA_CLOUDS)
+        writeDeckInfo(deck, eye, timeTicks)
+        readiedDecks[deck] = deckInfo.currentBuffer().slice()
+        // Per deck, not per frame: each draw needs its own copy of the uniforms to survive until it runs.
+        deckInfo.rotate()
+    }
+
+    /**
+     * What each deck readied this frame will bind, written afresh every frame.
+     *
+     * A deck a level has stopped asking for keeps an entry here and is never bound again, the painter
+     * iterating the level's *current* decks — so the staleness cannot reach a frame.
+     */
+    private val readiedDecks = mutableMapOf<CloudDeck, com.mojang.renderpearl.api.buffers.GpuBufferSlice>()
+
 
     /**
      * How far the cloud picture has slid, in blocks, wrapped so the float never grows coarse.

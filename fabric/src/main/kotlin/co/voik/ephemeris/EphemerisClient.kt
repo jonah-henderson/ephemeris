@@ -4,6 +4,8 @@ import co.voik.ephemeris.client.AuroraPainter
 import co.voik.ephemeris.client.Blaze3dSkyCanvas
 import co.voik.ephemeris.client.CloudPainter
 import co.voik.ephemeris.client.HorizonPainter
+import co.voik.ephemeris.client.CloudMoment
+import co.voik.ephemeris.client.LevelCloudRenderer
 import co.voik.ephemeris.client.LevelRendering
 import co.voik.ephemeris.client.GroundTints
 import co.voik.ephemeris.client.RainbowPainter
@@ -51,7 +53,15 @@ private fun registerTheBuiltInPainters() {
             moment.starBrightness,
         )
     }
-    LevelRendering.clouds { moment -> CloudPainter.draw(Blaze3dSkyCanvas, moment.level, moment.cameraPosition, moment.time) }
+    // **Both halves**, which is what 26.3 asks of anything drawn in the transparency pass: what a deck
+    // needs uploaded is uploaded where no pass is open, and the draw only draws.
+    LevelRendering.clouds(object : LevelCloudRenderer {
+        override fun ready(moment: CloudMoment) =
+            CloudPainter.ready(Blaze3dSkyCanvas, moment.level, moment.cameraPosition, moment.time)
+
+        override fun draw(moment: CloudMoment): Boolean =
+            CloudPainter.draw(Blaze3dSkyCanvas, moment.level, moment.cameraPosition, moment.time)
+    })
     LevelRendering.horizon { moment -> HorizonPainter.draw(Blaze3dSkyCanvas, moment.level) }
     LevelRendering.skyOverlay { moment ->
         AuroraPainter.draw(

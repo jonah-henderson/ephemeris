@@ -14,15 +14,31 @@ import net.minecraft.world.phys.Vec3
  */
 object CloudPainter {
 
+    /**
+     * The uploads the draw below will need, done where no pass is open — see [SkyCanvas.readyCloudDeck].
+     *
+     * **It reads the same decks and the same drift as [draw]**, which is the whole of why it is here rather
+     * than in the Mixin: a prepare that disagreed with its draw about either would upload one deck's
+     * uniforms and bind them for another.
+     */
+    fun ready(canvas: SkyCanvas, level: ClientLevel, eye: Vec3, timeTicks: Double) {
+        val spec = LevelLooks.of(level.dimension())?.sky ?: return
+        val drifted = driftFor(level, timeTicks)
+        for (deck in spec.decks) canvas.readyCloudDeck(deck, eye, drifted)
+    }
+
     /** Draws the level's decks, or returns false having drawn nothing so vanilla's clouds run instead. */
     fun draw(canvas: SkyCanvas, level: ClientLevel, eye: Vec3, timeTicks: Double): Boolean {
         val spec = LevelLooks.of(level.dimension())?.sky ?: return false
         if (spec.decks.isEmpty()) return false
 
-        // **The roil drifts, it does not tell the time**, so a server correction must not drag it backwards.
-        val drifted = SkyDrift.steady(level, "clouds", timeTicks)
+        val drifted = driftFor(level, timeTicks)
         // Outermost last: the decks write depth, so the near one must be drawn after the far one to occlude it.
         for (deck in spec.decks) canvas.drawCloudDeck(deck, eye, drifted)
         return true
     }
+
+    /** **The roil drifts, it does not tell the time**, so a server correction must not drag it backwards. */
+    private fun driftFor(level: ClientLevel, timeTicks: Double): Double =
+        SkyDrift.steady(level, "clouds", timeTicks)
 }

@@ -5,9 +5,12 @@ import co.voik.ephemeris.client.CloudMoment;
 import co.voik.ephemeris.client.LevelRendering;
 import co.voik.ephemeris.client.OffscreenLevelRender;
 import com.mojang.renderpearl.api.commands.RenderPass;
+import com.mojang.renderpearl.api.textures.GpuTextureView;
 import net.minecraft.client.CloudStatus;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.renderer.CloudRenderer;
+import net.minecraft.client.renderer.oit.OitRenderPassProvider;
+import net.minecraft.client.renderer.oit.OitStage;
 import net.minecraft.world.phys.Vec3;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
@@ -33,10 +36,21 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  * pass cannot be opened inside a pass. {@link Blaze3dSkyCanvas#lending} hands vanilla's down for the length
  * of the draw and takes it back after.
  *
- * <p><b>The order-independent path is not served yet.</b> A client with OIT on draws its clouds through
- * {@code renderOit}, which is handed no pass at all, and this does not touch it — such a client gets
- * vanilla's clouds where a level asked for its own. Vanilla's sheet is the less wrong of the two answers
- * available, the other being no clouds at all; see {@code notes/drawing-in-26-3.md}.
+ * <p><b>Both transparency paths, because exactly one of them runs.</b> A client with "improved
+ * transparency" on draws its clouds through {@code renderOit} instead, and `LevelRenderer` picks between
+ * them per frame. {@code renderOit} is handed no pass — it makes its own through
+ * {@code OitRenderPassProvider} — so there the canvas opens its own as it does everywhere else, and
+ * nothing is lent.
+ *
+ * <p><b>It is called once per {@code OitStage}, and the deck is drawn on one of them.</b> Vanilla's clouds
+ * are suppressed on all three; ours are drawn on {@code ACCUMULATE}, which is the stage where colour is
+ * actually gathered and so the nearest thing to where vanilla's would have contributed. Drawn on every
+ * stage it would be drawn three times a frame.
+ *
+ * <p><b>What that does not do is take part in the accumulation.</b> Our deck is drawn in a pass of its own
+ * with an ordinary blended pipeline, so against other transparent things it orders as it always did rather
+ * than order-independently. Giving the deck an {@code OitPipelineSet} of its own is what would close that,
+ * and it is shader work; see {@code notes/drawing-in-26-3.md}.
  */
 @Mixin(CloudRenderer.class)
 public class CloudRendererMixin {
@@ -45,6 +59,10 @@ public class CloudRendererMixin {
         + "Lnet/minecraft/world/phys/Vec3;JF)V";
     private static final String RENDER = "render(Lnet/minecraft/client/CloudStatus;"
         + "Lcom/mojang/renderpearl/api/commands/RenderPass;)V";
+    private static final String RENDER_OIT = "renderOit(Lnet/minecraft/client/CloudStatus;"
+        + "Lnet/minecraft/client/renderer/oit/OitStage;"
+        + "Lcom/mojang/renderpearl/api/textures/GpuTextureView;"
+        + "Lnet/minecraft/client/renderer/oit/OitRenderPassProvider$Parameters;)V";
 
     @Unique
     private int ephemeris$color;
@@ -70,17 +88,58 @@ public class CloudRendererMixin {
         this.ephemeris$cameraPosition = cameraPosition;
         this.ephemeris$gameTime = gameTime;
         this.ephemeris$partialTicks = partialTicks;
+        // **And the uploads, here rather than at the draw.** Inside a pass a renderer may issue pass
+        // commands and nothing else — no texture load, no buffer map, no ring-buffer rotation — and the
+        // draw is inside one. See LevelCloudRenderer.ready.
+        CloudMoment moment = ephemeris$momentOf(cloudStatus);
+        if (moment != null) {
+            LevelRendering.INSTANCE.readyClouds(moment);
+        }
     }
 
     @Inject(method = RENDER, at = @At("HEAD"), cancellable = true)
     private void ephemeris$drawTheLevelsClouds(
             CloudStatus cloudStatus, RenderPass pass, CallbackInfo callback) {
-        ClientLevel level = OffscreenLevelRender.INSTANCE.levelBeingDrawn();
         // No prepare this frame means no numbers to draw with, and vanilla will not have drawn either.
-        if (level == null || this.ephemeris$cameraPosition == null) {
+        CloudMoment moment = ephemeris$momentOf(cloudStatus);
+        if (moment == null) {
             return;
         }
-        CloudMoment moment = new CloudMoment(
+        if (Blaze3dSkyCanvas.INSTANCE.lending(pass, () -> LevelRendering.INSTANCE.drawClouds(moment))) {
+            callback.cancel();
+        }
+    }
+
+    /**
+     * The same again where the client sorts its transparency the other way — drawn on one stage, suppressed
+     * on all of them.
+     */
+    @Inject(method = RENDER_OIT, at = @At("HEAD"), cancellable = true)
+    private void ephemeris$drawTheLevelsCloudsInOit(
+            CloudStatus cloudStatus, OitStage stage, GpuTextureView depth,
+            OitRenderPassProvider.Parameters parameters, CallbackInfo callback) {
+        CloudMoment moment = ephemeris$momentOf(cloudStatus);
+        if (moment == null) {
+            return;
+        }
+        // Asked on every stage so that a level which claims its clouds has vanilla's silenced on all of
+        // them, and drawn on the one that gathers colour.
+        boolean ours = stage == OitStage.ACCUMULATE
+                ? LevelRendering.INSTANCE.drawClouds(moment)
+                : LevelRendering.INSTANCE.claimsClouds(moment);
+        if (ours) {
+            callback.cancel();
+        }
+    }
+
+    /** The frame's numbers as a moment, or null where no prepare has given us any. */
+    @Unique
+    private CloudMoment ephemeris$momentOf(CloudStatus cloudStatus) {
+        ClientLevel level = OffscreenLevelRender.INSTANCE.levelBeingDrawn();
+        if (level == null || this.ephemeris$cameraPosition == null) {
+            return null;
+        }
+        return new CloudMoment(
                 level,
                 OffscreenLevelRender.INSTANCE.cloudTargetBeingDrawnOnto(),
                 OffscreenLevelRender.INSTANCE.cameraBeingDrawnFrom(),
@@ -91,8 +150,5 @@ public class CloudRendererMixin {
                 this.ephemeris$cameraPosition,
                 this.ephemeris$gameTime,
                 this.ephemeris$partialTicks);
-        if (Blaze3dSkyCanvas.INSTANCE.lending(pass, () -> LevelRendering.INSTANCE.drawClouds(moment))) {
-            callback.cancel();
-        }
     }
 }
