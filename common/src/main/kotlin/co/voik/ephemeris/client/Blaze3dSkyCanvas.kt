@@ -447,13 +447,14 @@ object Blaze3dSkyCanvas : SkyCanvas {
 
     private var slabBuffer: GpuBuffer? = null
 
-    override fun drawDome(overhead: Rgba, underfoot: Rgba?) {
-        drawDisc(skyDisc(), overhead, lift = 0.0f, label = "Ephemeris sky dome")
-        // **Lifted, and that is vanilla's own oddity rather than a rounding of ours.** The disc is built at
-        // -16 and then translated 12 back up, which leaves it four blocks under the eye — near enough to
-        // read as "the world ends here" and far enough not to clip the camera.
-        underfoot?.let { drawDisc(voidDisc(), it, lift = VOID_DISC_LIFT, label = "Ephemeris sky underside") }
-    }
+    override fun drawDome(tint: Rgba) =
+        drawDisc(skyDisc(), tint, lift = 0.0f, label = "Ephemeris sky dome")
+
+    // **Lifted, and that is vanilla's own oddity rather than a rounding of ours.** The disc is built at -16
+    // and then translated 12 back up, which leaves it four blocks under the eye — near enough to read as
+    // "the world ends here" and far enough not to clip the camera.
+    override fun drawUnderside(tint: Rgba) =
+        drawDisc(voidDisc(), tint, lift = VOID_DISC_LIFT, label = "Ephemeris sky underside")
 
     /**
      * One of the two discs, tinted through the transform uniform.

@@ -12,8 +12,7 @@
     "client.ClientLevelMixin",
     "client.BlockColorsMixin",
     "client.CloudRendererMixin",
-    "client.SkyRendererMixin",
-    "client.SunriseSunsetMixin"
+    "client.SkyRendererMixin"
   ],
   "injectors": {
     "defaultRequire": 1

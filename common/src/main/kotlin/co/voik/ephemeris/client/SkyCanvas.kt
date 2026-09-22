@@ -21,22 +21,36 @@ interface SkyCanvas {
      * **The sky's own colour: everything else here is drawn onto this.**
      *
      * It is what a level sees when it looks up at nothing, and until a writer says otherwise it is exactly
-     * what vanilla would have drawn — which is why the shape below is vanilla's numbers rather than ours.
+     * what vanilla would have drawn — which is why the shape is vanilla's numbers rather than ours.
      *
-     * **A dome in name only.** Vanilla draws two flat discs, not a hemisphere: one 512 blocks across at
-     * `y = +16` for the sky, and one at `y = -16`, lifted 12 back up, for the ground under the world. They
-     * are wider than the far plane and untextured, so a flat disc overhead reads as a whole sky — and being
-     * only nine segments round, the horizon is a faint nonagon anybody who goes looking can find.
+     * **A dome in name only.** Vanilla draws a flat disc, not a hemisphere: 512 blocks across at `y = +16`,
+     * wider than the far plane and untextured, so a flat disc overhead reads as a whole sky. Being only
+     * nine segments round, the horizon is a faint nonagon anybody who goes looking can find.
      *
-     * [overhead] is the sky's colour, which vanilla takes from the level's `sky_color` attribute and fogs
-     * toward the horizon. [underfoot] is the disc below; vanilla draws it black and only where the camera
-     * is high enough to see past the world's edge, and `null` is that "not this frame". **Its colour is
-     * ours to play with where vanilla's is fixed** — an Age standing on nothing may want to say so.
+     * [tint] is the sky's colour, which vanilla takes from the level's `sky_color` attribute; the fade
+     * toward the horizon is the **fog**, not the disc, so whatever draws this must have uploaded the
+     * frame's fog or the sky comes out flat.
      *
-     * Drawn before anything else in a frame and writing no depth, so every body, star and cloud lands on
-     * top of it whatever order they are asked for in.
+     * Drawn first and writing no depth, so every body, star and cloud lands on top of it whatever order
+     * they are asked for in. [drawUnderside] is the other end of that sandwich.
      */
-    fun drawDome(overhead: Rgba, underfoot: Rgba?)
+    fun drawDome(tint: Rgba)
+
+    /**
+     * The disc **below** the world, drawn last so that it hides what has set.
+     *
+     * The sibling of [drawDome] at `y = -16`, lifted 12 back up, and its own mirror: the rim is reversed in
+     * x so it faces down. Vanilla draws it black, and only where the camera is high enough to see past the
+     * world's edge.
+     *
+     * **Last, and that is the whole point of it being its own verb.** The sky pass writes no depth, so what
+     * is drawn later covers what came before — which is how a sun that has gone down stops being visible
+     * through the ground. Draw it with the dome and every body below the horizon shows through.
+     *
+     * Its colour is ours to play with where vanilla's is fixed: an Age standing on nothing may want to say
+     * so.
+     */
+    fun drawUnderside(tint: Rgba)
 
     /**
      * A band of light on the horizon at [bearingDegrees], clockwise from north — one sunrise or one sunset.

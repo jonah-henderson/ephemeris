@@ -31,7 +31,9 @@ class HorizonPainterCheck : FunSpec({
     class RecordingCanvas : SkyCanvas {
         val glows = mutableListOf<Painted>()
 
-        override fun drawDome(overhead: Rgba, underfoot: Rgba?) = Unit
+        override fun drawDome(tint: Rgba) = Unit
+
+        override fun drawUnderside(tint: Rgba) = Unit
 
         override fun drawHorizonGlow(bearingDegrees: Float, tint: Rgba) {
             glows += Painted(bearingDegrees, tint)

@@ -1,6 +1,8 @@
 package co.voik.ephemeris.client
 
+import co.voik.ephemeris.Rgba
 import co.voik.ephemeris.RuntimeLevelLog
+import co.voik.ephemeris.sky.LevelLooks
 import com.mojang.blaze3d.pipeline.RenderTarget
 import net.minecraft.client.Camera
 import net.minecraft.client.multiplayer.ClientLevel
@@ -94,6 +96,22 @@ object LevelRendering {
     /** Asked by the sky Mixin. Registering a renderer is the way in; this is the way out. */
     fun drawSky(moment: SkyMoment): Boolean = skies.any { it.draw(moment) }
 
+    /**
+     * Whether this level's sky is **ours to draw whole** — asked by the sky Mixin before it lays anything
+     * down, because the background has to go under the suns and by then it is too late to ask.
+     *
+     * **It has to be answerable without drawing.** Since 26.3 the seam is one method wide: cancelling it
+     * takes vanilla's disc, its sunrise, its bodies and the disc below the world all together, so the
+     * decision is made once for the frame and everything after it is ours. A renderer's own `draw` still
+     * decides whether it personally has anything to say — this only decides whose frame it is.
+     *
+     * **The condition is `SkyPainter`'s and `HorizonPainter`'s own**, deliberately: all three ask whether
+     * the level is described and whether its sky is ordinary, and an ordinary one is left to vanilla
+     * entirely. They must not be able to disagree, which is why it is written once and read from there.
+     */
+    fun ownsTheSky(level: ClientLevel): Boolean =
+        LevelLooks.of(level.dimension())?.sky?.isOrdinary == false
+
 
     /**
      * Asked by the sky Mixin, from **both** of its injectors — once where a renderer claimed the sky, and
@@ -168,6 +186,20 @@ class SkyMoment(
     val rainBrightness: Float,
     /** How visible stars are at this hour, before anything of yours dims them further. */
     val starBrightness: Float,
+    /**
+     * What vanilla would have painted the sky itself — its `sky_color` attribute for this level and hour.
+     *
+     * Here because a renderer that takes the sky over takes the **background** over with it: since 26.3
+     * nothing of vanilla's sky is drawn once the seam cancels, so the colour behind a level's suns is the
+     * renderer's to lay down. [SkyCanvas.drawDome] is what lays it, and this is what vanilla would have
+     * used — a baseline to depart from rather than a rule.
+     */
+    val skyColour: Rgba,
+    /**
+     * Whether vanilla would have drawn the disc **below** the world this frame — true where the camera is
+     * high enough to see past its edge. See [SkyCanvas.drawUnderside], which is drawn last.
+     */
+    val undersideShowing: Boolean,
 )
 
 /** Draws a level's suns, moons and stars. */
