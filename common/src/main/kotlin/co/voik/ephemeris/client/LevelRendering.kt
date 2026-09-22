@@ -113,7 +113,6 @@ object LevelRendering {
     fun ownsTheSky(level: ClientLevel): Boolean =
         LevelLooks.of(level.dimension())?.sky?.isOrdinary == false
 
-
     /**
      * Asked by the sky Mixin, from **both** of its injectors — once where a renderer claimed the sky, and
      * once at the tail where vanilla drew it. A cancelled head returns at the injection point, so the tail

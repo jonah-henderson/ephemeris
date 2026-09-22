@@ -64,22 +64,41 @@ public class SkyRendererMixin {
     private void ephemeris$drawTheLevelsSky(
             GpuBufferSlice fog, SkyRenderState state, CallbackInfo callback) {
         ClientLevel level = OffscreenLevelRender.INSTANCE.levelBeingDrawn();
-        if (level == null || !LevelRendering.INSTANCE.ownsTheSky(level)) {
+        if (level == null) {
+            return;
+        }
+        boolean oursToDraw = LevelRendering.INSTANCE.ownsTheSky(level);
+
+        // Nothing of the sky could be seen from in here, so none of it is drawn — a level's bodies, its
+        // horizon and every overlay over them alike. See SkyThroughFog for why the fog cannot say this for
+        // itself.
+        //
+        // **Asked before the sky is claimed, not after.** A level whose sky is ordinary is left to vanilla,
+        // and vanilla's bodies carry no fog uniform either — so this ran for exactly the skies that did not
+        // need it, and an abyss under an ordinary sky kept its sunset. Where the sky is ours the dome still
+        // goes down, because vanilla's disc did: what the fog hides is the things *in* the sky, not the
+        // colour of it. Where it is vanilla's there is no dome to lay, and cancelling outright leaves the
+        // frame at the cleared fog colour — which is what vanilla itself does in lava and powder snow, and
+        // is the picture a fully fogged sky would have made anyway.
+        //
+        // **And for every level, not only the ones a look was recorded for** (Jonah, 2026-09-22, walked).
+        // Ordinary water closes at 96 against bodies standing at 100, so the sun no longer shows from under
+        // the sea in the Overworld either. It is the same fault wherever a medium closes in front of the
+        // sky, and drawing the line at levels this library happens to know about would only have made it
+        // arbitrary.
+        if (SkyThroughFog.INSTANCE.hidesTheSky(OffscreenLevelRender.INSTANCE.cameraBeingDrawnFrom())) {
+            if (oursToDraw) {
+                RenderSystem.setShaderFog(fog);
+                ephemeris$layTheSky(ephemeris$momentOf(level, state));
+            }
+            callback.cancel();
+            return;
+        }
+        if (!oursToDraw) {
             return;
         }
         RenderSystem.setShaderFog(fog);
         SkyMoment moment = ephemeris$momentOf(level, state);
-
-        // Nothing of the sky could be seen from in here, so none of it is drawn — a level's bodies, its
-        // horizon and every overlay over them alike. The dome still goes down, because vanilla's disc did:
-        // what the fog hides is the things *in* the sky, not the colour of it. See SkyThroughFog for why
-        // the fog cannot say this for itself.
-        if (SkyThroughFog.INSTANCE.hidesTheSky(moment.getCamera())) {
-            ephemeris$layTheSky(moment);
-            callback.cancel();
-            return;
-        }
-
         ephemeris$layTheSky(moment);
         LevelRendering.INSTANCE.drawHorizon(new HorizonMoment(
                 level,
