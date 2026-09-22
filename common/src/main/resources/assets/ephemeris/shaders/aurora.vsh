@@ -1,14 +1,16 @@
 #version 330
+// SPIR-V since 26.3: every stage-crossing declaration needs a location.
+#extension GL_ARB_separate_shader_objects : require
 
-#moj_import <minecraft:dynamictransforms.glsl>
-#moj_import <minecraft:projection.glsl>
-#moj_import <ephemeris:noise.glsl>
+#include <minecraft:dynamictransforms.glsl>
+#include <minecraft:projection.glsl>
+#include <ephemeris:noise.glsl>
 
 // A flat unit grid — `Position` is `(along, up, 0)` and carries no world meaning at all. Where the sheet
 // actually stands is computed here, from uniforms, so one static mesh serves every curtain at every
 // distance and the fold costs no rebuild.
-in vec3 Position;
-in vec2 UV0;
+layout(location = 0) in vec3 Position;
+layout(location = 1) in vec2 UV0;
 
 layout(std140) uniform AuroraInfo {
     // x: how present this curtain is, 0..1.  y: the folded time it is read at.
@@ -24,7 +26,7 @@ layout(std140) uniform AuroraInfo {
     vec4 Lean;
 };
 
-out vec2 acrossTheSheet;
+layout(location = 0) out vec2 acrossTheSheet;
 
 // How many sky units a kilometre is. Arbitrary — the sky pass writes no depth and nothing else is drawn at
 // this scale — but it must be small enough that a 700km arc stays inside the projection's far plane.

@@ -1,7 +1,9 @@
 #version 330
+// SPIR-V since 26.3: every stage-crossing declaration needs a location.
+#extension GL_ARB_separate_shader_objects : require
 
-#moj_import <minecraft:fog.glsl>
-#moj_import <minecraft:dynamictransforms.glsl>
+#include <minecraft:fog.glsl>
+#include <minecraft:dynamictransforms.glsl>
 
 layout(std140) uniform DeckInfo {
     vec4 LowTone;
@@ -12,12 +14,12 @@ layout(std140) uniform DeckInfo {
 
 uniform sampler2D Sampler0;
 
-in float faceBrightness;
-in vec2 worldSample;
-in vec2 acrossTheSlab;
-in float eyeDistance;
+layout(location = 0) in float faceBrightness;
+layout(location = 1) in vec2 worldSample;
+layout(location = 2) in vec2 acrossTheSlab;
+layout(location = 3) in float eyeDistance;
 
-out vec4 fragColor;
+layout(location = 0) out vec4 fragColor;
 
 // A pixel this faint is sky. Vanilla's own test on its cloud picture is `alpha < 10` of 255.
 const float SOLID_ENOUGH = 10.0 / 255.0;

@@ -1,3 +1,6 @@
+#ifndef EPHEMERIS_NOISE_GLSL
+#define EPHEMERIS_NOISE_GLSL
+
 // Tiling value noise, for shapes that must not look like arithmetic.
 //
 // **Why this exists at all.** A sum of sines is the cheap way to make something wander, and it has a
@@ -62,3 +65,5 @@ float ephemerisFbm(vec2 at, vec2 period, int octaves) {
     }
     return total / most;
 }
+
+#endif

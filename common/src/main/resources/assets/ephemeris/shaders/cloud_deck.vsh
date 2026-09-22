@@ -1,14 +1,19 @@
 #version 330
+// **Required since 26.3, which compiles these to SPIR-V.** Every `in` and `out` crossing a stage needs an
+// explicit location under it, and `#moj_import` is gone in favour of `#include`.
+#extension GL_ARB_separate_shader_objects : require
 
-#moj_import <minecraft:fog.glsl>
-#moj_import <minecraft:dynamictransforms.glsl>
-#moj_import <minecraft:projection.glsl>
+#include <minecraft:fog.glsl>
+#include <minecraft:dynamictransforms.glsl>
+#include <minecraft:projection.glsl>
 
 // One deck's slab: a unit box, scaled and lifted into place by ModelViewMat. Position carries the local
 // corner and Color carries only a face brightness — the roil itself is left to the fragment stage, which
 // is the whole reason this pipeline exists.
-in vec3 Position;
-in vec4 Color;
+//
+// The locations are the vertex format's own order — POSITION_COLOR, so position then colour.
+layout(location = 0) in vec3 Position;
+layout(location = 1) in vec4 Color;
 
 layout(std140) uniform DeckInfo {
     vec4 LowTone;
@@ -22,8 +27,8 @@ layout(std140) uniform DeckInfo {
     vec4 Extent;
 };
 
-out float faceBrightness;
-out vec2 worldSample;
+layout(location = 0) out float faceBrightness;
+layout(location = 1) out vec2 worldSample;
 // Where on the slab this fragment is, in local units — `±1` at the edges (`Blaze3dSkyCanvas.buildSlab`).
 // The fragment stage takes its length to fade the square slab into a disc.
 //
@@ -33,7 +38,7 @@ out vec2 worldSample;
 // the fade. Every fragment of every deck was discarded and the Spire had no clouds at all. Scaling the
 // number was tried first and could not have worked: the fault is the order of the two operations, not
 // their units (Jonah, 2026-08-06 and 2026-08-08, walked).
-out vec2 acrossTheSlab;
+layout(location = 2) out vec2 acrossTheSlab;
 
 // How far this corner stands from the eye, in blocks, for the fragment stage to fade against the fog.
 //
@@ -42,7 +47,7 @@ out vec2 acrossTheSlab;
 // camera's view — and a rotation does not change a length, so the view-space position's own length is the
 // distance from the eye. Measuring the unit corner instead would have said `1.73` for every vertex of
 // every deck at every height.
-out float eyeDistance;
+layout(location = 3) out float eyeDistance;
 
 void main() {
     vec4 eyeRelative = ModelViewMat * vec4(Position, 1.0);

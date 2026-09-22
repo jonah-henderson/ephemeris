@@ -1,7 +1,9 @@
 #version 330
+// SPIR-V since 26.3: every stage-crossing declaration needs a location.
+#extension GL_ARB_separate_shader_objects : require
 
-#moj_import <minecraft:dynamictransforms.glsl>
-#moj_import <ephemeris:noise.glsl>
+#include <minecraft:dynamictransforms.glsl>
+#include <ephemeris:noise.glsl>
 
 layout(std140) uniform AuroraInfo {
     vec4 Shape;
@@ -15,9 +17,9 @@ layout(std140) uniform AuroraInfo {
 // see `Blaze3dSkyCanvas.rampOf`. One fetch, and no loop over however many colours were written.
 uniform sampler2D Sampler0;
 
-in vec2 acrossTheSheet;
+layout(location = 0) in vec2 acrossTheSheet;
 
-out vec4 fragColor;
+layout(location = 0) out vec4 fragColor;
 
 // Where the arc starts fading toward its ends, as a share of the length it was given. Real ones fade out
 // with distance rather than stopping, so this stands in for the air between.
