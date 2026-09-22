@@ -111,7 +111,7 @@ class AuroraCheck : FunSpec({
             height = 0.83f,
             frequency = 0.19f,
             bearingDegrees = 237.0f,
-            ground = AuroraGround.WHERE_IT_SNOWS,
+            warmestGround = Aurora.SNOW_LINE,
             curtains = 5,
             seed = -998877L,
         )
@@ -127,9 +127,14 @@ class AuroraCheck : FunSpec({
 
     test("a curtain that says nothing about the ground may be seen over any") {
         // The neutral answer is the default on purpose: a library aurora that silently never comes is a
-        // worse thing to meet first than one that comes everywhere.
-        check(Aurora().ground == AuroraGround.ANYWHERE) { "An undescribed curtain carries a rule nobody asked for" }
-        check(sent(Aurora()).ground == AuroraGround.ANYWHERE) { "The default did not survive the trip" }
+        // worse thing to meet first than one that comes everywhere. Null is that "no ceiling at all".
+        check(Aurora().warmestGround == null) { "An undescribed curtain carries a rule nobody asked for" }
+        check(sent(Aurora()).warmestGround == null) { "The default did not survive the trip" }
+    }
+
+    test("a ceiling on the ground's warmth crosses the wire") {
+        val cold = Aurora(warmestGround = Aurora.SNOW_LINE)
+        check(sent(cold).warmestGround == Aurora.SNOW_LINE) { "A ceiling arrived as ${sent(cold).warmestGround}" }
     }
 
     test("a sky carries its curtain to the client") {
@@ -184,7 +189,7 @@ class AuroraOnTheWireCheck : FunSpec({
         height = 0.68f,
         frequency = 0.43f,
         bearingDegrees = 214.0f,
-        ground = AuroraGround.WHERE_IT_SNOWS,
+        warmestGround = Aurora.SNOW_LINE,
         curtains = 4,
         seed = 4242L,
     )
