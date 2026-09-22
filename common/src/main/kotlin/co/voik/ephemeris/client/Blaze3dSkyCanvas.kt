@@ -1002,7 +1002,7 @@ object Blaze3dSkyCanvas : SkyCanvas {
         // **Bound whether or not it is read.** A pipeline declaring a sampler needs one, so a solid deck
         // binds vanilla's picture too and the shader is told to ignore it — which is cheaper than a second
         // pipeline and a second copy of the roil to keep in step with this one.
-        cloudPass()?.use { pass ->
+        onCloudPass { pass ->
             pass.setPipeline(RenderSystem.getCompiledPipeline(CLOUD_DECK_PIPELINE))
             RenderSystem.bindDefaultUniforms(pass)
             pass.setUniform("DynamicTransforms", transforms)
@@ -1544,9 +1544,43 @@ object Blaze3dSkyCanvas : SkyCanvas {
     private fun renderPass(label: String): RenderPass? =
         passOnto(label, OffscreenLevelRender.targetBeingDrawnOnto())
 
-    /** The target vanilla's clouds use, which has its own when the setting calls for one. */
-    private fun cloudPass(): RenderPass? =
-        passOnto("Ephemeris cloud deck", OffscreenLevelRender.cloudTargetBeingDrawnOnto())
+    /**
+     * A pass for the cloud deck — **vanilla's own where one has been lent, and ours where none has.**
+     *
+     * The sky is drawn where no pass is open, so everything else here opens its own. The clouds are not:
+     * since 26.3 they are drawn inside the transparency pass, which `LevelRenderer` opens and hands down,
+     * and a pass cannot be opened inside a pass — the encoder says so outright ("Close the existing render
+     * pass before creating a new one!"). So for that one draw the pass arrives from outside.
+     *
+     * [lending] is how it arrives, and the borrowed one is **never closed here**: it belongs to whoever
+     * lent it and has more to draw after us.
+     */
+    private fun onCloudPass(draw: (RenderPass) -> Unit) {
+        val lent = lentPass
+        if (lent != null) {
+            draw(lent)
+            return
+        }
+        passOnto("Ephemeris cloud deck", OffscreenLevelRender.cloudTargetBeingDrawnOnto())?.use(draw)
+    }
+
+    /**
+     * Draws [work] with [pass] lent to whatever asks for one, and takes it back afterwards.
+     *
+     * Restores rather than clears, so a nested lend cannot leave the outer one holding nothing — which
+     * costs a line here and takes a whole class of "it worked until something else drew too" away.
+     */
+    fun <T> lending(pass: RenderPass, work: () -> T): T {
+        val held = lentPass
+        lentPass = pass
+        try {
+            return work()
+        } finally {
+            lentPass = held
+        }
+    }
+
+    private var lentPass: RenderPass? = null
 
     /** Null when the target has no colour attachment, which nothing can be drawn into. */
     private fun passOnto(label: String, target: RenderTarget): RenderPass? {
