@@ -125,6 +125,11 @@ renderer decides for itself whether it applies, because the interesting cases ar
 registration keyed by dimension cannot express them. Return `false` and the next renderer is asked; if none
 claims it, vanilla draws its own.
 
+**Or bend what is drawn without claiming it.** `.environment { level, layers -> … }` lays attribute layers over
+a level's air, and `.horizonHeight { level, camera -> … }` stands the sunrise fan taller or lower — a multiple
+of vanilla's height, applied to vanilla's fan and to this library's own alike. Neither claims: every one
+registered is applied, so two mods that each tint the fog or stretch the glow compose.
+
 This rung exists because 26.1 closed every other one: `DimensionSpecialEffects` is gone, Fabric API dropped
 `DimensionRenderingRegistry`, and a dimension type still cannot carry appearance to the client. Every mod
 that wants a sky of its own writes the same two Mixins, and two mods that do fight over the same seam.

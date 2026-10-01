@@ -43,6 +43,7 @@ object LevelRendering {
     private val horizons = mutableListOf<LevelHorizonRenderer>()
     private val overlays = mutableListOf<LevelSkyOverlay>()
     private val environments = mutableListOf<LevelEnvironment>()
+    private val horizonHeights = mutableListOf<LevelHorizonHeight>()
 
     /** Offer to draw suns, moons and stars. */
     fun sky(renderer: LevelSkyRenderer) {
@@ -90,6 +91,30 @@ object LevelRendering {
     fun environment(layers: LevelEnvironment) {
         environments += layers
     }
+
+    /**
+     * Offer to stand the light at the horizon taller or shorter — a sunset that climbs further up the sky, or
+     * one that hugs the horizon.
+     *
+     * The fan a sunrise is painted on is flattened by the glow's strength, so a weak glow is a thin band; an
+     * answer here multiplies that flattening, raising the fan's top edge without moving where it stands or
+     * what colour it is. Applied to both fans: vanilla's, where a level's sky is ordinary, and this library's
+     * own, where the level has suns of its own.
+     *
+     * Like [environment] this **does not claim**: every answer is applied, by multiplying, so two mods that
+     * each stretch the glow compose rather than one silencing the other. One is vanilla's height.
+     */
+    fun horizonHeight(height: LevelHorizonHeight) {
+        horizonHeights += height
+    }
+
+    /** How tall the horizon's light stands for [camera] in [level] — every answer multiplied, one if none. */
+    fun horizonHeightFor(level: ClientLevel?, camera: Camera): Float {
+        if (level == null) return VANILLAS_HORIZON
+        return horizonHeights.fold(VANILLAS_HORIZON) { height, each -> height * each.heightFor(level, camera) }
+    }
+
+    private const val VANILLAS_HORIZON = 1.0f
 
     // The three below are what the Mixins call. Public because a Java Mixin cannot see a Kotlin
     // `internal` — the name is mangled — and not because a consumer has any business calling them.
@@ -268,6 +293,12 @@ class HorizonMoment(
     val sunAngle: Float,
     val vanillaColour: Int,
 )
+
+/** How tall a level's light at the horizon stands, as seen from a camera — see [LevelRendering.horizonHeight]. */
+fun interface LevelHorizonHeight {
+    /** A multiple of vanilla's height: **1** to leave it, more for a taller glow, less for a lower one. */
+    fun heightFor(level: ClientLevel, camera: Camera): Float
+}
 
 /** Paints a level's sunrises and sunsets. */
 fun interface LevelHorizonRenderer {

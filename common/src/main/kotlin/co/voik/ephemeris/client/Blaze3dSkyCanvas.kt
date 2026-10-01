@@ -544,7 +544,12 @@ object Blaze3dSkyCanvas : SkyCanvas {
         )
         // Vanilla flattens the fan by its own alpha so a weak glow is a thin band rather than a faint wide
         // one. Keeping that means a distant sun's light hugs the horizon instead of washing the whole sky.
-        modelViewStack.scale(1.0f, 1.0f, tint.alpha)
+        // And as tall as the level is told it stands, as vanilla's own fan is — see `LevelRendering.horizonHeight`.
+        val height = LevelRendering.horizonHeightFor(
+            OffscreenLevelRender.levelBeingDrawn(),
+            OffscreenLevelRender.cameraBeingDrawnFrom(),
+        )
+        modelViewStack.scale(1.0f, 1.0f, tint.alpha * height)
 
         val transforms = RenderSystem.getDynamicUniforms().writeTransform(
             modelViewNow(),

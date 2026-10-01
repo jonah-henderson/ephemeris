@@ -17,6 +17,7 @@ import net.minecraft.util.ARGB;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.ModifyArg;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
@@ -139,6 +140,21 @@ public class SkyRendererMixin {
                 state.starBrightness,
                 Rgba.Companion.of(state.skyColor),
                 state.shouldRenderDarkDisc);
+    }
+
+    /**
+     * **Vanilla's sunrise fan, as tall as the level is told it stands** — see
+     * {@link LevelRendering#horizonHeight}. Vanilla flattens its fan by the glow's strength with
+     * {@code scale(1, 1, alpha)}; this multiplies that one factor, and leaves where the fan stands and what
+     * colour it is alone.
+     */
+    @ModifyArg(
+            method = "renderSunriseAndSunset",
+            at = @At(value = "INVOKE", target = "Lorg/joml/Matrix4fStack;scale(FFF)Lorg/joml/Matrix4f;"),
+            index = 2)
+    private float ephemeris$asTallAsTheLevelSays(float alpha) {
+        return alpha * LevelRendering.INSTANCE.horizonHeightFor(
+                OffscreenLevelRender.INSTANCE.levelBeingDrawn(), OffscreenLevelRender.INSTANCE.cameraBeingDrawnFrom());
     }
 
     /** The sky's own colour, laid before anything is drawn on it. */
