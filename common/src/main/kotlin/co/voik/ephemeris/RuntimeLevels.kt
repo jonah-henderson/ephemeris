@@ -49,21 +49,25 @@ object RuntimeLevels {
         // [RuntimeLevelSeeds] for why this is ours rather than `LevelStem`'s seed override.
         RuntimeLevelSeeds.remember(dimension, config.seed)
         val stem = LevelStem(config.dimensionType, config.generator)
-        val level = ServerLevel(
-            server,
-            server.executor,
-            server.storageSource,
-            // Derived, as vanilla's own secondary levels are: the world's shared state (the difficulty, the
-            // game rules, whether it has been initialised) stays one thing, and only what is genuinely
-            // per-level diverges.
-            DerivedLevelData(server.worldData, server.worldData.overworldData()),
-            dimension,
-            stem,
-            false,
-            BiomeManager.obfuscateSeed(config.seed),
-            ImmutableList.copyOf(config.customSpawners),
-            config.tickTime,
-        )
+        // Derived, as vanilla's own secondary levels are: the world's shared state (the difficulty, the game
+        // rules, whether it has been initialised) stays one thing, and only what is genuinely per-level
+        // diverges.
+        val levelData = DerivedLevelData(server.worldData, server.worldData.overworldData())
+        val spawners = ImmutableList.copyOf(config.customSpawners)
+        val obfuscatedSeed = BiomeManager.obfuscateSeed(config.seed)
+        val level = if (config.horizonAtTheFloor) {
+            object : ServerLevel(
+                server, server.executor, server.storageSource, levelData, dimension, stem, false,
+                obfuscatedSeed, spawners, config.tickTime,
+            ) {
+                override fun isFlat(): Boolean = true
+            }
+        } else {
+            ServerLevel(
+                server, server.executor, server.storageSource, levelData, dimension, stem, false,
+                obfuscatedSeed, spawners, config.tickTime,
+            )
+        }
 
         server.levels[dimension] = level
         // Vanilla does both of these to every level it builds, and a level without them has no border and

@@ -51,4 +51,14 @@ data class RuntimeLevelConfig(
      * Empty is vanilla's own default for a secondary level, and what every level had until a caller asked.
      */
     val customSpawners: List<CustomSpawner> = emptyList(),
+    /**
+     * Whether a visiting client should take this level's horizon to be its floor, as it does a superflat
+     * world's: no dark disc drawn under the sky below sea level, and the void's darkness only at the very
+     * bottom. For a level with nothing beneath its land, where sky belongs below you as much as above.
+     *
+     * **This is what `ServerLevel.isFlat()` means to the game** — its one reader is the spawn packet, and
+     * the client reads nothing else off it — so answering it per level changes that and nothing more.
+     * Vanilla answers it for the whole save at once.
+     */
+    val horizonAtTheFloor: Boolean = false,
 )
