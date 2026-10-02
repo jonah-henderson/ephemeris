@@ -75,6 +75,8 @@ sealed interface Appearance {
          * the drawing, so a body may carry a tint other code reads and a palette the sky shows.
          */
         val palette: Palette? = null,
+        /** Streamers round it and a shimmer in its glow, or null for none — see [Corona]. */
+        val corona: Corona? = null,
     ) : Appearance {
         override val kindKey: String get() = SPRITE
 
@@ -88,7 +90,10 @@ sealed interface Appearance {
                     Codec.FLOAT.fieldOf("size").forGetter(Sprite::angularSize),
                     Identifier.CODEC.listOf().fieldOf("shapes").forGetter(Sprite::shapes),
                     Palette.CODEC.optionalFieldOf("palette").forGetter { java.util.Optional.ofNullable(it.palette) },
-                ).apply(instance) { tint, size, shapes, palette -> Sprite(tint, size, shapes, palette.orElse(null)) }
+                    Corona.CODEC.optionalFieldOf("corona").forGetter { java.util.Optional.ofNullable(it.corona) },
+                ).apply(instance) { tint, size, shapes, palette, corona ->
+                    Sprite(tint, size, shapes, palette.orElse(null), corona.orElse(null))
+                }
             }
         }
     }

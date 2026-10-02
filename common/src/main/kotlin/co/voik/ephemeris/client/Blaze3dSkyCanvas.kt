@@ -5,9 +5,12 @@ import co.voik.ephemeris.RuntimeLevelLog
 import co.voik.ephemeris.Sphere
 import co.voik.ephemeris.sky.Aurora
 import co.voik.ephemeris.sky.CloudDeck
+import co.voik.ephemeris.sky.Corona
 import co.voik.ephemeris.sky.HorizonFan
 import co.voik.ephemeris.sky.Palette
 import co.voik.ephemeris.sky.Rainbow
+import kotlin.math.cos
+import kotlin.math.sin
 import com.mojang.renderpearl.api.pipeline.PrimitiveTopology
 import com.mojang.renderpearl.api.buffers.GpuBuffer
 import com.mojang.blaze3d.buffers.Std140Builder
@@ -652,10 +655,11 @@ object Blaze3dSkyCanvas : SkyCanvas {
         veil: Rgba,
         emitsOwnLight: Boolean,
         palette: Palette?,
+        glowStrength: Float,
     ) {
         // A palette maps the sprite's black to nothing, so the whole sprite is drawn and nothing is cropped.
         if (palette != null) {
-            drawRecolouredQuad(shape, palette, orientation, distance, angularSize, tint.alpha)
+            drawRecolouredQuad(shape, palette, orientation, distance, angularSize, tint.alpha, glowStrength)
             if (veil.alpha > VEIL_WORTH_DRAWING) {
                 drawVeilQuad(WHOLE_SPRITE, orientation, distance, angularSize, veil)
             }
@@ -731,6 +735,107 @@ object Blaze3dSkyCanvas : SkyCanvas {
             }
         }
     }
+
+    /**
+     * Each streamer a thin wedge in the body's own plane, from just inside the rim out to its length,
+     * [colour] at its root and nothing at its tip, in one submission.
+     */
+    override fun drawCorona(
+        orientation: Quaternionf,
+        distance: Float,
+        angularSize: Float,
+        rays: List<Corona.Ray>,
+        colour: Rgba,
+        fade: Float,
+    ) {
+        val worthDrawing = rays.filter { it.strength * fade > VEIL_WORTH_DRAWING }
+        if (worthDrawing.isEmpty()) return
+        val format = DefaultVertexFormat.POSITION_COLOR
+        ByteBufferBuilder.exactlySized(worthDrawing.size * QUAD_VERTICES * format.vertexSize).use { bytes ->
+            val builder = BufferBuilder(bytes, PrimitiveTopology.QUADS, format)
+            for (ray in worthDrawing) {
+                // Premultiplied, so the hiding fades with the light.
+                val strength = ray.strength * fade
+                val root = Rgba(colour.red * strength, colour.green * strength, colour.blue * strength, colour.alpha * strength)
+                addRay(builder, orientation, distance, angularSize, ray, root)
+            }
+            builder.buildOrThrow().use { mesh ->
+                RenderSystem.getDevice()
+                    .createBuffer({ "Ephemeris corona mesh" }, GpuBuffer.USAGE_VERTEX, mesh.vertexBuffer())
+                    .use { vertices -> drawCoronaMesh(vertices, worthDrawing.size * QUAD_INDICES) }
+            }
+        }
+    }
+
+    /** One ray: two corners at its root either side of its bearing, and both of the others at its tip. */
+    private fun addRay(
+        builder: BufferBuilder,
+        orientation: Quaternionf,
+        distance: Float,
+        angularSize: Float,
+        ray: Corona.Ray,
+        root: Rgba,
+    ) {
+        val bearing = ray.turn * FULL_TURN_RADIANS
+        val halfWidth = RAY_HALF_WIDTH / RAY_ROOT
+        fun corner(radius: Float, aside: Float, tint: Rgba) {
+            val angle = bearing + aside
+            val across = cos(angle) * radius * angularSize
+            val along = sin(angle) * radius * angularSize
+            val at = orientation.transform(Vector3f(across, distance, along))
+            builder.addVertex(at.x, at.y, at.z).setColor(tint.red, tint.green, tint.blue, tint.alpha)
+        }
+        val tip = RAY_ROOT + ray.length
+        corner(RAY_ROOT, -halfWidth, root)
+        corner(RAY_ROOT, halfWidth, root)
+        corner(tip, 0.0f, Rgba.CLEAR)
+        corner(tip, 0.0f, Rgba.CLEAR)
+    }
+
+    private fun drawCoronaMesh(vertices: GpuBuffer, indices: Int) {
+        val transforms = RenderSystem.getDynamicUniforms().writeTransform(modelViewNow(), UNTOUCHED, Vector3f(), Matrix4f())
+        val quadIndices = RenderSystem.getSequentialBuffer(PrimitiveTopology.QUADS)
+        renderPass("Ephemeris corona")?.use { pass ->
+            pass.setPipeline(RenderSystem.getCompiledPipeline(CORONA_PIPELINE))
+            RenderSystem.bindDefaultUniforms(pass)
+            pass.setUniform("DynamicTransforms", transforms)
+            pass.setVertexBuffer(ONLY_VERTEX_BINDING, vertices.slice())
+            pass.setIndexBuffer(quadIndices.getBuffer(indices), quadIndices.type())
+            pass.drawIndexed(indices, ONE_INSTANCE, FROM_THE_FIRST_INDEX, NO_VERTEX_OFFSET, FROM_THE_FIRST_INSTANCE)
+        }
+    }
+
+    /**
+     * [GLOWS_PIPELINE] with the blend premultiplied, so a corona whose colour hides the sky darkens it, and
+     * a fragment shader of ours: vanilla's discards at zero alpha, which is every pixel of a streamer that
+     * is light alone.
+     */
+    private val CORONA_PIPELINE: RenderPipeline = RenderPipeline.builder()
+        .withLocation(Identifier.fromNamespaceAndPath(NAMESPACE, "pipeline/corona"))
+        .withVertexShader(Identifier.withDefaultNamespace("core/position_color"))
+        .withFragmentShader(Identifier.fromNamespaceAndPath(NAMESPACE, "corona"))
+        .withBindGroupLayout(
+            BindGroupLayout.builder()
+                .withUniform("DynamicTransforms", UniformType.UNIFORM_BUFFER)
+                .withUniform("Projection", UniformType.UNIFORM_BUFFER)
+                .build(),
+        )
+        .withColorTargetState(ColorTargetState(BlendFunction.TRANSLUCENT_PREMULTIPLIED_ALPHA))
+        .withCull(false)
+        .withVertexBinding(ONLY_VERTEX_BINDING, DefaultVertexFormat.POSITION_COLOR)
+        .withPrimitiveTopology(PrimitiveTopology.QUADS)
+        .build()
+
+    /**
+     * Where a ray's root sits, in the body's half-widths: just inside the rim of vanilla's sun, whose disc
+     * is ten of its sprite's thirty-two pixels across.
+     */
+    private const val RAY_ROOT = 0.28f
+
+    /** How wide a ray is at its root, in the same half-widths. */
+    private const val RAY_HALF_WIDTH = 0.035f
+
+    private const val FULL_TURN_RADIANS = (2.0 * Math.PI).toFloat()
 
     private fun addGlowQuad(builder: BufferBuilder, glow: Glow, angularSize: Float, tint: Rgba) {
         fun corner(acrossBy: Float, alongBy: Float) {
@@ -966,7 +1071,7 @@ object Blaze3dSkyCanvas : SkyCanvas {
         modelViewStack.popMatrix()
     }
 
-    /** The whole of [shape]'s sprite drawn through [palette], faded to [fade] of itself. */
+    /** The whole of [shape]'s sprite drawn through [palette], faded to [fade] of itself, its glow to [glow]. */
     private fun drawRecolouredQuad(
         shape: Identifier,
         palette: Palette,
@@ -974,6 +1079,7 @@ object Blaze3dSkyCanvas : SkyCanvas {
         distance: Float,
         angularSize: Float,
         fade: Float,
+        glow: Float,
     ) {
         val atlas = celestialsAtlas()
         val quad = bodyQuadOf(atlas, shape, WHOLE_SPRITE)
@@ -984,10 +1090,11 @@ object Blaze3dSkyCanvas : SkyCanvas {
         modelViewStack.translate(0.0f, distance, 0.0f)
         modelViewStack.scale(angularSize, 1.0f, angularSize)
 
-        // Premultiplied, so a fade scales the light and the covering alike.
+        // The modulator carries the glow's strength in its colour and the fade in its alpha, which is how
+        // `recoloured_body.fsh` reads it: the glow pulses and the disc does not.
         val transforms = RenderSystem.getDynamicUniforms().writeTransform(
             modelViewNow(),
-            Vector4f(fade, fade, fade, fade),
+            Vector4f(glow, glow, glow, fade),
             Vector3f(),
             Matrix4f(),
         )

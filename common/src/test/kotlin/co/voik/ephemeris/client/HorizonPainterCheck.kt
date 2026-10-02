@@ -57,6 +57,16 @@ class HorizonPainterCheck : FunSpec({
             veil: Rgba,
             emitsOwnLight: Boolean,
             palette: co.voik.ephemeris.sky.Palette?,
+            glowStrength: Float,
+        ) = Unit
+
+        override fun drawCorona(
+            orientation: Quaternionf,
+            distance: Float,
+            angularSize: Float,
+            rays: List<co.voik.ephemeris.sky.Corona.Ray>,
+            colour: Rgba,
+            fade: Float,
         ) = Unit
 
         override fun drawStarfield(

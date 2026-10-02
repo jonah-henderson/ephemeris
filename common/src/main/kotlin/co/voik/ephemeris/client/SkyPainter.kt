@@ -172,16 +172,24 @@ object SkyPainter {
             val survives = survivesTheAir * rainBrightness
             val tint = if (adds) plain.copy(alpha = plain.alpha * rainBrightness) else plain.dimmed(survives)
             val veil = if (adds) Rgba.CLEAR else airOver(camera, altitude, (1.0f - survives) * plain.alpha)
+            val orientation = facingOf(body, clockTime, sunAngle, moonAngle)
+            val distance = body.path.distanceAt(clockTime)
+            val corona = sprite.corona
             canvas.drawBody(
                 shape = shape,
-                orientation = facingOf(body, clockTime, sunAngle, moonAngle),
-                distance = body.path.distanceAt(clockTime),
+                orientation = orientation,
+                distance = distance,
                 angularSize = sprite.angularSize,
                 tint = tint,
                 veil = veil,
                 emitsOwnLight = adds,
                 palette = sprite.palette,
+                glowStrength = corona?.strengthAt(clockTime) ?: FULL_STRENGTH,
             )
+            // Over the body, so a ray's root lies across its rim rather than under it.
+            if (corona != null) {
+                canvas.drawCorona(orientation, distance, sprite.angularSize, corona.raysAt(clockTime), corona.colour, tint.alpha)
+            }
         }
     }
 
@@ -225,6 +233,9 @@ object SkyPainter {
      * covers instead of adding and costs the body its glow.
      */
     private const val LUMINOUS_ADDS = 0.55f
+
+    /** A glow nothing pulses. */
+    private const val FULL_STRENGTH = 1.0f
 
     /**
      * How far around its circle a body is, in `0.0..1.0`.

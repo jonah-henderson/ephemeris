@@ -3,6 +3,7 @@ package co.voik.ephemeris.client
 import co.voik.ephemeris.Rgba
 import co.voik.ephemeris.sky.Aurora
 import co.voik.ephemeris.sky.CloudDeck
+import co.voik.ephemeris.sky.Corona
 import co.voik.ephemeris.sky.Palette
 import co.voik.ephemeris.sky.Rainbow
 import net.minecraft.resources.Identifier
@@ -78,7 +79,8 @@ interface SkyCanvas {
      * is doing, so this is added rather than blended and is [Rgba.CLEAR] for a body seen through nothing.
      *
      * A [palette] draws the sprite's colours as its own, each covering or adding as it says, in place of
-     * [tint]'s colour and of [emitsOwnLight]; [tint]'s alpha still fades it.
+     * [tint]'s colour and of [emitsOwnLight]; [tint]'s alpha still fades it, and [glowStrength] scales its
+     * glow alone, leaving the disc as it is.
      */
     fun drawBody(
         shape: Identifier,
@@ -89,6 +91,20 @@ interface SkyCanvas {
         veil: Rgba,
         emitsOwnLight: Boolean,
         palette: Palette?,
+        glowStrength: Float,
+    )
+
+    /**
+     * A body's streamers, placed as [drawBody] places the body: each [Corona.Ray] from the rim outward,
+     * [colour] at its root (premultiplied, as a [Corona]'s is) and nothing at its tip, faded to [fade].
+     */
+    fun drawCorona(
+        orientation: Quaternionf,
+        distance: Float,
+        angularSize: Float,
+        rays: List<Corona.Ray>,
+        colour: Rgba,
+        fade: Float,
     )
 
     /**
