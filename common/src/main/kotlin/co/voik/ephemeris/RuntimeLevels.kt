@@ -10,6 +10,8 @@ import net.minecraft.world.level.Level
 import net.minecraft.world.level.biome.BiomeManager
 import net.minecraft.world.level.dimension.LevelStem
 import net.minecraft.world.level.storage.DerivedLevelData
+import java.nio.file.Files
+import java.nio.file.Path
 
 /**
  * Levels made after the server has started, on either loader.
@@ -104,41 +106,90 @@ object RuntimeLevels {
         val dimension = ResourceKey.create(Registries.DIMENSION, id)
         // Nothing here may ever take the overworld apart, whatever it is asked.
         if (dimension in VANILLA_LEVELS) return false
-
-        server.levels[dimension]?.let { level ->
-            RuntimeLevelEvents.closing(level)
-            server.levels.remove(dimension)
-            RuntimeLevelSeeds.forget(dimension)
-            RuntimeLevelPlatform.of().levelClosing(server, level)
-            runCatching { level.close() }.onFailure {
-                RuntimeLevelLog.warn("Could not close $id cleanly; its files are left alone", it)
-                return false
-            }
-        }
+        if (!close(server, dimension, saving = false)) return false
         return discard(server, dimension)
+    }
+
+    /**
+     * Close the level [from] and move what it saved to [to], returning whether it moved. The caller opens it
+     * again under [to] — with [open], as for any level — and gets the same world back, chunks and all.
+     *
+     * For a level whose id was only ever a placeholder: nothing about a saved chunk names the dimension it
+     * was saved in, so the folder *is* the level's identity on disk, and moving it renames the level.
+     *
+     * **Saved before it closes**, where [delete] does not bother: everything still in memory has to reach
+     * the folder before the folder goes anywhere. Refused, with nothing touched, where [to] is open or
+     * already has a folder, or either is not a dimension folder of this world. Where the level closed and the
+     * move then failed it says so and returns false, and [from] is still on disk to open again.
+     */
+    fun move(server: MinecraftServer, from: Identifier, to: Identifier): Boolean {
+        val leaving = ResourceKey.create(Registries.DIMENSION, from)
+        val arriving = ResourceKey.create(Registries.DIMENSION, to)
+        if (leaving in VANILLA_LEVELS || arriving in VANILLA_LEVELS) return false
+        if (arriving in server.levels) return false
+        val source = folderOf(server, leaving) ?: return false
+        val target = folderOf(server, arriving) ?: return false
+        if (target.toFile().exists()) {
+            RuntimeLevelLog.warn("Refusing to move $from onto $target, which already exists")
+            return false
+        }
+        if (!close(server, leaving, saving = true)) return false
+        if (!source.toFile().isDirectory) return true
+        target.parent?.let { Files.createDirectories(it) }
+        return runCatching { Files.move(source, target) }
+            .onFailure { RuntimeLevelLog.warn("Could not move $source to $target; it is left where it was", it) }
+            .isSuccess
+    }
+
+    /**
+     * Take [dimension] out of the server and close it, if it is open, answering whether it is now closed.
+     *
+     * **Order is the whole of the correctness** — see [delete] for why each step makes the next one safe.
+     * [saving] writes everything the level holds first, for a caller that keeps its files.
+     */
+    private fun close(server: MinecraftServer, dimension: ResourceKey<Level>, saving: Boolean): Boolean {
+        val level = server.levels[dimension] ?: return true
+        RuntimeLevelEvents.closing(level)
+        if (saving) level.save(null, true, false)
+        server.levels.remove(dimension)
+        RuntimeLevelSeeds.forget(dimension)
+        RuntimeLevelPlatform.of().levelClosing(server, level)
+        runCatching { level.close() }.onFailure {
+            RuntimeLevelLog.warn("Could not close ${dimension.identifier()} cleanly; its files are left alone", it)
+            return false
+        }
+        return true
     }
 
     /**
      * Remove a closed level's saved chunks.
      *
-     * **Fenced on where the path is, not on what it is called.** This is the only place the library deletes
-     * anything, so the check is that the directory really is a *dimension folder inside this world* — under
-     * `<level>/dimensions`, and deeper than it. A malformed id, a `..`, or a storage layout that moved all
-     * fail the same way: nothing is removed and it says so.
+     * **Fenced on where the path is, not on what it is called** — see [folderOf]. This is the only place the
+     * library deletes anything.
      */
     private fun discard(server: MinecraftServer, dimension: ResourceKey<Level>): Boolean {
+        val folder = folderOf(server, dimension) ?: return false
+        if (!folder.toFile().isDirectory) return true
+        val gone = folder.toFile().deleteRecursively()
+        if (!gone) RuntimeLevelLog.warn("Some of $folder could not be removed and is left behind")
+        return gone
+    }
+
+    /**
+     * Where [dimension] saves, or null — said in the log — where that is not a *dimension folder inside this
+     * world*: under `<level>/dimensions`, and deeper than it. A malformed id, a `..`, or a storage layout that
+     * moved all fail the same way, so nothing outside the world is ever removed or moved.
+     */
+    private fun folderOf(server: MinecraftServer, dimension: ResourceKey<Level>): Path? {
         val world = server.storageSource.levelDirectory.path().toAbsolutePath().normalize()
         val dimensions = world.resolve(DIMENSIONS_FOLDER)
         val folder = server.storageSource.getDimensionPath(dimension).toAbsolutePath().normalize()
         val isInsideThisWorld = folder.startsWith(dimensions) && folder != dimensions
         if (!isInsideThisWorld) {
-            RuntimeLevelLog.warn("Refusing to discard $folder — it is not a dimension folder of this world")
-            return false
+            RuntimeLevelLog.warn("Refusing to touch $folder — it is not a dimension folder of this world")
+            return null
         }
-        if (!folder.toFile().isDirectory) return true
-        val gone = folder.toFile().deleteRecursively()
-        if (!gone) RuntimeLevelLog.warn("Some of $folder could not be removed and is left behind")
-        return gone
+        return folder
     }
 
     /** Whether the server already holds this level, without building one to find out. */
