@@ -3,6 +3,7 @@ package co.voik.ephemeris.client
 import co.voik.ephemeris.Rgba
 import co.voik.ephemeris.sky.Aurora
 import co.voik.ephemeris.sky.CloudDeck
+import co.voik.ephemeris.sky.Palette
 import co.voik.ephemeris.sky.Rainbow
 import net.minecraft.resources.Identifier
 import net.minecraft.world.phys.Vec3
@@ -75,6 +76,9 @@ interface SkyCanvas {
      * [veil] is the light scattered *in front* of the body, laid over it and never through it — its colour
      * is the air's and its alpha is how much of it there is. A body that covers must cover whatever the air
      * is doing, so this is added rather than blended and is [Rgba.CLEAR] for a body seen through nothing.
+     *
+     * A [palette] draws the sprite's colours as its own, each covering or adding as it says, in place of
+     * [tint]'s colour and of [emitsOwnLight]; [tint]'s alpha still fades it.
      */
     fun drawBody(
         shape: Identifier,
@@ -84,6 +88,7 @@ interface SkyCanvas {
         tint: Rgba,
         veil: Rgba,
         emitsOwnLight: Boolean,
+        palette: Palette?,
     )
 
     /**

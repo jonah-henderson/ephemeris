@@ -180,6 +180,7 @@ object SkyPainter {
                 tint = tint,
                 veil = veil,
                 emitsOwnLight = adds,
+                palette = sprite.palette,
             )
         }
     }

@@ -70,6 +70,11 @@ sealed interface Appearance {
         override val tint: Rgba,
         override val angularSize: Float,
         val shapes: List<Identifier>,
+        /**
+         * The sprite's colours drawn as others, or null to draw it tinted. A palette replaces the tint in
+         * the drawing, so a body may carry a tint other code reads and a palette the sky shows.
+         */
+        val palette: Palette? = null,
     ) : Appearance {
         override val kindKey: String get() = SPRITE
 
@@ -82,7 +87,8 @@ sealed interface Appearance {
                     Rgba.CODEC.optionalFieldOf("tint", Rgba.WHITE).forGetter(Sprite::tint),
                     Codec.FLOAT.fieldOf("size").forGetter(Sprite::angularSize),
                     Identifier.CODEC.listOf().fieldOf("shapes").forGetter(Sprite::shapes),
-                ).apply(instance, ::Sprite)
+                    Palette.CODEC.optionalFieldOf("palette").forGetter { java.util.Optional.ofNullable(it.palette) },
+                ).apply(instance) { tint, size, shapes, palette -> Sprite(tint, size, shapes, palette.orElse(null)) }
             }
         }
     }

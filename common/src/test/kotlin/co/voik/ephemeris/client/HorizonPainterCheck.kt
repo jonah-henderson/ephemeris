@@ -56,6 +56,7 @@ class HorizonPainterCheck : FunSpec({
             tint: Rgba,
             veil: Rgba,
             emitsOwnLight: Boolean,
+            palette: co.voik.ephemeris.sky.Palette?,
         ) = Unit
 
         override fun drawStarfield(

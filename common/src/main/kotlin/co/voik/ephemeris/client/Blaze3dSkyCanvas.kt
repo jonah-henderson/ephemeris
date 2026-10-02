@@ -6,6 +6,7 @@ import co.voik.ephemeris.Sphere
 import co.voik.ephemeris.sky.Aurora
 import co.voik.ephemeris.sky.CloudDeck
 import co.voik.ephemeris.sky.HorizonFan
+import co.voik.ephemeris.sky.Palette
 import co.voik.ephemeris.sky.Rainbow
 import com.mojang.renderpearl.api.pipeline.PrimitiveTopology
 import com.mojang.renderpearl.api.buffers.GpuBuffer
@@ -236,6 +237,31 @@ object Blaze3dSkyCanvas : SkyCanvas {
         .build()
 
     /**
+     * For a body drawn through a [Palette]: each texel looked up by its brightness in `Sampler1`, the
+     * palette baked into a row.
+     *
+     * **Premultiplied**, which is what lets one draw both cover and add. What the palette gives is the light
+     * a texel puts out and how much of the sky behind it hides, so a black disc that hides everything and a
+     * glow that hides nothing come from the same pass.
+     */
+    private val RECOLOURED_BODY_PIPELINE: RenderPipeline = RenderPipeline.builder()
+        .withLocation(Identifier.fromNamespaceAndPath(NAMESPACE, "pipeline/recoloured_body"))
+        .withVertexShader(Identifier.withDefaultNamespace("core/position_tex"))
+        .withFragmentShader(Identifier.fromNamespaceAndPath(NAMESPACE, "recoloured_body"))
+        .withBindGroupLayout(
+            BindGroupLayout.builder()
+                .withUniform("Sampler0", UniformType.COMBINED_IMAGE_SAMPLER)
+                .withUniform("Sampler1", UniformType.COMBINED_IMAGE_SAMPLER)
+                .withUniform("DynamicTransforms", UniformType.UNIFORM_BUFFER)
+                .withUniform("Projection", UniformType.UNIFORM_BUFFER)
+                .build(),
+        )
+        .withColorTargetState(ColorTargetState(BlendFunction.TRANSLUCENT_PREMULTIPLIED_ALPHA))
+        .withVertexBinding(ONLY_VERTEX_BINDING, DefaultVertexFormat.POSITION_TEX)
+        .withPrimitiveTopology(PrimitiveTopology.QUADS)
+        .build()
+
+    /**
      * The curtain's own pipeline. Additive, like the stars, because an aurora is light laid on the sky
      * rather than a sheet hung in front of it; and depth is left alone, so it sits in the sky pass and the
      * terrain drawn afterwards hides whatever stands in front of it.
@@ -399,6 +425,15 @@ object Blaze3dSkyCanvas : SkyCanvas {
      * cut from an atlas that a resource reload re-stitches.
      */
     private val ramps = mutableMapOf<List<Rgba>, DynamicTexture>()
+
+    /** Palettes already baked, on [ramps]' argument. */
+    private val paletteRamps = mutableMapOf<Palette, DynamicTexture>()
+
+    /**
+     * How many brightnesses a palette is baked at: one per level a texel's channel can hold, so every
+     * colour of a sprite lands on a step of its own.
+     */
+    private const val PALETTE_STEPS = 256
 
     private val auroraInfo: MappableRingBuffer by lazy {
         MappableRingBuffer(
@@ -616,7 +651,16 @@ object Blaze3dSkyCanvas : SkyCanvas {
         tint: Rgba,
         veil: Rgba,
         emitsOwnLight: Boolean,
+        palette: Palette?,
     ) {
+        // A palette maps the sprite's black to nothing, so the whole sprite is drawn and nothing is cropped.
+        if (palette != null) {
+            drawRecolouredQuad(shape, palette, orientation, distance, angularSize, tint.alpha)
+            if (veil.alpha > VEIL_WORTH_DRAWING) {
+                drawVeilQuad(WHOLE_SPRITE, orientation, distance, angularSize, veil)
+            }
+            return
+        }
         val kept = keptOf(shape)
         // **A cropped body is drawn twice, because its two parts are different things.** Vanilla paints a
         // glow around its moon, radially, out to three times the disc's own radius — light, which adds. The
@@ -908,6 +952,53 @@ object Blaze3dSkyCanvas : SkyCanvas {
             RenderSystem.bindDefaultUniforms(pass)
             pass.setUniform("DynamicTransforms", transforms)
             pass.setUniform("Sampler0", atlas.textureView, atlas.sampler)
+            pass.setVertexBuffer(ONLY_VERTEX_BINDING, quad.buffer.slice())
+            pass.setIndexBuffer(quadIndices.getBuffer(QUAD_INDICES), quadIndices.type())
+            pass.drawIndexed(
+                QUAD_INDICES,
+                ONE_INSTANCE,
+                FROM_THE_FIRST_INDEX,
+                NO_VERTEX_OFFSET,
+                FROM_THE_FIRST_INSTANCE,
+            )
+        }
+
+        modelViewStack.popMatrix()
+    }
+
+    /** The whole of [shape]'s sprite drawn through [palette], faded to [fade] of itself. */
+    private fun drawRecolouredQuad(
+        shape: Identifier,
+        palette: Palette,
+        orientation: Quaternionf,
+        distance: Float,
+        angularSize: Float,
+        fade: Float,
+    ) {
+        val atlas = celestialsAtlas()
+        val quad = bodyQuadOf(atlas, shape, WHOLE_SPRITE)
+        val ramp = rampOf(palette)
+        val modelViewStack = RenderSystem.getModelViewStack()
+        modelViewStack.pushMatrix()
+        modelViewStack.rotate(orientation)
+        modelViewStack.translate(0.0f, distance, 0.0f)
+        modelViewStack.scale(angularSize, 1.0f, angularSize)
+
+        // Premultiplied, so a fade scales the light and the covering alike.
+        val transforms = RenderSystem.getDynamicUniforms().writeTransform(
+            modelViewNow(),
+            Vector4f(fade, fade, fade, fade),
+            Vector3f(),
+            Matrix4f(),
+        )
+        val quadIndices = RenderSystem.getSequentialBuffer(PrimitiveTopology.QUADS)
+
+        renderPass("Ephemeris recoloured sky body")?.use { pass ->
+            pass.setPipeline(RenderSystem.getCompiledPipeline(RECOLOURED_BODY_PIPELINE))
+            RenderSystem.bindDefaultUniforms(pass)
+            pass.setUniform("DynamicTransforms", transforms)
+            pass.setUniform("Sampler0", atlas.textureView, atlas.sampler)
+            pass.setUniform("Sampler1", ramp.textureView, ramp.sampler)
             pass.setVertexBuffer(ONLY_VERTEX_BINDING, quad.buffer.slice())
             pass.setIndexBuffer(quadIndices.getBuffer(QUAD_INDICES), quadIndices.type())
             pass.drawIndexed(
@@ -1395,6 +1486,18 @@ object Blaze3dSkyCanvas : SkyCanvas {
     private const val HALF_TURN = 180.0f
 
     private fun rampOf(colours: List<Rgba>): DynamicTexture = ramps.getOrPut(colours) { bakeRamp(colours) }
+
+    private fun rampOf(palette: Palette): DynamicTexture = paletteRamps.getOrPut(palette) { bakePalette(palette) }
+
+    /** The palette as one row of pixels, black at the left: pixel `n` is what a texel `n/255` bright becomes. */
+    private fun bakePalette(palette: Palette): DynamicTexture {
+        val image = NativeImage(PALETTE_STEPS, 1, false)
+        for (step in 0..<PALETTE_STEPS) {
+            val brightness = step.toFloat() / (PALETTE_STEPS - 1).toFloat()
+            image.setPixelABGR(step, 0, packedAbgr(palette.at(brightness)))
+        }
+        return DynamicTexture({ "Ephemeris body palette" }, image).also { it.upload() }
+    }
 
     /**
      * The ramp as one row of pixels, **crown at the left**, with the stops already blended between.

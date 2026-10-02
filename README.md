@@ -116,6 +116,12 @@ The crop is **vanilla's moon only**. Its sun is left whole, because what surroun
 own corona; and a texture of yours is left whole because it is presumed drawn as you want it seen.
 `SpriteCuts.register(shape, pipeline)` is there for one that needs a rule of its own.
 
+**A sprite's colours can be drawn as others** — a `Palette` on `Appearance.Sprite`, keyed by how bright each
+texel is. Each entry is premultiplied: its colour is the light it gives and its alpha how much of the sky it
+hides, so one body can cover with its disc and add with its glow. That is the only way to draw a dark sun,
+since adding a dark colour adds next to nothing. `Palette.ofVanillaSun(centre, ring, rim, glow)` keys
+vanilla's sun by its own four colours; a palette replaces the tint in the drawing.
+
 **Keep the vocabulary, bring your own transport** — `LevelLooks.remember(dimension, look)` on the client,
 filled from your own packet, config, or rule.
 
