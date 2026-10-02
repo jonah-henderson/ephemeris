@@ -5,7 +5,7 @@ import co.voik.ephemeris.client.Blaze3dSkyCanvas
 import co.voik.ephemeris.client.CloudPainter
 import co.voik.ephemeris.client.HorizonPainter
 import co.voik.ephemeris.client.LevelRendering
-import co.voik.ephemeris.client.GroundTints
+import co.voik.ephemeris.client.LookArrivals
 import co.voik.ephemeris.client.RainbowPainter
 import co.voik.ephemeris.client.SkyPainter
 import co.voik.ephemeris.sky.LevelLooks
@@ -60,8 +60,8 @@ class EphemerisClient(eventBus: IEventBus) {
             )
         }
         LevelRendering.environment(HorizonPainter::silenceVanillasGlow)
-    // A level told something new has to drop what it baked from the old answer — see [GroundTints.forget].
-    LevelLooks.whenTold = GroundTints::forget
+    // A level told something new has to drop what it baked from the old answer, and build its air again.
+    LevelLooks.whenTold = LookArrivals::told
 
         NeoForge.EVENT_BUS.addListener(::onLoggingOut)
     }

@@ -2,10 +2,14 @@ package co.voik.ephemeris.mixin.client;
 
 import co.voik.ephemeris.client.GroundTints;
 import co.voik.ephemeris.client.LevelRendering;
+import co.voik.ephemeris.client.RepaintableAir;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.world.attribute.EnvironmentAttributeSystem;
 import net.minecraft.world.level.ColorResolver;
+import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Mutable;
+import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.ModifyVariable;
@@ -30,7 +34,25 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
  * {@link #ephemeris$tintTheGround}.
  */
 @Mixin(ClientLevel.class)
-public abstract class ClientLevelMixin {
+public abstract class ClientLevelMixin implements RepaintableAir {
+
+    @Shadow @Final @Mutable private EnvironmentAttributeSystem environmentAttributes;
+
+    /** Vanilla's, which is private; the body is never run, the shadow standing in for it. */
+    @Shadow
+    private EnvironmentAttributeSystem.Builder addEnvironmentAttributeLayers(
+            EnvironmentAttributeSystem.Builder environmentAttributes) {
+        throw new AssertionError("shadowed");
+    }
+
+    /**
+     * The constructor's own line again, for a look that arrived after the level was built — see
+     * {@link RepaintableAir}. The field is final, and the constructor is the only other place it is set.
+     */
+    @Override
+    public void repaintEphemerisAir() {
+        this.environmentAttributes = this.addEnvironmentAttributeLayers(EnvironmentAttributeSystem.builder()).build();
+    }
 
     @Inject(method = "addEnvironmentAttributeLayers", at = @At("RETURN"), cancellable = true)
     private void ephemeris$paintTheAir(
