@@ -5,7 +5,7 @@ to decide what they look like once they exist.
 
 An ephemeris is a table of where the sky's bodies will be. These worlds do not outlast the save.
 
-Minecraft **26.1.2**. MIT.
+Minecraft **26.1.2**. CC0 (public domain).
 
 ## What it does
 
