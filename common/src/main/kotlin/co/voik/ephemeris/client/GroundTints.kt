@@ -22,9 +22,9 @@ import net.minecraft.world.level.biome.Biome
 import java.util.concurrent.ConcurrentHashMap
 
 /**
- * The grass, leaves and litter of a level, painted the colour that level was written with.
+ * The grass, leaves, litter and water of a level, painted the colour that level was written with.
  *
- * **A level cannot repaint a biome, and must not want to.** Vanilla resolves these three off the biome, and
+ * **A level cannot repaint a biome, and must not want to.** Vanilla resolves these four off the biome, and
  * a runtime level borrows the registry's biomes — so writing a colour onto `minecraft:forest` would repaint
  * every forest in every world including the overworld's. Answering per *level* instead leaves the registry
  * untouched, which is the same reasoning that keeps an Age's dimension out of `LevelStem`.
@@ -57,7 +57,7 @@ object GroundTints {
         }
     }
 
-    /** One of the three tints a level may repaint, and how vanilla arrives at each. */
+    /** One of the four tints a level may repaint, and how vanilla arrives at each. */
     private enum class Ground {
         GRASS {
             override fun colourIn(look: Look): Rgba? = look.grass
@@ -90,6 +90,14 @@ object GroundTints {
         DRY_FOLIAGE {
             override fun colourIn(look: Look): Rgba? = look.dryFoliage
         },
+
+        /**
+         * Water, which reaches here the same way on both loaders: the fluid's tint source asks
+         * `BiomeColors.getAverageWaterColor`, which is this level's tint cache for [BiomeColors.WATER_COLOR_RESOLVER].
+         */
+        WATER {
+            override fun colourIn(look: Look): Rgba? = look.water
+        },
         ;
 
         abstract fun colourIn(look: Look): Rgba?
@@ -102,13 +110,13 @@ object GroundTints {
              * Which tint [resolver] is, **by identity**, or null for one that is not ours to answer.
              *
              * `BiomeColors`' four are singletons and `ClientLevel` keys its caches on those same instances,
-             * so identity is the same question the cache is already asking. Water is deliberately absent:
-             * it is a fluid tint with a research note of its own.
+             * so identity is the same question the cache is already asking.
              */
             fun of(resolver: ColorResolver): Ground? = when (resolver) {
                 BiomeColors.GRASS_COLOR_RESOLVER -> GRASS
                 BiomeColors.FOLIAGE_COLOR_RESOLVER -> FOLIAGE
                 BiomeColors.DRY_FOLIAGE_COLOR_RESOLVER -> DRY_FOLIAGE
+                BiomeColors.WATER_COLOR_RESOLVER -> WATER
                 else -> null
             }
         }

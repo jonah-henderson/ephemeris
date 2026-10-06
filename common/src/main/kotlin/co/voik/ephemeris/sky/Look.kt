@@ -7,8 +7,8 @@ import com.mojang.serialization.codecs.RecordCodecBuilder
 /**
  * How a level is coloured — the half of its appearance a server cannot decide alone.
  *
- * **The air, and what grows under it.** Most of this is the air the eye sees through; [grass], [foliage]
- * and [dryFoliage] are the tints vanilla resolves off the *biome*, which is why they have to be here rather
+ * **The air, and what grows under it.** Most of this is the air the eye sees through; [grass], [foliage],
+ * [dryFoliage] and [water] are the tints vanilla resolves off the *biome*, which is why they have to be here rather
  * than on a biome: a runtime level borrows the registry's biomes, and repainting one of those would repaint
  * it in the overworld too. Answering per level instead leaves the registry alone entirely.
  *
@@ -40,6 +40,10 @@ data class Look(
     val foliage: Rgba? = null,
     /** And leaf litter and dead brush, which vanilla resolves separately from live leaves. */
     val dryFoliage: Rgba? = null,
+    /** What water is tinted, the same way: its surface, its flow and a cauldron's. */
+    val water: Rgba? = null,
+    /** The colour of the fog seen from under the water. */
+    val waterFog: Rgba? = null,
     /**
      * How brightly the stars burn, overriding the day's own curve — `1.0` being midnight.
      *
@@ -53,7 +57,7 @@ data class Look(
     val saysNothing: Boolean
         get() = sky == null && fog == null && cloud == null && tint == null &&
             motes == null && haze == null && ceiling == null && murk == null && starBrightness == null &&
-            grass == null && foliage == null && dryFoliage == null
+            grass == null && foliage == null && dryFoliage == null && water == null && waterFog == null
 
     /**
      * This look over [under] — every colour of ours that was named, and [under]'s where it was not.
@@ -74,6 +78,8 @@ data class Look(
         grass = grass ?: under.grass,
         foliage = foliage ?: under.foliage,
         dryFoliage = dryFoliage ?: under.dryFoliage,
+        water = water ?: under.water,
+        waterFog = waterFog ?: under.waterFog,
     )
 
     companion object {
@@ -95,8 +101,10 @@ data class Look(
                 Rgba.CODEC.optionalFieldOf("foliage").forGetter { java.util.Optional.ofNullable(it.foliage) },
                 Rgba.CODEC.optionalFieldOf("dry_foliage")
                     .forGetter { java.util.Optional.ofNullable(it.dryFoliage) },
+                Rgba.CODEC.optionalFieldOf("water").forGetter { java.util.Optional.ofNullable(it.water) },
+                Rgba.CODEC.optionalFieldOf("water_fog").forGetter { java.util.Optional.ofNullable(it.waterFog) },
             ).apply(instance) { sky, fog, cloud, tint, motes, haze, ceiling, murk, starBrightness,
-                                grass, foliage, dryFoliage ->
+                                grass, foliage, dryFoliage, water, waterFog ->
                 Look(
                     sky = sky.orElse(null),
                     fog = fog.orElse(null),
@@ -110,6 +118,8 @@ data class Look(
                     grass = grass.orElse(null),
                     foliage = foliage.orElse(null),
                     dryFoliage = dryFoliage.orElse(null),
+                    water = water.orElse(null),
+                    waterFog = waterFog.orElse(null),
                 )
             }
         }
