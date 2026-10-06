@@ -7,6 +7,7 @@ import co.voik.ephemeris.client.LevelRendering;
 import co.voik.ephemeris.client.OffscreenLevelRender;
 import co.voik.ephemeris.client.SkyMoment;
 import co.voik.ephemeris.client.SkyThroughFog;
+import com.mojang.blaze3d.pipeline.RenderTarget;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.renderpearl.api.buffers.GpuBufferSlice;
 import net.minecraft.client.Minecraft;
@@ -18,6 +19,7 @@ import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.ModifyArg;
+import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
@@ -168,5 +170,19 @@ public class SkyRendererMixin {
      */
     private static float ephemeris$partOfATickOn() {
         return Minecraft.getInstance().getDeltaTracker().getGameTimeDeltaPartialTick(false);
+    }
+
+    /**
+     * Vanilla's own sky goes where this frame is going, not where the renderer was built. A
+     * {@code SkyRenderer} keeps the target it was constructed under, and an off-screen render that turns
+     * between targets (a panel's two fields) would otherwise draw every other frame's sky out of sight.
+     */
+    @Redirect(
+        method = RENDER,
+        at = @At(
+            value = "FIELD",
+            target = "Lnet/minecraft/client/renderer/SkyRenderer;renderTarget:Lcom/mojang/blaze3d/pipeline/RenderTarget;"))
+    private RenderTarget ephemeris$theTargetBeingDrawnOnto(SkyRenderer renderer) {
+        return OffscreenLevelRender.INSTANCE.targetBeingDrawnOnto();
     }
 }
