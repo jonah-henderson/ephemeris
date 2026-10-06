@@ -45,6 +45,11 @@ data class Look(
     /** The colour of the fog seen from under the water. */
     val waterFog: Rgba? = null,
     /**
+     * Whether this look's colours darken at night as the day's own do — null for yes, which is what a sky
+     * does; false for a sky that holds its colour round the clock.
+     */
+    val fadesAtNight: Boolean? = null,
+    /**
      * How brightly the stars burn, overriding the day's own curve — `1.0` being midnight.
      *
      * **How a sky with no sun stops having a noon.** Vanilla drives star brightness off the timeline, so a
@@ -57,7 +62,8 @@ data class Look(
     val saysNothing: Boolean
         get() = sky == null && fog == null && cloud == null && tint == null &&
             motes == null && haze == null && ceiling == null && murk == null && starBrightness == null &&
-            grass == null && foliage == null && dryFoliage == null && water == null && waterFog == null
+            grass == null && foliage == null && dryFoliage == null && water == null && waterFog == null &&
+            fadesAtNight == null
 
     /**
      * This look over [under] — every colour of ours that was named, and [under]'s where it was not.
@@ -80,6 +86,7 @@ data class Look(
         dryFoliage = dryFoliage ?: under.dryFoliage,
         water = water ?: under.water,
         waterFog = waterFog ?: under.waterFog,
+        fadesAtNight = fadesAtNight ?: under.fadesAtNight,
     )
 
     companion object {
@@ -103,8 +110,10 @@ data class Look(
                     .forGetter { java.util.Optional.ofNullable(it.dryFoliage) },
                 Rgba.CODEC.optionalFieldOf("water").forGetter { java.util.Optional.ofNullable(it.water) },
                 Rgba.CODEC.optionalFieldOf("water_fog").forGetter { java.util.Optional.ofNullable(it.waterFog) },
+                Codec.BOOL.optionalFieldOf("fades_at_night")
+                    .forGetter { java.util.Optional.ofNullable(it.fadesAtNight) },
             ).apply(instance) { sky, fog, cloud, tint, motes, haze, ceiling, murk, starBrightness,
-                                grass, foliage, dryFoliage, water, waterFog ->
+                                grass, foliage, dryFoliage, water, waterFog, fadesAtNight ->
                 Look(
                     sky = sky.orElse(null),
                     fog = fog.orElse(null),
@@ -120,6 +129,7 @@ data class Look(
                     dryFoliage = dryFoliage.orElse(null),
                     water = water.orElse(null),
                     waterFog = waterFog.orElse(null),
+                    fadesAtNight = fadesAtNight.orElse(null),
                 )
             }
         }
