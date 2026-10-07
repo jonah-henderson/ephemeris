@@ -47,3 +47,6 @@ Thumbs.db
 /*.jpeg
 /*.png
 /*.webp
+
+# Release outputs (scripts/release.sh)
+/dist/
