@@ -50,3 +50,6 @@ Thumbs.db
 
 # Release outputs (scripts/release.sh)
 /dist/
+
+# Design notes live in their own repository, linked in here
+/notes
