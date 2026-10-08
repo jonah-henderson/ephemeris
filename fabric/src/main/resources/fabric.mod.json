@@ -7,6 +7,11 @@
   "authors": [
     "${mod_author}"
   ],
+  "contact": {
+    "homepage": "https://github.com/jonah-henderson/ephemeris",
+    "sources": "https://github.com/jonah-henderson/ephemeris",
+    "issues": "https://github.com/jonah-henderson/ephemeris/issues"
+  },
   "license": "${license}",
   "environment": "*",
   "entrypoints": {

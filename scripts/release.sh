@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Releases Ephemeris: builds and tests a commit in a throwaway worktree, tags it v<version>-mc<minecraft>,
-# keeps the Fabric jar under dist/<version>/, and pushes the tag.
+# keeps the Fabric jar under dist/<version>/, pushes the tag and publishes the jar as a GitHub release asset,
+# which is where the pack of a mod that depends on it names it.
 #
 #   scripts/release.sh <version> [<commit>]     the commit defaults to HEAD
 #   scripts/release.sh --offline <version> ...  never asks origin anything; the tag stays local
@@ -75,10 +76,22 @@ if $offline; then
     pushed=true
     echo "release: tagged $tag locally (offline; push it with 'git push origin $tag')"
 else
-    read -r -p "Push $tag to origin? [y/N] " answer
+    read -r -p "Push $tag to origin and publish the jar as a release? [y/N] " answer
     [[ "$answer" == "y" || "$answer" == "Y" ]] || fail "not pushed; nothing left the machine"
     git push origin "$tag"
     pushed=true
     echo "release: pushed $tag"
+    # A `+` in an asset's name is not kept the same by every host, so the asset has none.
+    asset="$dist/assets/$(basename "${jar//+/-}")"
+    mkdir -p "$dist/assets"
+    cp "$jar" "$asset"
+    slug="$(git remote get-url origin | sed -E 's#.*github\.com[:/]([^/]+/[^/]+)$#\1#; s#\.git$##')"
+    if gh release view "$tag" --repo "$slug" >/dev/null 2>&1; then
+        gh release upload "$tag" "$asset" --repo "$slug" --clobber
+    else
+        gh release create "$tag" "$asset" --repo "$slug" --verify-tag --prerelease --title "Ephemeris $expected" \
+            --notes "Ephemeris $expected for Minecraft $minecraft."
+    fi
+    echo "release: published $tag"
 fi
 git worktree remove --force "$work"
