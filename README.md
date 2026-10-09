@@ -55,6 +55,10 @@ there are three of them.
 rest — the cycle, the timers, `isRainingAt`, mob spawning, snow and ice, `/weather`, and **the client needs
 nothing at all**.
 
+`ephemeris:daytime` is an item model property that makes a clock item read the hour a level is lit as, and
+spin where there is no sun to read. Vanilla's `clock.json` falls through to a random spin outside the
+overworld; point its fallback at this property.
+
 ## Appearance
 
 Three rungs, and the convenient road is the same road as the escape hatch.

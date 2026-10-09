@@ -134,6 +134,17 @@ class HorizonPainterCheck : FunSpec({
         check(HorizonPainter.everGlows(LevelLook(SkySpec.VANILLA))) { "An ordinary sky lost its sunrise" }
     }
 
+    test("vanilla's warm fog is kept only for an ordinary sky") {
+        // The fog warms toward due east or west and nowhere else, so under a sky of ours it follows the view
+        // rather than the sun (Jonah, 2026-10-09, walked).
+        val polar = lookOf(HorizonGlow.BLENDED, sun(Orbit.VANILLA_SUN.copy(inclinationDegrees = 90.0f, liftDegrees = 2.0f)))
+        check(!HorizonPainter.fogMayWarm(polar)) { "A polar sun was left vanilla's east-west fog" }
+        check(!HorizonPainter.fogMayWarm(lookOf(HorizonGlow.BLENDED, sun(Orbit.VANILLA_SUN)))) {
+            "A sky of ours kept vanilla's fog"
+        }
+        check(HorizonPainter.fogMayWarm(LevelLook(SkySpec.VANILLA))) { "An ordinary sky lost its fog" }
+    }
+
     test("a sun at the horizon paints, and one overhead does not") {
         val look = lookOf(HorizonGlow.BLENDED, sun(tilted))
 

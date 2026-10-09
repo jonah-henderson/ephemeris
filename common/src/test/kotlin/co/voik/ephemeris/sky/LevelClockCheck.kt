@@ -281,4 +281,38 @@ class LevelClockCheck : FunSpec({
             }
         }
     }
+    test("an ordinary sky's clock hand is vanilla's own") {
+        for (tick in 0..<day step 500) {
+            val hand = LevelClock.clockHandAt(LevelLook(SkySpec.VANILLA), tick.toLong()) ?: error("no hand at $tick")
+            check(hand == Orbit.VANILLA_SUN.progressAt(tick.toLong())) { "At tick $tick the hand read $hand" }
+        }
+        val atNoon = LevelClock.clockHandAt(LevelLook(SkySpec.VANILLA), 6000) ?: error("no hand at noon")
+        check(atNoon < 0.01f || atNoon > 0.99f) { "Vanilla's clock reads zero at noon, and this read $atNoon" }
+    }
+
+    test("a sun that never sets never points a clock at midnight") {
+        val polar = lookOf(sun(Orbit.VANILLA_SUN.copy(inclinationDegrees = 90.0f, liftDegrees = 25.0f)))
+        for (tick in 0..<day step 500) {
+            val hand = LevelClock.clockHandAt(polar, tick.toLong()) ?: error("no hand at $tick")
+            val awayFromMidnight = Math.abs(hand - 0.5f)
+            check(awayFromMidnight > 0.1f) { "At tick $tick a midnight sun's clock read $hand, which is night" }
+        }
+    }
+
+    test("a sky with no suns has no hour to read, so its clock is left to spin") {
+        val moonOnly = lookOf(
+            CelestialBody(
+                Orbit.VANILLA_MOON,
+                Appearance.Sprite(Rgba.WHITE, 20.0f, Appearance.MOON_SHAPES),
+                PhaseCycle(day, 0),
+            ),
+        )
+        check(LevelClock.clockHandAt(moonOnly, 3000) == null) { "A sky with no suns was given a clock reading" }
+    }
+    test("a sun held at one height gives the same hour every tick, not a dawn and a dusk by turns") {
+        val polar = lookOf(sun(Orbit.VANILLA_SUN.copy(inclinationDegrees = 90.0f, liftDegrees = 2.0f)))
+        val hours = (0L..2000L).map { tick -> LevelClock.vanillaEquivalent(polar, tick)?.let { Math.floorMod(it, day.toLong()) } }
+        val distinct = hours.toSet()
+        check(distinct.size == 1) { "A sun held at 2° was lit as ${distinct.size} different hours in 2000 ticks: ${distinct.take(6)}" }
+    }
 })

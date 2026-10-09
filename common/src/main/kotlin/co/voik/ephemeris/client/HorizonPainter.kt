@@ -58,6 +58,16 @@ object HorizonPainter {
     }
 
     /**
+     * Whether vanilla's own warm fog is right for this level: **only for an ordinary sky**.
+     *
+     * `AtmosphericFogEnvironment` warms the fog toward due east or due west, chosen by the sign of the real
+     * clock's sun angle, and toward nowhere else, so under any sky of ours it sits where the sun is not and
+     * follows the view rather than the light (Jonah, 2026-10-09, walked). A fog glow drawn at the sun's own
+     * bearing would replace it; until one is, there is none.
+     */
+    fun fogMayWarm(look: LevelLook): Boolean = look.sky.isOrdinary
+
+    /**
      * Takes vanilla's sunrise colour away from a level that has no sunrise — registered as an environment
      * layer, because the fog reads that attribute directly and no renderer stands between them.
      *
@@ -69,7 +79,7 @@ object HorizonPainter {
         layers: EnvironmentAttributeSystem.Builder,
     ): EnvironmentAttributeSystem.Builder {
         val look = LevelLooks.of(level.dimension()) ?: return layers
-        if (everGlows(look)) return layers
+        if (fogMayWarm(look)) return layers
         return layers.addConstantLayer(EnvironmentAttributes.SUNRISE_SUNSET_COLOR) { UNLIT_HORIZON }
     }
 

@@ -4,6 +4,7 @@ import co.voik.ephemeris.client.AuroraPainter
 import co.voik.ephemeris.client.Blaze3dSkyCanvas
 import co.voik.ephemeris.client.CloudPainter
 import co.voik.ephemeris.client.HorizonPainter
+import co.voik.ephemeris.client.LevelDaytime
 import co.voik.ephemeris.client.LevelRendering
 import co.voik.ephemeris.client.LookArrivals
 import co.voik.ephemeris.client.RainbowPainter
@@ -13,6 +14,7 @@ import net.neoforged.api.distmarker.Dist
 import net.neoforged.bus.api.IEventBus
 import net.neoforged.fml.common.Mod
 import net.neoforged.neoforge.client.event.ClientPlayerNetworkEvent
+import net.neoforged.neoforge.client.event.RegisterRangeSelectItemModelPropertyEvent
 import net.neoforged.neoforge.common.NeoForge
 
 /**
@@ -64,6 +66,11 @@ class EphemerisClient(eventBus: IEventBus) {
     LevelLooks.whenTold = LookArrivals::told
 
         NeoForge.EVENT_BUS.addListener(::onLoggingOut)
+        eventBus.addListener(::onRegisterRangeSelectProperties)
+    }
+
+    private fun onRegisterRangeSelectProperties(event: RegisterRangeSelectItemModelPropertyEvent) {
+        event.register(LevelDaytime.ID, LevelDaytime.MAP_CODEC)
     }
 
     /** Forgotten on disconnect: these keys mean nothing on the next server and an id can be reused. */

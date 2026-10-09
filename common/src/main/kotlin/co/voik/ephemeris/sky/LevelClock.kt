@@ -63,8 +63,34 @@ object LevelClock {
         val deciding = decidingSun(look, dayTime) ?: return dayStarted + MIDNIGHT
 
         val height = deciding.altitudeDegrees
-        val rising = deciding.body.path.altitudeAt(dayTime + LOOK_AHEAD) > height
+        val rising = deciding.body.path.altitudeAt(dayTime + LOOK_AHEAD) - height > -FLAT_BELOW
         return dayStarted + hourAt(height, rising)
+    }
+
+    /**
+     * Where the hand of a clock item points in a level, as the `0..1` turn vanilla's own clock face is
+     * drawn from — or **null** where the level has nothing to tell the time by and the clock should spin.
+     *
+     * Null for a level nothing has described, one with no skylight (roofed or lightless), and one whose sky
+     * holds no sun. Anywhere else the hand follows the same hour the level is *lit as*, so it agrees with
+     * the sky and with the rules the sky drives, and a sky that sits at the horizon shows the horizon.
+     */
+    fun clockHandFor(level: Level): Float? {
+        if (!level.dimensionType().hasSkyLight()) return null
+        val look = LevelLooks.anywhere(level) ?: return null
+        return clockHandAt(look, level.defaultClockTime)
+    }
+
+    /**
+     * The same, of a look rather than a level — pure, so it can be checked without a game.
+     *
+     * `Orbit.VANILLA_SUN.progressAt` is vanilla's `visual/sun_angle` over a full turn, which is what its clock
+     * item reads, so the real hour and the lit-as hour are fed through the one curve.
+     */
+    fun clockHandAt(look: LevelLook, dayTime: Long): Float? {
+        if (look.readAt(dayTime).suns.isEmpty()) return null
+        val hour = vanillaEquivalent(look, dayTime) ?: dayTime
+        return Orbit.VANILLA_SUN.progressAt(hour)
     }
 
     /** Which sun the level's own rule follows — the same choice `LevelDaylight` makes, and for one reason. */
@@ -112,6 +138,16 @@ object LevelClock {
 
     /** Far enough ahead to tell a climb from a fall, near enough to still be the same moment. */
     private const val LOOK_AHEAD = 40L
+
+    /**
+     * How far a sun may sink over [LOOK_AHEAD] and still count as holding its height, in degrees.
+     *
+     * A sun on a circle at constant height gains and loses a few millionths of a degree by rounding, so
+     * comparing it with itself chose dawn or dusk by noise, tick by tick. Anything inside this is read as
+     * climbing, so a sun that never changes height is lit as one hour. The smallest real fall is a sun at
+     * the top of its arc, three thousandths of a degree.
+     */
+    private const val FLAT_BELOW = 1.0e-4f
 
     /** Enough to land on the tick: a day halved this many times is well under one. */
     private const val BISECTIONS = 18

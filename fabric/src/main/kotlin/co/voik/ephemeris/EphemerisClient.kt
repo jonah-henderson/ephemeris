@@ -6,6 +6,7 @@ import co.voik.ephemeris.client.CloudPainter
 import co.voik.ephemeris.client.HorizonPainter
 import co.voik.ephemeris.client.CloudMoment
 import co.voik.ephemeris.client.LevelCloudRenderer
+import co.voik.ephemeris.client.LevelDaytime
 import co.voik.ephemeris.client.LevelRendering
 import co.voik.ephemeris.client.LookArrivals
 import co.voik.ephemeris.client.RainbowPainter
@@ -14,6 +15,7 @@ import co.voik.ephemeris.sky.LevelLookPayload
 import co.voik.ephemeris.sky.LevelLooks
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking
+import net.minecraft.client.renderer.item.properties.numeric.RangeSelectItemModelProperties
 
 /**
  * Ephemeris on a Fabric client: learning what each level looks like, and forgetting it again.
@@ -23,6 +25,7 @@ import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking
  */
 fun initClient() {
     registerTheBuiltInPainters()
+    RangeSelectItemModelProperties.ID_MAPPER.put(LevelDaytime.ID, LevelDaytime.MAP_CODEC)
 
     ClientPlayNetworking.registerGlobalReceiver(LevelLookPayload.TYPE) { payload, _ ->
         LevelLooks.remember(payload)

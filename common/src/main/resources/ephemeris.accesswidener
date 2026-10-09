@@ -39,3 +39,8 @@ accessible	field	net/minecraft/server/MinecraftServer	worldData	Lnet/minecraft/w
 # else. Losing the cache costs nothing here -- `GroundWarmth` asks nine positions twice a second, and a
 # moving eye rarely asks the same block twice anyway.
 accessible	method	net/minecraft/world/level/biome/Biome	getHeightAdjustedTemperature	(Lnet/minecraft/core/BlockPos;I)F
+
+# The one way a mod can add an item model property on Fabric, which has no event for it. `ephemeris:daytime`
+# is put here from the Fabric client entrypoint; NeoForge has `RegisterRangeSelectItemModelPropertyEvent`
+# and needs no transformer.
+accessible	field	net/minecraft/client/renderer/item/properties/numeric/RangeSelectItemModelProperties	ID_MAPPER	Lnet/minecraft/util/ExtraCodecs$LateBoundIdMapper;
