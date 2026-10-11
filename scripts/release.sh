@@ -3,8 +3,10 @@
 # keeps the Fabric jar under dist/<version>/, pushes the tag and publishes the jar as a GitHub release asset,
 # which is where the pack of a mod that depends on it names it.
 #
-#   scripts/release.sh <version> [<commit>]     the commit defaults to HEAD
-#   scripts/release.sh --offline <version> ...  never asks origin anything; the tag stays local
+#   scripts/release.sh [<version>] [<commit>]     the commit defaults to HEAD
+#   scripts/release.sh --offline [<version>] ...  never asks origin anything; the tag stays local
+#
+# Without a version it offers the next patch, minor and major after the last release, or takes one typed in.
 #
 # Nothing leaves the machine before it asks. A failure before then removes the tag it made and leaves the
 # worktree under build/release/<version>/ for a look.
@@ -12,22 +14,51 @@ set -euo pipefail
 
 offline=false
 if [[ "${1:-}" == "--offline" ]]; then offline=true; shift; fi
-version="${1:?usage: scripts/release.sh [--offline] <version> [<commit>]}"
-commit_name="${2:-HEAD}"
+version="${1:-}"
+commit_name="${2:-}"
+# A lone argument that is no version is the commit, with the version still to be asked for.
+if [[ -n "$version" && -z "$commit_name" && ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    commit_name="$version"
+    version=""
+fi
+commit_name="${commit_name:-HEAD}"
 
 root="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$root"
 
 fail() { echo "release: $*" >&2; exit 1; }
 
-[[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || fail "'$version' is not a version like 0.1.0"
 minecraft="$(sed -n 's/^minecraft *= *"\(.*\)"/\1/p' libs.versions.toml | head -1)"
 [[ -n "$minecraft" ]] || fail "no minecraft version in libs.versions.toml"
+last="$(git tag --list "v*-mc${minecraft}" | sed "s/^v//; s/-mc.*//" | sort -V | tail -1)"
+
+# The next patch, minor or major after the last release, or any version typed in.
+ask_for_version() {
+    local major minor patch answer typed
+    IFS=. read -r major minor patch <<< "${last:-0.0.0}"
+    local presets=("$major.$minor.$((patch + 1))" "$major.$((minor + 1)).0" "$((major + 1)).0.0")
+    local kinds=(patch minor major)
+    if [[ -n "$last" ]]; then echo "The last release is $last." >&2; else echo "Nothing has been released yet." >&2; fi
+    for index in 0 1 2; do echo "  $((index + 1))) ${presets[$index]}  ${kinds[$index]}" >&2; done
+    echo "  4) another version" >&2
+    while true; do
+        read -r -p "Release which version? " answer || fail "no version given, and no terminal to ask for one"
+        case "$answer" in
+            1|2|3) echo "${presets[$((answer - 1))]}"; return ;;
+            4) read -r -p "Version: " typed || fail "no version given, and no terminal to ask for one" ;;
+            *) typed="$answer" ;;
+        esac
+        if [[ "$typed" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then echo "$typed"; return; fi
+        echo "'$typed' is neither a choice nor a version like 0.1.0" >&2
+    done
+}
+[[ -n "$version" ]] || version="$(ask_for_version)"
+
+[[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || fail "'$version' is not a version like 0.1.0"
 tag="v${version}-mc${minecraft}"
 commit="$(git rev-parse --verify "${commit_name}^{commit}")" || fail "no commit '$commit_name'"
 
 # Greater than the last release for this Minecraft version, and not taken here or on origin.
-last="$(git tag --list "v*-mc${minecraft}" | sed "s/^v//; s/-mc.*//" | sort -V | tail -1)"
 if [[ -n "$last" ]]; then
     newest="$(printf '%s\n%s\n' "$last" "$version" | sort -V | tail -1)"
     [[ "$newest" == "$version" && "$last" != "$version" ]] || fail "$version is not after the last release, $last"
