@@ -28,6 +28,7 @@ import com.mojang.blaze3d.vertex.ByteBufferBuilder
 import com.mojang.blaze3d.vertex.DefaultVertexFormat
 import net.minecraft.client.Minecraft
 import net.minecraft.client.renderer.MappableRingBuffer
+import net.minecraft.client.renderer.BindGroupLayouts
 import net.minecraft.client.renderer.RenderPipelines
 import com.mojang.blaze3d.platform.NativeImage
 import net.minecraft.client.renderer.texture.DynamicTexture
@@ -735,6 +736,104 @@ object Blaze3dSkyCanvas : SkyCanvas {
             }
         }
     }
+
+    /**
+     * The caller's own quads, in one submission: every corner pushed out to [SHAPE_DISTANCE] along its direction,
+     * coloured by its own colour except through the starfield, which reads none.
+     */
+    override fun drawShapes(quads: List<SkyQuad>, blend: SkyBlend) {
+        if (quads.isEmpty()) return
+        val coloured = blend != SkyBlend.STARFIELD
+        val format = if (coloured) DefaultVertexFormat.POSITION_COLOR else DefaultVertexFormat.POSITION
+        ByteBufferBuilder.exactlySized(quads.size * QUAD_VERTICES * format.vertexSize).use { bytes ->
+            val builder = BufferBuilder(bytes, PrimitiveTopology.QUADS, format)
+            val at = Vector3f()
+            for (quad in quads) {
+                for (corner in quad.corners) {
+                    corner.direction.normalize(SHAPE_DISTANCE, at)
+                    val vertex = builder.addVertex(at.x, at.y, at.z)
+                    if (coloured) vertex.setColor(corner.colour.red, corner.colour.green, corner.colour.blue, corner.colour.alpha)
+                }
+            }
+            builder.buildOrThrow().use { mesh ->
+                // Closed here for the reason `drawGlows` gives: what stands in for vanilla's upload allocates.
+                RenderSystem.getDevice()
+                    .createBuffer({ "Ephemeris sky shapes" }, GpuBuffer.USAGE_VERTEX, mesh.vertexBuffer())
+                    .use { vertices -> drawShapeMesh(vertices, quads.size * QUAD_INDICES, blend) }
+            }
+        }
+    }
+
+    private fun drawShapeMesh(vertices: GpuBuffer, indices: Int, blend: SkyBlend) {
+        val transforms = RenderSystem.getDynamicUniforms().writeTransform(modelViewNow(), UNTOUCHED, Vector3f(), Matrix4f())
+        val quadIndices = RenderSystem.getSequentialBuffer(PrimitiveTopology.QUADS)
+        renderPass("Ephemeris sky shapes")?.use { pass ->
+            val pipeline = when (blend) {
+                SkyBlend.LIGHT -> GLOWS_PIPELINE
+                SkyBlend.SHADE -> SHADE_PIPELINE
+                SkyBlend.STARFIELD -> PORTAL_PIPELINE
+            }
+            pass.setPipeline(RenderSystem.getCompiledPipeline(pipeline))
+            RenderSystem.bindDefaultUniforms(pass)
+            pass.setUniform("DynamicTransforms", transforms)
+            if (blend == SkyBlend.STARFIELD) {
+                val textures = Minecraft.getInstance().textureManager
+                val sky = textures.getTexture(END_SKY)
+                val portal = textures.getTexture(END_PORTAL)
+                pass.setUniform("Sampler0", sky.textureView, sky.sampler)
+                pass.setUniform("Sampler1", portal.textureView, portal.sampler)
+            }
+            pass.setVertexBuffer(ONLY_VERTEX_BINDING, vertices.slice())
+            pass.setIndexBuffer(quadIndices.getBuffer(indices), quadIndices.type())
+            pass.drawIndexed(indices, ONE_INSTANCE, FROM_THE_FIRST_INDEX, NO_VERTEX_OFFSET, FROM_THE_FIRST_INSTANCE)
+        }
+    }
+
+    /** How far off a caller's shapes hang — where the sky's bodies do. */
+    private const val SHAPE_DISTANCE = 100.0f
+
+    private val END_SKY = Identifier.withDefaultNamespace("textures/environment/end_sky.png")
+    private val END_PORTAL = Identifier.withDefaultNamespace("textures/entity/end_portal/end_portal.png")
+
+    /** [GLOWS_PIPELINE] laid over the sky by alpha rather than added to it, so a shape can darken what is behind. */
+    private val SHADE_PIPELINE: RenderPipeline = RenderPipeline.builder()
+        .withLocation(Identifier.fromNamespaceAndPath(NAMESPACE, "pipeline/sky_shade"))
+        .withVertexShader(Identifier.withDefaultNamespace("core/position_color"))
+        .withFragmentShader(Identifier.withDefaultNamespace("core/position_color"))
+        .withBindGroupLayout(
+            BindGroupLayout.builder()
+                .withUniform("DynamicTransforms", UniformType.UNIFORM_BUFFER)
+                .withUniform("Projection", UniformType.UNIFORM_BUFFER)
+                .build(),
+        )
+        .withColorTargetState(ColorTargetState(BlendFunction.TRANSLUCENT))
+        .withCull(false)
+        .withVertexBinding(ONLY_VERTEX_BINDING, DefaultVertexFormat.POSITION_COLOR)
+        .withPrimitiveTopology(PrimitiveTopology.QUADS)
+        .build()
+
+    /**
+     * Vanilla's End portal — its own shaders, layers and textures, read in screen space so any shape shows the same
+     * field — **without its depth**, which would leave a hole in the sky that hid the land beyond it.
+     */
+    private val PORTAL_PIPELINE: RenderPipeline = RenderPipeline.builder()
+        .withLocation(Identifier.fromNamespaceAndPath(NAMESPACE, "pipeline/sky_portal"))
+        .withBindGroupLayout(BindGroupLayouts.GLOBALS)
+        .withBindGroupLayout(BindGroupLayouts.PROJECTION)
+        .withBindGroupLayout(BindGroupLayouts.DYNAMIC_TRANSFORMS)
+        .withBindGroupLayout(BindGroupLayouts.FOG)
+        .withBindGroupLayout(BindGroupLayouts.SAMPLER0_SAMPLER1)
+        .withVertexShader(Identifier.withDefaultNamespace("core/rendertype_end_portal"))
+        .withFragmentShader(Identifier.withDefaultNamespace("core/rendertype_end_portal"))
+        .withShaderDefine("PORTAL_LAYERS", VANILLAS_PORTAL_LAYERS)
+        .withColorTargetState(ColorTargetState.DEFAULT)
+        .withCull(false)
+        .withVertexBinding(ONLY_VERTEX_BINDING, DefaultVertexFormat.POSITION)
+        .withPrimitiveTopology(PrimitiveTopology.QUADS)
+        .build()
+
+    /** As many layers as vanilla's End portal draws. */
+    private const val VANILLAS_PORTAL_LAYERS = 15
 
     /**
      * Each streamer a thin wedge in the body's own plane, from just inside the rim out to its length,

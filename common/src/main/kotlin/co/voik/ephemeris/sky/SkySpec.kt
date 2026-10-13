@@ -24,8 +24,6 @@ data class SkySpec(
     val aurora: Aurora? = null,
     /** The bow that stands opposite its light in the right weather, or null where nothing asked for one. */
     val rainbow: Rainbow? = null,
-    /** Rifts torn high in it, or null for a sky that is whole. An overlay, like [aurora]. */
-    val tears: SkyTears? = null,
 ) {
 
     /**
@@ -37,7 +35,7 @@ data class SkySpec(
      * not something vanilla cannot draw. A star **reveal** is, so it counts — [decks] do not, because the
      * cloud renderer draws those and a level may have them over an otherwise unremarkable sky.
      *
-     * **[aurora], [rainbow] and [tears] do not count either, and that is the point of drawing them on an overlay.**
+     * **[aurora] and [rainbow] do not count either, and that is the point of drawing them on an overlay.**
      * Both are things vanilla cannot draw, and neither is a reason to take vanilla's sun and moon away from
      * a level that wanted neither changed: the overlay runs whether this renderer claimed the sky or
      * vanilla drew it, so an otherwise unremarkable sky keeps vanilla's own and gains a curtain or a bow.
@@ -123,9 +121,6 @@ data class SkySpec(
                 second,
             )
         },
-        tears?.let { torn ->
-            "tears ×%d %s glow %.2f".format(torn.count, torn.colour.packed().toUInt().toString(16), torn.glow)
-        },
         "stars ${stars.count}" + if (stars.glow == ORDINARY_STAR_GLOW) "" else
             " burning %.2f times vanilla's".format(stars.glow),
         stars.reveal?.let { "— hidden below %.0f, fully shown above %.0f".format(it.hiddenBelow, it.fullyShownAbove) },
@@ -168,10 +163,8 @@ data class SkySpec(
                     .forGetter { spec -> java.util.Optional.ofNullable(spec.aurora) },
                 Rainbow.CODEC.optionalFieldOf("rainbow")
                     .forGetter { spec -> java.util.Optional.ofNullable(spec.rainbow) },
-                SkyTears.CODEC.optionalFieldOf("tears")
-                    .forGetter { spec -> java.util.Optional.ofNullable(spec.tears) },
-            ).apply(instance) { bodies, stars, decks, aurora, rainbow, tears ->
-                SkySpec(bodies, stars, decks, aurora.orElse(null), rainbow.orElse(null), tears.orElse(null))
+            ).apply(instance) { bodies, stars, decks, aurora, rainbow ->
+                SkySpec(bodies, stars, decks, aurora.orElse(null), rainbow.orElse(null))
             }
         }
 

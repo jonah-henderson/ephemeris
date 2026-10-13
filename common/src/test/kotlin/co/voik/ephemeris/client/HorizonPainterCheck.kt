@@ -47,6 +47,7 @@ class HorizonPainterCheck : FunSpec({
         ) = Unit
 
         override fun drawGlows(glows: List<Glow>) = Unit
+        override fun drawShapes(quads: List<SkyQuad>, blend: SkyBlend) = Unit
 
         override fun drawBody(
             shape: Identifier,

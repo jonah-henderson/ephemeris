@@ -9,6 +9,7 @@ import co.voik.ephemeris.sky.Rainbow
 import net.minecraft.resources.Identifier
 import net.minecraft.world.phys.Vec3
 import org.joml.Quaternionf
+import org.joml.Vector3fc
 
 /**
  * Everything a sky can be drawn with — five verbs, so the painters can decide what a sky looks like
@@ -131,6 +132,13 @@ interface SkyCanvas {
     fun drawGlows(glows: List<Glow>)
 
     /**
+     * Shapes of the caller's own hung on the sky, in **one** submission: each quad's corners are directions from
+     * the eye with a colour apiece, and [blend] says how they meet what is behind them. What the shapes are is
+     * entirely the caller's; this only draws them.
+     */
+    fun drawShapes(quads: List<SkyQuad>, blend: SkyBlend)
+
+    /**
      * The level's stars, arranged by [seed] and turned up to [brightness]. Named by seed and count rather
      * than passed as points, the geometry never changing once built.
      *
@@ -193,6 +201,26 @@ interface SkyCanvas {
         lightBearingDegrees: Float,
         strength: Float,
     )
+}
+
+/** One corner of a [SkyQuad]: which way it lies from the eye, and its colour there. */
+data class SkyCorner(val direction: Vector3fc, val colour: Rgba)
+
+/** Four [SkyCorner]s in order round the edge, for [SkyCanvas.drawShapes]. */
+data class SkyQuad(val first: SkyCorner, val second: SkyCorner, val third: SkyCorner, val fourth: SkyCorner) {
+    val corners: List<SkyCorner> get() = listOf(first, second, third, fourth)
+}
+
+/** How a shape of the caller's meets the sky behind it. */
+enum class SkyBlend {
+    /** Adds its colour, as a star does: light, and invisible where it is black. */
+    LIGHT,
+
+    /** Lays its colour over the sky by its alpha, so it can darken: a shadow, or a hole. */
+    SHADE,
+
+    /** The End portal's drifting starfield seen through it; the corners' colours are not read. */
+    STARFIELD,
 }
 
 /** One glow's worth of [SkyCanvas.drawGlow]'s arguments, so a great many can go in at once. */
