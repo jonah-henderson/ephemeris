@@ -12,6 +12,7 @@ import co.voik.ephemeris.client.LevelRendering
 import co.voik.ephemeris.client.LookArrivals
 import co.voik.ephemeris.client.RainbowPainter
 import co.voik.ephemeris.client.SkyPainter
+import co.voik.ephemeris.client.TearPainter
 import co.voik.ephemeris.sky.LevelLookPayload
 import co.voik.ephemeris.sky.LevelLooks
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents
@@ -88,6 +89,7 @@ private fun registerTheBuiltInPainters() {
             moment.rainBrightness,
         )
     }
+    LevelRendering.skyOverlay { moment -> TearPainter.draw(Blaze3dSkyCanvas, moment.level, moment.rainBrightness) }
     LevelRendering.environment(HorizonPainter::silenceVanillasGlow)
     // A level told something new has to drop what it baked from the old answer, and build its air again.
     LevelLooks.whenTold = LookArrivals::told

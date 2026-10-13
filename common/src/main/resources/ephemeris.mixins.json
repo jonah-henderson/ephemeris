@@ -12,7 +12,8 @@
     "client.ClientLevelMixin",
     "client.BlockColorsMixin",
     "client.CloudRendererMixin",
-    "client.SkyRendererMixin"
+    "client.SkyRendererMixin",
+    "client.WeatherEffectRendererMixin"
   ],
   "injectors": {
     "defaultRequire": 1

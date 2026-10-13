@@ -120,6 +120,8 @@ data class LevelLook(
      * stays as it is. Applied on the client through vanilla's own list of the player's post effects.
      */
     val filters: List<Identifier> = emptyList(),
+    /** How its rain falls and sounds. */
+    val rain: RainLook = RainLook(),
 ) {
     /** Where everything stands at [dayTime]. Pure, so both sides get the same answer without asking. */
     fun readAt(dayTime: Long): SkyReading = SkyReading.of(sky, dayTime)
@@ -127,7 +129,7 @@ data class LevelLook(
     /** Whether this says anything at all, so a renderer can decline cheaply. */
     val saysNothing: Boolean
         get() = sky.isOrdinary && air.saysNothing && corners.isEmpty() && sky.decks.isEmpty() && airFrom == null &&
-            filters.isEmpty()
+            filters.isEmpty() && rain.isOrdinary
 
     companion object {
         /** The filter this library ships: the level drained of colour, to its own brightness. */

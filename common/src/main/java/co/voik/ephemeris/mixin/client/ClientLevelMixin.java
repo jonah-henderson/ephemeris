@@ -1,6 +1,7 @@
 package co.voik.ephemeris.mixin.client;
 
 import co.voik.ephemeris.client.GroundTints;
+import co.voik.ephemeris.client.LevelRain;
 import co.voik.ephemeris.client.LevelRendering;
 import co.voik.ephemeris.client.RepaintableAir;
 import net.minecraft.client.multiplayer.ClientLevel;
@@ -12,6 +13,7 @@ import org.spongepowered.asm.mixin.Mutable;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.ModifyArg;
 import org.spongepowered.asm.mixin.injection.ModifyVariable;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
@@ -31,7 +33,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
  * by their nature, and a first-wins rule would make two mods that both tint the fog silently exclusive.
  *
  * <p>It also lets a level repaint what grows in it. That is a second seam and a different shape — see
- * {@link #ephemeris$tintTheGround}.
+ * {@link #ephemeris$tintTheGround}. And it pitches a level's rain as it says, in {@link #ephemeris$pitchTheRain}.
  */
 @Mixin(ClientLevel.class)
 public abstract class ClientLevelMixin implements RepaintableAir {
@@ -81,5 +83,19 @@ public abstract class ClientLevelMixin implements RepaintableAir {
     @ModifyVariable(method = "calculateBlockTint", at = @At("HEAD"), argsOnly = true)
     private ColorResolver ephemeris$tintTheGround(ColorResolver resolver) {
         return GroundTints.INSTANCE.wrap((ClientLevel) (Object) this, resolver);
+    }
+
+    /**
+     * The rain's patter, overhead and under a roof, at the level's own pitch ({@code RainLook.pitch}). Both
+     * are played from {@code tickWeatherEffects}, and nothing else there plays a sound.
+     */
+    @ModifyArg(
+            method = "tickWeatherEffects",
+            at = @At(
+                    value = "INVOKE",
+                    target = "Lnet/minecraft/client/multiplayer/ClientLevel;playLocalSound(Lnet/minecraft/core/BlockPos;Lnet/minecraft/sounds/SoundEvent;Lnet/minecraft/sounds/SoundSource;FFZ)V"),
+            index = 4)
+    private float ephemeris$pitchTheRain(float pitch) {
+        return pitch * LevelRain.of((ClientLevel) (Object) this).getPitch();
     }
 }
