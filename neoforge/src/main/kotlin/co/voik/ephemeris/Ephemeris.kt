@@ -66,6 +66,6 @@ class Ephemeris(eventBus: IEventBus) {
     }
 
     private companion object {
-        const val PAYLOAD_VERSION = "1"
+        const val PAYLOAD_VERSION = "2"
     }
 }
