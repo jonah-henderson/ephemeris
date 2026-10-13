@@ -115,11 +115,22 @@ data class LevelLook(
      * unsaid. Applying it is the consumer's — the library carries it because this is what crosses.
      */
     val airFrom: ResourceKey<DimensionType>? = null,
+    /**
+     * Post effects the whole level is seen through, every frame, by id (`ephemeris:monochrome`) — the GUI
+     * stays as it is. Applied on the client through vanilla's own list of the player's post effects.
+     */
+    val filters: List<Identifier> = emptyList(),
 ) {
     /** Where everything stands at [dayTime]. Pure, so both sides get the same answer without asking. */
     fun readAt(dayTime: Long): SkyReading = SkyReading.of(sky, dayTime)
 
     /** Whether this says anything at all, so a renderer can decline cheaply. */
     val saysNothing: Boolean
-        get() = sky.isOrdinary && air.saysNothing && corners.isEmpty() && sky.decks.isEmpty() && airFrom == null
+        get() = sky.isOrdinary && air.saysNothing && corners.isEmpty() && sky.decks.isEmpty() && airFrom == null &&
+            filters.isEmpty()
+
+    companion object {
+        /** The filter this library ships: the level drained of colour, to its own brightness. */
+        val MONOCHROME: Identifier = Identifier.fromNamespaceAndPath("ephemeris", "monochrome")
+    }
 }

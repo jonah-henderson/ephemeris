@@ -64,7 +64,11 @@ data class LevelLookPayload(val looks: List<Entry>) : CustomPacketPayload {
             // has this registry even though it has none the runtime level itself is in.
             ByteBufCodecs.optional(ResourceKey.streamCodec(Registries.DIMENSION_TYPE)),
             { Optional.ofNullable(it.airFrom) },
-        ) { sky, air, corners, rules, airFrom -> LevelLook(sky, air, corners, rules, airFrom.orElse(null)) }
+            Identifier.STREAM_CODEC.apply(ByteBufCodecs.list()),
+            LevelLook::filters,
+        ) { sky, air, corners, rules, airFrom, filters ->
+            LevelLook(sky, air, corners, rules, airFrom.orElse(null), filters)
+        }
 
         private val ENTRY_STREAM_CODEC: StreamCodec<ByteBuf, Entry> = StreamCodec.composite(
             ResourceKey.streamCodec(Registries.DIMENSION),

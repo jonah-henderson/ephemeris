@@ -7,12 +7,14 @@ import co.voik.ephemeris.client.HorizonPainter
 import co.voik.ephemeris.client.CloudMoment
 import co.voik.ephemeris.client.LevelCloudRenderer
 import co.voik.ephemeris.client.LevelDaytime
+import co.voik.ephemeris.client.LevelFilters
 import co.voik.ephemeris.client.LevelRendering
 import co.voik.ephemeris.client.LookArrivals
 import co.voik.ephemeris.client.RainbowPainter
 import co.voik.ephemeris.client.SkyPainter
 import co.voik.ephemeris.sky.LevelLookPayload
 import co.voik.ephemeris.sky.LevelLooks
+import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking
 import net.minecraft.client.renderer.item.properties.numeric.RangeSelectItemModelProperties
@@ -30,6 +32,8 @@ fun initClient() {
     ClientPlayNetworking.registerGlobalReceiver(LevelLookPayload.TYPE) { payload, _ ->
         LevelLooks.remember(payload)
     }
+
+    ClientTickEvents.END_CLIENT_TICK.register(LevelFilters::tick)
 
     // Forgotten on disconnect: these keys mean nothing on the next server and an id can be reused.
     ClientPlayConnectionEvents.DISCONNECT.register { _, _ -> LevelLooks.forgetAll() }

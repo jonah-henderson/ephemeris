@@ -5,6 +5,7 @@ import co.voik.ephemeris.client.Blaze3dSkyCanvas
 import co.voik.ephemeris.client.CloudPainter
 import co.voik.ephemeris.client.HorizonPainter
 import co.voik.ephemeris.client.LevelDaytime
+import co.voik.ephemeris.client.LevelFilters
 import co.voik.ephemeris.client.LevelRendering
 import co.voik.ephemeris.client.LookArrivals
 import co.voik.ephemeris.client.RainbowPainter
@@ -13,7 +14,9 @@ import co.voik.ephemeris.sky.LevelLooks
 import net.neoforged.api.distmarker.Dist
 import net.neoforged.bus.api.IEventBus
 import net.neoforged.fml.common.Mod
+import net.minecraft.client.Minecraft
 import net.neoforged.neoforge.client.event.ClientPlayerNetworkEvent
+import net.neoforged.neoforge.client.event.ClientTickEvent
 import net.neoforged.neoforge.client.event.RegisterRangeSelectItemModelPropertyEvent
 import net.neoforged.neoforge.common.NeoForge
 
@@ -66,6 +69,7 @@ class EphemerisClient(eventBus: IEventBus) {
     LevelLooks.whenTold = LookArrivals::told
 
         NeoForge.EVENT_BUS.addListener(::onLoggingOut)
+        NeoForge.EVENT_BUS.addListener { _: ClientTickEvent.Post -> LevelFilters.tick(Minecraft.getInstance()) }
         eventBus.addListener(::onRegisterRangeSelectProperties)
     }
 
