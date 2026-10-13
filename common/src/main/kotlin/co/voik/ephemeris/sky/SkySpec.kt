@@ -45,7 +45,8 @@ data class SkySpec(
             val bodiesAreVanillas = bodies == VANILLA.bodies
             val starsAreVanillas = stars.count == VANILLA.stars.count &&
                 stars.reveal == null &&
-                stars.glow == VANILLA.stars.glow
+                stars.glow == VANILLA.stars.glow &&
+                stars.byDay == VANILLA.stars.byDay
             return bodiesAreVanillas && starsAreVanillas
         }
 
@@ -361,6 +362,11 @@ data class StarField(
      * field is drawn at: doubling this quadruples the light it lays on the sky.
      */
     val glow: Float = SkySpec.ORDINARY_STAR_GLOW,
+    /**
+     * How much of its midnight brightness the field keeps through the day, from none to all of it — a floor
+     * under the night's own curve, so the stars are never fainter at midnight than they would have been.
+     */
+    val byDay: Float = NONE_BY_DAY,
 ) {
     companion object {
         val CODEC: Codec<StarField> = RecordCodecBuilder.create { instance ->
@@ -370,7 +376,12 @@ data class StarField(
                 StarReveal.CODEC.optionalFieldOf("reveal")
                     .forGetter { field -> java.util.Optional.ofNullable(field.reveal) },
                 Codec.FLOAT.optionalFieldOf("glow", SkySpec.ORDINARY_STAR_GLOW).forGetter(StarField::glow),
-            ).apply(instance) { count, seed, reveal, glow -> StarField(count, seed, reveal.orElse(null), glow) }
+                Codec.FLOAT.optionalFieldOf("by_day", NONE_BY_DAY).forGetter(StarField::byDay),
+            ).apply(instance) { count, seed, reveal, glow, byDay ->
+                StarField(count, seed, reveal.orElse(null), glow, byDay)
+            }
         }
+
+        const val NONE_BY_DAY = 0.0f
     }
 }

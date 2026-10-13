@@ -111,7 +111,8 @@ object SkyPainter {
         val nightliness = look.air.starBrightness
             ?: LevelDaylight.starlitnessFor(level)
             ?: (starBrightness / VANILLAS_BRIGHTEST_STARS)
-        val visibility = nightliness * VANILLAS_BRIGHTEST_STARS * stars.glow * revealed
+        val starlit = maxOf(nightliness, stars.byDay)
+        val visibility = starlit * VANILLAS_BRIGHTEST_STARS * stars.glow * revealed
         if (stars.count > 0 && visibility > STARS_WORTH_DRAWING) {
             // **The twinkle drifts where the field's position tells the hour**, so only the first of the
             // two takes the steady clock — see [SkyDrift]. `starAngle` is vanilla's and is used as given.

@@ -58,12 +58,14 @@ data class Look(
      * ground actually gets is a level attribute, and this is only what the eye sees overhead.
      */
     val starBrightness: Float? = null,
+    /** A sky colour that wanders over time, laid over whatever [sky] or the day said. */
+    val wander: SkyWander? = null,
 ) {
     val saysNothing: Boolean
         get() = sky == null && fog == null && cloud == null && tint == null &&
             motes == null && haze == null && ceiling == null && murk == null && starBrightness == null &&
             grass == null && foliage == null && dryFoliage == null && water == null && waterFog == null &&
-            fadesAtNight == null
+            fadesAtNight == null && wander == null
 
     /**
      * This look over [under] — every colour of ours that was named, and [under]'s where it was not.
@@ -87,6 +89,7 @@ data class Look(
         water = water ?: under.water,
         waterFog = waterFog ?: under.waterFog,
         fadesAtNight = fadesAtNight ?: under.fadesAtNight,
+        wander = wander ?: under.wander,
     )
 
     companion object {
@@ -112,8 +115,9 @@ data class Look(
                 Rgba.CODEC.optionalFieldOf("water_fog").forGetter { java.util.Optional.ofNullable(it.waterFog) },
                 Codec.BOOL.optionalFieldOf("fades_at_night")
                     .forGetter { java.util.Optional.ofNullable(it.fadesAtNight) },
+                SkyWander.CODEC.optionalFieldOf("wander").forGetter { java.util.Optional.ofNullable(it.wander) },
             ).apply(instance) { sky, fog, cloud, tint, motes, haze, ceiling, murk, starBrightness,
-                                grass, foliage, dryFoliage, water, waterFog, fadesAtNight ->
+                                grass, foliage, dryFoliage, water, waterFog, fadesAtNight, wander ->
                 Look(
                     sky = sky.orElse(null),
                     fog = fog.orElse(null),
@@ -130,6 +134,7 @@ data class Look(
                     water = water.orElse(null),
                     waterFog = waterFog.orElse(null),
                     fadesAtNight = fadesAtNight.orElse(null),
+                    wander = wander.orElse(null),
                 )
             }
         }

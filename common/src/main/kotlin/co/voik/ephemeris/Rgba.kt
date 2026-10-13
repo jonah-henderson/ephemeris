@@ -57,9 +57,13 @@ data class Rgba(val red: Float, val green: Float, val blue: Float, val alpha: Fl
      * than it was.
      */
     fun drained(amount: Float): Rgba {
-        val grey = red * SEEN_AS_RED + green * SEEN_AS_GREEN + blue * SEEN_AS_BLUE
+        val grey = brightness
         return lerp(Rgba(grey, grey, grey, alpha), amount)
     }
+
+    /** How bright this colour looks, by the eye's own weighting of the channels — the grey [drained] walks to. */
+    val brightness: Float
+        get() = red * SEEN_AS_RED + green * SEEN_AS_GREEN + blue * SEEN_AS_BLUE
 
     /**
      * The other way along the same line: pushed **away** from its own grey, so what colour it has becomes
@@ -71,7 +75,7 @@ data class Rgba(val red: Float, val green: Float, val blue: Float, val alpha: Fl
      * sun is the thing the eye looks straight at.
      */
     fun saturated(amount: Float): Rgba {
-        val grey = red * SEEN_AS_RED + green * SEEN_AS_GREEN + blue * SEEN_AS_BLUE
+        val grey = brightness
         fun pushed(channel: Float) = (grey + (channel - grey) * (1.0f + amount)).coerceIn(0.0f, 1.0f)
         return Rgba(pushed(red), pushed(green), pushed(blue), alpha)
     }
