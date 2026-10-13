@@ -140,6 +140,12 @@ a level's air, and `.horizonHeight { level, camera -> … }` stands the sunrise 
 of vanilla's height, applied to vanilla's fan and to this library's own alike. Neither claims: every one
 registered is applied, so two mods that each tint the fog or stretch the glow compose.
 
+**Or hang something in the sky without claiming it.** `.skyOverlay { moment -> … }` draws over the sun, moon and
+stars; `.skyBackdrop { moment -> listOf(SkyShapes(quads, blend)) }` hangs shapes of your own *behind* them, on
+vanilla's sky as well as one of this library's, and `moment.starTurn` carries a point fixed among the stars to
+where it stands this frame. A backdrop answers with data rather than drawing, because on vanilla's sky its
+shapes go into the pass vanilla already has open, and are uploaded before it is.
+
 This rung exists because 26.1 closed every other one: `DimensionSpecialEffects` is gone, Fabric API dropped
 `DimensionRenderingRegistry`, and a dimension type still cannot carry appearance to the client. Every mod
 that wants a sky of its own writes the same two Mixins, and two mods that do fight over the same seam.

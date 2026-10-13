@@ -742,10 +742,51 @@ object Blaze3dSkyCanvas : SkyCanvas {
      * coloured by its own colour except through the starfield, which reads none.
      */
     override fun drawShapes(quads: List<SkyQuad>, blend: SkyBlend) {
-        if (quads.isEmpty()) return
+        val mesh = shapeMeshOf(quads, blend) ?: return
+        mesh.use { renderPass("Ephemeris sky shapes")?.use { pass -> drawShapeMesh(pass, it) } }
+    }
+
+    /**
+     * Uploads [groups] now, while no pass is open, for [drawStagedShapes] to draw into one that may be —
+     * vanilla's own sky pass, which it opens before its bodies and hands nobody.
+     */
+    fun stageShapes(groups: List<SkyShapes>) {
+        releaseStagedShapes()
+        groups.mapNotNullTo(staged) { shapeMeshOf(it.quads, it.blend) }
+    }
+
+    /** Draws what [stageShapes] uploaded, into the pass lent (see [lending]) or one of its own. */
+    fun drawStagedShapes() {
+        if (staged.isEmpty()) return
+        val lent = lentPass
+        if (lent != null) {
+            staged.forEach { drawShapeMesh(lent, it) }
+            return
+        }
+        renderPass("Ephemeris sky backdrop")?.use { pass -> staged.forEach { drawShapeMesh(pass, it) } }
+    }
+
+    fun releaseStagedShapes() {
+        staged.forEach { it.close() }
+        staged.clear()
+    }
+
+    private val staged = mutableListOf<ShapeMesh>()
+
+    /** Shapes uploaded and waiting to be drawn: their vertices, how many indices they take, and their blend. */
+    private class ShapeMesh(val vertices: GpuBuffer, val indices: Int, val blend: SkyBlend) : AutoCloseable {
+        override fun close() = vertices.close()
+    }
+
+    /**
+     * [quads] uploaded, every corner pushed out to [SHAPE_DISTANCE] along its direction and coloured by its own
+     * colour except through the starfield, which reads none. Null for no quads.
+     */
+    private fun shapeMeshOf(quads: List<SkyQuad>, blend: SkyBlend): ShapeMesh? {
+        if (quads.isEmpty()) return null
         val coloured = blend != SkyBlend.STARFIELD
         val format = if (coloured) DefaultVertexFormat.POSITION_COLOR else DefaultVertexFormat.POSITION
-        ByteBufferBuilder.exactlySized(quads.size * QUAD_VERTICES * format.vertexSize).use { bytes ->
+        return ByteBufferBuilder.exactlySized(quads.size * QUAD_VERTICES * format.vertexSize).use { bytes ->
             val builder = BufferBuilder(bytes, PrimitiveTopology.QUADS, format)
             val at = Vector3f()
             for (quad in quads) {
@@ -756,37 +797,36 @@ object Blaze3dSkyCanvas : SkyCanvas {
                 }
             }
             builder.buildOrThrow().use { mesh ->
-                // Closed here for the reason `drawGlows` gives: what stands in for vanilla's upload allocates.
-                RenderSystem.getDevice()
+                // Closed by whoever holds the mesh, for the reason `drawGlows` gives: what stands in for
+                // vanilla's upload allocates.
+                val vertices = RenderSystem.getDevice()
                     .createBuffer({ "Ephemeris sky shapes" }, GpuBuffer.USAGE_VERTEX, mesh.vertexBuffer())
-                    .use { vertices -> drawShapeMesh(vertices, quads.size * QUAD_INDICES, blend) }
+                ShapeMesh(vertices, quads.size * QUAD_INDICES, blend)
             }
         }
     }
 
-    private fun drawShapeMesh(vertices: GpuBuffer, indices: Int, blend: SkyBlend) {
+    private fun drawShapeMesh(pass: RenderPass, mesh: ShapeMesh) {
         val transforms = RenderSystem.getDynamicUniforms().writeTransform(modelViewNow(), UNTOUCHED, Vector3f(), Matrix4f())
         val quadIndices = RenderSystem.getSequentialBuffer(PrimitiveTopology.QUADS)
-        renderPass("Ephemeris sky shapes")?.use { pass ->
-            val pipeline = when (blend) {
-                SkyBlend.LIGHT -> GLOWS_PIPELINE
-                SkyBlend.SHADE -> SHADE_PIPELINE
-                SkyBlend.STARFIELD -> PORTAL_PIPELINE
-            }
-            pass.setPipeline(RenderSystem.getCompiledPipeline(pipeline))
-            RenderSystem.bindDefaultUniforms(pass)
-            pass.setUniform("DynamicTransforms", transforms)
-            if (blend == SkyBlend.STARFIELD) {
-                val textures = Minecraft.getInstance().textureManager
-                val sky = textures.getTexture(END_SKY)
-                val portal = textures.getTexture(END_PORTAL)
-                pass.setUniform("Sampler0", sky.textureView, sky.sampler)
-                pass.setUniform("Sampler1", portal.textureView, portal.sampler)
-            }
-            pass.setVertexBuffer(ONLY_VERTEX_BINDING, vertices.slice())
-            pass.setIndexBuffer(quadIndices.getBuffer(indices), quadIndices.type())
-            pass.drawIndexed(indices, ONE_INSTANCE, FROM_THE_FIRST_INDEX, NO_VERTEX_OFFSET, FROM_THE_FIRST_INSTANCE)
+        val pipeline = when (mesh.blend) {
+            SkyBlend.LIGHT -> GLOWS_PIPELINE
+            SkyBlend.SHADE -> SHADE_PIPELINE
+            SkyBlend.STARFIELD -> PORTAL_PIPELINE
         }
+        pass.setPipeline(RenderSystem.getCompiledPipeline(pipeline))
+        RenderSystem.bindDefaultUniforms(pass)
+        pass.setUniform("DynamicTransforms", transforms)
+        if (mesh.blend == SkyBlend.STARFIELD) {
+            val textures = Minecraft.getInstance().textureManager
+            val sky = textures.getTexture(END_SKY)
+            val portal = textures.getTexture(END_PORTAL)
+            pass.setUniform("Sampler0", sky.textureView, sky.sampler)
+            pass.setUniform("Sampler1", portal.textureView, portal.sampler)
+        }
+        pass.setVertexBuffer(ONLY_VERTEX_BINDING, mesh.vertices.slice())
+        pass.setIndexBuffer(quadIndices.getBuffer(mesh.indices), quadIndices.type())
+        pass.drawIndexed(mesh.indices, ONE_INSTANCE, FROM_THE_FIRST_INDEX, NO_VERTEX_OFFSET, FROM_THE_FIRST_INSTANCE)
     }
 
     /** How far off a caller's shapes hang — where the sky's bodies do. */

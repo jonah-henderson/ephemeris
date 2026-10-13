@@ -58,8 +58,6 @@ object SkyPainter {
 
     private const val FULL_TURN_RADIANS = (2.0 * Math.PI).toFloat()
 
-    /** Vanilla reaches the axis it swings its sky about with this turn about the vertical. */
-    private const val SKY_AXIS_DEGREES = -90.0f
 
     /**
      * Draws the level's bodies and stars, or returns **false** having drawn nothing.
@@ -327,6 +325,5 @@ object SkyPainter {
      * first. An [Orbit] carries that turn in its own ascending node, so this is only for the starfield,
      * which has no orbit.
      */
-    private fun aroundVanillasAxis(angle: Float): Quaternionf =
-        Quaternionf().rotateY(Math.toRadians(SKY_AXIS_DEGREES.toDouble()).toFloat()).rotateX(angle)
+    private fun aroundVanillasAxis(angle: Float): Quaternionf = SkyTurn.byVanillasAxis(angle)
 }

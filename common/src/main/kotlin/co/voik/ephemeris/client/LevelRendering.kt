@@ -1,5 +1,7 @@
 package co.voik.ephemeris.client
 
+import org.joml.Quaternionf
+
 import co.voik.ephemeris.Rgba
 import co.voik.ephemeris.RuntimeLevelLog
 import co.voik.ephemeris.sky.CloudDeck
@@ -42,6 +44,7 @@ object LevelRendering {
     private val clouds = mutableListOf<LevelCloudRenderer>()
     private val horizons = mutableListOf<LevelHorizonRenderer>()
     private val overlays = mutableListOf<LevelSkyOverlay>()
+    private val backdrops = mutableListOf<LevelSkyBackdrop>()
     private val environments = mutableListOf<LevelEnvironment>()
     private val horizonHeights = mutableListOf<LevelHorizonHeight>()
 
@@ -79,6 +82,18 @@ object LevelRendering {
      */
     fun skyOverlay(overlay: LevelSkyOverlay) {
         overlays += overlay
+    }
+
+    /**
+     * Offer shapes to hang **behind** the sun, moon and stars — something vast and far off, a nebula.
+     *
+     * Like [skyOverlay] this does not claim, and it reaches vanilla's sky as well as one of ours: drawn after
+     * the dome and the horizon's light and before the bodies, so a sun passes in front of it and stars shine
+     * over it. Its shapes are asked for as data rather than drawn, because on vanilla's sky they go into a
+     * pass vanilla already has open, and must be uploaded before it is.
+     */
+    fun skyBackdrop(backdrop: LevelSkyBackdrop) {
+        backdrops += backdrop
     }
 
     /**
@@ -155,6 +170,24 @@ object LevelRendering {
     }
 
     private var saidTheSeamRan = false
+
+    /**
+     * Asked by the sky Mixin while no pass is open: every backdrop's shapes for this frame, uploaded for
+     * [drawBackdrops].
+     */
+    fun readyBackdrops(moment: SkyMoment) {
+        Blaze3dSkyCanvas.stageShapes(backdrops.flatMap { it.shapesFor(moment) })
+    }
+
+    /** Asked by the sky Mixin, where the bodies are about to go — into a lent pass where there is one. */
+    fun drawBackdrops() {
+        Blaze3dSkyCanvas.drawStagedShapes()
+    }
+
+    /** Asked by the sky Mixin once the sky is drawn, so what was uploaded for it is let go. */
+    fun releaseBackdrops() {
+        Blaze3dSkyCanvas.releaseStagedShapes()
+    }
 
     /** Asked by the cloud Mixin. */
     fun drawClouds(moment: CloudMoment): Boolean = clouds.any { it.draw(moment) }
@@ -253,7 +286,21 @@ class SkyMoment(
      * high enough to see past its edge. See [SkyCanvas.drawUnderside], which is drawn last.
      */
     val undersideShowing: Boolean,
-)
+) {
+    /**
+     * How far the stars have turned, as vanilla turns them — for anything that should ride round with them.
+     * Applied to a direction, it carries a point fixed among the stars to where it stands this frame.
+     */
+    val starTurn: Quaternionf get() = SkyTurn.byVanillasAxis(starAngle)
+}
+
+/** How vanilla swings its sky: about the axis a quarter turn round from north, by an angle in radians. */
+object SkyTurn {
+    private const val SKY_AXIS_DEGREES = -90.0
+
+    fun byVanillasAxis(angle: Float): Quaternionf =
+        Quaternionf().rotateY(Math.toRadians(SKY_AXIS_DEGREES).toFloat()).rotateX(angle)
+}
 
 /** Draws a level's suns, moons and stars. */
 fun interface LevelSkyRenderer {
@@ -270,6 +317,15 @@ fun interface LevelSkyRenderer {
 fun interface LevelSkyOverlay {
     fun draw(moment: SkyMoment)
 }
+
+/** Hangs shapes behind a level's sun, moon and stars — see [LevelRendering.skyBackdrop]. */
+fun interface LevelSkyBackdrop {
+    /** What to hang this frame, drawn in the order given; empty where there is nothing in this level. */
+    fun shapesFor(moment: SkyMoment): List<SkyShapes>
+}
+
+/** Quads of the caller's, and how they meet the sky behind them — one submission's worth. */
+data class SkyShapes(val quads: List<SkyQuad>, val blend: SkyBlend)
 
 /**
  * Everything vanilla knows at the instant it is about to paint the horizon.

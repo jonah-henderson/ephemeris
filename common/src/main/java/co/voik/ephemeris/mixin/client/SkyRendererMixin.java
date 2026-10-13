@@ -15,6 +15,9 @@ import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.renderer.SkyRenderer;
 import net.minecraft.client.renderer.state.level.SkyRenderState;
 import net.minecraft.util.ARGB;
+import com.mojang.renderpearl.api.commands.RenderPass;
+import com.mojang.blaze3d.vertex.PoseStack;
+import net.minecraft.world.level.MoonPhase;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -98,6 +101,9 @@ public class SkyRendererMixin {
             return;
         }
         if (!oursToDraw) {
+            // Vanilla draws this one, and opens its pass before its bodies: what goes behind them is uploaded
+            // now, while no pass is open, and drawn into vanilla's below.
+            LevelRendering.INSTANCE.readyBackdrops(ephemeris$momentOf(level, state));
             return;
         }
         RenderSystem.setShaderFog(fog);
@@ -109,6 +115,9 @@ public class SkyRendererMixin {
                 moment.getCamera(),
                 state.sunAngle,
                 ARGB.colorFromVector4f(state.sunriseAndSunsetColor)));
+        LevelRendering.INSTANCE.readyBackdrops(moment);
+        LevelRendering.INSTANCE.drawBackdrops();
+        LevelRendering.INSTANCE.releaseBackdrops();
         LevelRendering.INSTANCE.drawSky(moment);
         LevelRendering.INSTANCE.drawSkyOverlays(moment);
         if (moment.getUndersideShowing()) {
@@ -117,10 +126,26 @@ public class SkyRendererMixin {
         callback.cancel();
     }
 
+    /**
+     * Vanilla's sky, just before its sun, moon and stars: the backdrops uploaded at the head go down here,
+     * into the pass vanilla has open — the only point in its sky that is behind the bodies and still ours to
+     * reach, since 26.3 draws the whole sky in one pass.
+     */
+    @Inject(method = "renderSunMoonAndStars", at = @At("HEAD"))
+    private void ephemeris$hangTheBackdrop(
+            RenderPass pass, PoseStack poseStack, float sunAngle, float moonAngle, float starAngle,
+            MoonPhase moonPhase, float rainBrightness, float starBrightness, CallbackInfo callback) {
+        Blaze3dSkyCanvas.INSTANCE.lending(pass, () -> {
+            LevelRendering.INSTANCE.drawBackdrops();
+            return null;
+        });
+    }
+
     /** Reached only where the sky was left to vanilla, so it has just drawn its own. */
     @Inject(method = RENDER, at = @At("TAIL"))
     private void ephemeris$drawOverVanillasSky(
             GpuBufferSlice fog, SkyRenderState state, CallbackInfo callback) {
+        LevelRendering.INSTANCE.releaseBackdrops();
         ClientLevel level = OffscreenLevelRender.INSTANCE.levelBeingDrawn();
         if (level == null) {
             return;
