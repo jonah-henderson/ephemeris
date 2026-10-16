@@ -21,8 +21,12 @@ fun init() {
     // On both sides from the main entrypoint, not the client one: Fabric requires the type registered at
     // each end, and registering it twice throws. Common init is the only place that is true of.
     PayloadTypeRegistry.clientboundPlay().register(LevelLookPayload.TYPE, LevelLookPayload.STREAM_CODEC)
+    PayloadTypeRegistry.clientboundPlay().register(LevelClockPayload.TYPE, LevelClockPayload.STREAM_CODEC)
 
-    ServerPlayConnectionEvents.JOIN.register { handler, _, _ -> LevelAppearance.joined(handler.player) }
+    ServerPlayConnectionEvents.JOIN.register { handler, _, _ ->
+        LevelAppearance.joined(handler.player)
+        LevelClocks.joined(handler.player)
+    }
     ServerPlayConnectionEvents.DISCONNECT.register { handler, _ -> LevelAppearance.left(handler.player) }
 
     // The watchdog for lazy delivery — silent when delivery is eager, which is the default.
@@ -31,5 +35,8 @@ fun init() {
     }
 
     // These keys mean nothing in the next world an integrated server opens, and ids repeat.
-    ServerLifecycleEvents.SERVER_STOPPED.register { _ -> LevelAppearance.forgetAll() }
+    ServerLifecycleEvents.SERVER_STOPPED.register { _ ->
+        LevelAppearance.forgetAll()
+        LevelClocks.forgetAll()
+    }
 }

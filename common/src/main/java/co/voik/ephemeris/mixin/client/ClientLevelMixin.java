@@ -1,9 +1,11 @@
 package co.voik.ephemeris.mixin.client;
 
 import co.voik.ephemeris.client.GroundTints;
+import co.voik.ephemeris.client.LevelClientClock;
 import co.voik.ephemeris.client.LevelRain;
 import co.voik.ephemeris.client.LevelRendering;
 import co.voik.ephemeris.client.RepaintableAir;
+import net.minecraft.client.ClientClockManager;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.world.attribute.EnvironmentAttributeSystem;
 import net.minecraft.world.level.ColorResolver;
@@ -11,6 +13,7 @@ import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Mutable;
 import org.spongepowered.asm.mixin.Shadow;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.ModifyArg;
@@ -39,6 +42,22 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 public abstract class ClientLevelMixin implements RepaintableAir {
 
     @Shadow @Final @Mutable private EnvironmentAttributeSystem environmentAttributes;
+
+    /** This level's clocks — built on the first asking, which is during its own constructor. */
+    @Unique private LevelClientClock ephemeris$clock;
+
+    /**
+     * This level's own clock where the server said it keeps one, the connection's otherwise
+     * ({@link LevelClientClock}). Vanilla answers the connection's for every level, which is one clock manager
+     * per connection however many levels — a panel's preview level included.
+     */
+    @Inject(method = "clockManager", at = @At("RETURN"), cancellable = true)
+    private void ephemeris$ownClock(CallbackInfoReturnable<ClientClockManager> callback) {
+        if (this.ephemeris$clock == null) {
+            this.ephemeris$clock = new LevelClientClock((ClientLevel) (Object) this, callback.getReturnValue());
+        }
+        callback.setReturnValue(this.ephemeris$clock);
+    }
 
     /** Vanilla's, which is private; the body is never run, the shadow standing in for it. */
     @Shadow

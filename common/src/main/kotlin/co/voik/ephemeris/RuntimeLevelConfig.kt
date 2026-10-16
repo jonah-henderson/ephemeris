@@ -33,12 +33,19 @@ data class RuntimeLevelConfig(
      */
     val seed: Long,
     /**
-     * Whether the level advances its own clock and weather.
+     * Whether the level advances its own game time and runs the server's scheduled functions with it.
      *
      * False is the ordinary answer for a level that should feel like part of the same world — vanilla's own
-     * Nether and End are built this way, taking the overworld's time. True gives the level a day of its own.
+     * Nether and End are built this way, taking the overworld's time. **Not the hour**: that is the clock its
+     * dimension type names, which is the server's unless [clock] gives it one of its own.
      */
     val tickTime: Boolean = false,
+    /**
+     * A day of the level's own, starting where this says the first time it is built, or null to keep the hour of
+     * the clock its dimension type names — the overworld's, for most ([LevelClocks]). Sleeping there then moves
+     * its morning and nobody else's.
+     */
+    val clock: OwnClock? = null,
     /**
      * Spawners of the caller's own, ticked once per tick as vanilla ticks its phantoms and its patrols.
      *

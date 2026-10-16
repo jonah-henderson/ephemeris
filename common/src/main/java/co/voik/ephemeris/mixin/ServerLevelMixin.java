@@ -1,15 +1,20 @@
 package co.voik.ephemeris.mixin;
 
+import co.voik.ephemeris.LevelClockManager;
+import co.voik.ephemeris.LevelClocks;
 import co.voik.ephemeris.LevelWeather;
 import co.voik.ephemeris.RuntimeLevelSeeds;
 import net.minecraft.network.protocol.Packet;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.players.PlayerList;
+import net.minecraft.world.clock.ServerClockManager;
 import net.minecraft.world.level.saveddata.WeatherData;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.Redirect;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 /**
@@ -76,5 +81,43 @@ public abstract class ServerLevelMixin {
                     target = "Lnet/minecraft/server/players/PlayerList;broadcastAll(Lnet/minecraft/network/protocol/Packet;)V"))
     private void ephemeris$tellOnlyThisLevel(PlayerList players, Packet<?> packet) {
         players.broadcastAll(packet, ((ServerLevel) (Object) this).dimension());
+    }
+
+    /**
+     * The level's own clocks, where it keeps a day of its own ({@link LevelClocks}).
+     *
+     * <p><b>Nearly everything that reads the time asks this method</b> rather than the server: the timelines
+     * the attribute system bakes in this level's constructor, the day count villagers restock by, sieges, the
+     * loot time check. There is no event on either loader and no data that could say it, the clock registry
+     * being frozen at startup.
+     */
+    @Inject(method = "clockManager", at = @At("HEAD"), cancellable = true)
+    private void ephemeris$ownClock(CallbackInfoReturnable<ServerClockManager> callback) {
+        LevelClockManager own = LevelClocks.managerFor((ServerLevel) (Object) this);
+        if (own != null) {
+            callback.setReturnValue(own);
+        }
+    }
+
+    /** Runs the level's own clock as the level runs its time, so it stops where the tick rate stops it. */
+    @Inject(method = "tickTime", at = @At("HEAD"))
+    private void ephemeris$tickOwnClock(CallbackInfo callback) {
+        LevelClocks.tick((ServerLevel) (Object) this);
+    }
+
+    /**
+     * Wakes the sleepers into this level's own morning rather than the server's.
+     *
+     * <p>Vanilla moves the default clock through the server's manager, which for a level sharing the
+     * overworld's clock moved the overworld's morning for everybody. Asking the level instead is the same
+     * call for a level that keeps no clock of its own.
+     */
+    @Redirect(
+            method = "tick",
+            at = @At(
+                    value = "INVOKE",
+                    target = "Lnet/minecraft/server/MinecraftServer;clockManager()Lnet/minecraft/world/clock/ServerClockManager;"))
+    private ServerClockManager ephemeris$wakeIntoThisLevelsMorning(MinecraftServer server) {
+        return ((ServerLevel) (Object) this).clockManager();
     }
 }

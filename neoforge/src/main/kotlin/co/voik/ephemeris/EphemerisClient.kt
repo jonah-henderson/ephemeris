@@ -80,5 +80,6 @@ class EphemerisClient(eventBus: IEventBus) {
     /** Forgotten on disconnect: these keys mean nothing on the next server and an id can be reused. */
     private fun onLoggingOut(event: ClientPlayerNetworkEvent.LoggingOut) {
         LevelLooks.forgetAll()
+        LevelClocks.forgetWhatWasTold()
     }
 }

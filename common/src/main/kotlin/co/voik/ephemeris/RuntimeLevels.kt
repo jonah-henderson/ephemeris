@@ -50,6 +50,8 @@ object RuntimeLevels {
         // **Before the level is built, because its own chunk cache asks during construction.** See
         // [RuntimeLevelSeeds] for why this is ours rather than `LevelStem`'s seed override.
         RuntimeLevelSeeds.remember(dimension, config.seed)
+        // And its clock, for the same reason: the attribute system is built in the constructor and asks for it.
+        LevelClocks.keepOwn(dimension, config.clock)
         val stem = LevelStem(config.dimensionType, config.generator)
         // Derived, as vanilla's own secondary levels are: the world's shared state (the difficulty, the game
         // rules, whether it has been initialised) stays one thing, and only what is genuinely per-level
@@ -72,6 +74,7 @@ object RuntimeLevels {
         }
 
         server.levels[dimension] = level
+        LevelClocks.opened(level)
         // Vanilla does both of these to every level it builds, and a level without them has no border and
         // never tells a joining player where the border is.
         level.worldBorder.setAbsoluteMaxSize(server.absoluteMaxWorldSize)
@@ -153,6 +156,7 @@ object RuntimeLevels {
         if (saving) level.save(null, true, false)
         server.levels.remove(dimension)
         RuntimeLevelSeeds.forget(dimension)
+        LevelClocks.forget(dimension)
         RuntimeLevelPlatform.of().levelClosing(server, level)
         runCatching { level.close() }.onFailure {
             RuntimeLevelLog.warn("Could not close ${dimension.identifier()} cleanly; its files are left alone", it)

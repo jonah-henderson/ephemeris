@@ -45,10 +45,16 @@ class Ephemeris(eventBus: IEventBus) {
             .playToClient(LevelLookPayload.TYPE, LevelLookPayload.STREAM_CODEC) { payload, _ ->
                 LevelLooks.remember(payload)
             }
+            .playToClient(LevelClockPayload.TYPE, LevelClockPayload.STREAM_CODEC) { payload, _ ->
+                LevelClocks.remember(payload)
+            }
     }
 
     private fun onPlayerLoggedIn(event: PlayerEvent.PlayerLoggedInEvent) {
-        (event.entity as? ServerPlayer)?.let { LevelAppearance.joined(it) }
+        (event.entity as? ServerPlayer)?.let {
+            LevelAppearance.joined(it)
+            LevelClocks.joined(it)
+        }
     }
 
     private fun onPlayerLoggedOut(event: PlayerEvent.PlayerLoggedOutEvent) {
@@ -63,9 +69,10 @@ class Ephemeris(eventBus: IEventBus) {
     /** These keys mean nothing in the next world an integrated server opens, and ids repeat. */
     private fun onServerStopped(event: ServerStoppedEvent) {
         LevelAppearance.forgetAll()
+        LevelClocks.forgetAll()
     }
 
     private companion object {
-        const val PAYLOAD_VERSION = "2"
+        const val PAYLOAD_VERSION = "3"
     }
 }

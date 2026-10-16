@@ -32,11 +32,15 @@ fun initClient() {
     ClientPlayNetworking.registerGlobalReceiver(LevelLookPayload.TYPE) { payload, _ ->
         LevelLooks.remember(payload)
     }
+    ClientPlayNetworking.registerGlobalReceiver(LevelClockPayload.TYPE) { payload, _ -> LevelClocks.remember(payload) }
 
     ClientTickEvents.END_CLIENT_TICK.register(LevelFilters::tick)
 
     // Forgotten on disconnect: these keys mean nothing on the next server and an id can be reused.
-    ClientPlayConnectionEvents.DISCONNECT.register { _, _ -> LevelLooks.forgetAll() }
+    ClientPlayConnectionEvents.DISCONNECT.register { _, _ ->
+        LevelLooks.forgetAll()
+        LevelClocks.forgetWhatWasTold()
+    }
 }
 
 /**

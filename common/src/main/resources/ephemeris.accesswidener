@@ -44,3 +44,8 @@ accessible	method	net/minecraft/world/level/biome/Biome	getHeightAdjustedTempera
 # is put here from the Fabric client entrypoint; NeoForge has `RegisterRangeSelectItemModelPropertyEvent`
 # and needs no transformer.
 accessible	field	net/minecraft/client/renderer/item/properties/numeric/RangeSelectItemModelProperties	ID_MAPPER	Lnet/minecraft/util/ExtraCodecs$LateBoundIdMapper;
+
+# So a level can keep a clock of its own (`LevelClockManager`): `ServerLevel.clockManager()` is declared to return
+# this class, so a level answering with its own manager has to hand back a subclass, and the one constructor is
+# private. Nothing is overridden that vanilla calls on the server's manager; the subclass is only ever a level's.
+accessible	method	net/minecraft/world/clock/ServerClockManager	<init>	(Lnet/minecraft/world/clock/PackedClockStates;)V

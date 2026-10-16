@@ -6,6 +6,7 @@
     "EnvironmentAttributesMixin",
     "LevelMixin",
     "ServerLevelMixin",
+    "TimeCommandMixin",
     "TimelineLayersMixin"
   ],
   "client": [
