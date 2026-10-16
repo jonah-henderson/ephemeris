@@ -59,7 +59,7 @@ class LevelClockManager internal constructor(
     fun keepPace(pace: ClockPace) {
         if (pace == kept) return
         kept = pace
-        changeOwn { it.copyWith(rate = pace.rate, paused = pace.paused) }
+        changeOwn { it.copyWith(rate = pace.rate) }
     }
 
     /** One tick of the level's own clock, under the game rule that stops every clock. */
