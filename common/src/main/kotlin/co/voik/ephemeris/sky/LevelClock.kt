@@ -63,7 +63,11 @@ object LevelClock {
         val deciding = decidingSun(look, dayTime) ?: return dayStarted + MIDNIGHT
 
         val height = deciding.altitudeDegrees
-        val rising = deciding.body.path.altitudeAt(dayTime + LOOK_AHEAD) - height > -FLAT_BELOW
+        val path = deciding.body.path
+        // A held sun has no motion to read a climb from, so its place says it: morning on the eastern side of the
+        // sky, afternoon on the western.
+        val rising = if (path.isStill) path.bearingAt(dayTime) < HALF_TURN
+            else path.altitudeAt(dayTime + LOOK_AHEAD) - height > -FLAT_BELOW
         return dayStarted + hourAt(height, rising)
     }
 
@@ -135,6 +139,9 @@ object LevelClock {
     private const val MIDNIGHT = 18000L
 
     private const val RIGHT_ANGLE = 90.0f
+
+    /** Due south as a bearing: anything less is on the eastern side. */
+    private const val HALF_TURN = 180.0f
 
     /** Far enough ahead to tell a climb from a fall, near enough to still be the same moment. */
     private const val LOOK_AHEAD = 40L

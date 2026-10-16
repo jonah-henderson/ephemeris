@@ -95,6 +95,8 @@ data class Orbit(
         Motion.Sweep(Direction.Axis.X, periodTicks, phaseDegrees, retrograde, pacing)
     }
 
+    override fun paced(factor: Double): CelestialPath = copy(periodTicks = pacedPeriod(periodTicks, factor))
+
     /**
      * The four motions this circle is, outermost first.
      *

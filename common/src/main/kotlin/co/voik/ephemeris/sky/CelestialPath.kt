@@ -320,6 +320,7 @@ sealed interface CelestialPath {
                 ORBIT to Orbit.MAP_CODEC,
                 MOTIONS to Motions.MAP_CODEC,
                 NAMED to Named.MAP_CODEC,
+                HELD to Held.MAP_CODEC,
             )
         }
 
@@ -334,9 +335,19 @@ sealed interface CelestialPath {
         const val ORBIT = "orbit"
         const val MOTIONS = "motions"
         const val NAMED = "named"
+        const val HELD = "held"
     }
 
     val kindKey: String
+
+    /** Whether the body never moves at all — a path [Held] at one moment. */
+    val isStill: Boolean get() = false
+
+    /**
+     * This path taking [factor] times as long over everything it does — slower above one, quicker below. A path
+     * with nothing to time (one [Held], one [Named] in code) is itself.
+     */
+    fun paced(factor: Double): CelestialPath = this
 }
 
 /** [turn] shifted by whole half turns to land as near [previous] as it can. */
@@ -380,6 +391,8 @@ data class Motions(
     private val rose: List<Long> by lazy { CelestialPath.risingsOf(this) }
 
     override fun risings(): List<Long> = rose
+
+    override fun paced(factor: Double): CelestialPath = copy(motions = motions.map { it.paced(factor) })
 
     companion object {
         const val VANILLA_DISTANCE = 100.0f
@@ -427,6 +440,50 @@ data class Named(val id: Identifier) : CelestialPath {
             instance.group(
                 Identifier.CODEC.fieldOf("id").forGetter(Named::id),
             ).apply(instance, ::Named)
+        }
+    }
+}
+
+/**
+ * Another path **held at one moment of it** — a body that has stopped where [path] put it at [atTicks].
+ *
+ * Still for good: its height is one number, so it never rises or sets, and a sky whose daylight it decides is lit
+ * as one hour — the one its place says, morning on the eastern side and afternoon on the western
+ * ([LevelClock.vanillaEquivalent]). What it was doing before it stopped is kept, so it stands exactly where it
+ * would have been.
+ */
+data class Held(val path: CelestialPath, val atTicks: Long) : CelestialPath {
+
+    override val kindKey: String get() = CelestialPath.HELD
+
+    override val isStill: Boolean get() = true
+
+    override val distance: Float get() = path.distance
+
+    override val periodTicks: Int get() = path.periodTicks
+
+    override fun orientationAt(dayTime: Long): Quaternionf = path.orientationAt(atTicks)
+
+    private val walked: CelestialPath.Swing by lazy {
+        val altitude = path.altitudeAt(atTicks)
+        CelestialPath.Swing(altitude, altitude)
+    }
+
+    override fun swing(): CelestialPath.Swing = walked
+
+    private val levelledBy: CelestialPath.Levelling by lazy { CelestialPath.levellingOf(this) }
+
+    override fun levelling(): CelestialPath.Levelling = levelledBy
+
+    override fun risings(): List<Long> = emptyList()
+
+    companion object {
+        /** Lazy on the path it holds, which is any path — this one included — and so its own codec. */
+        val MAP_CODEC: MapCodec<Held> = RecordCodecBuilder.mapCodec { instance ->
+            instance.group(
+                Codec.lazyInitialized { CelestialPath.CODEC }.fieldOf("path").forGetter(Held::path),
+                Codec.LONG.fieldOf("at").forGetter(Held::atTicks),
+            ).apply(instance, ::Held)
         }
     }
 }

@@ -34,6 +34,7 @@ import java.util.UUID
 object LevelAppearance {
 
     private val looks = mutableMapOf<ResourceKey<Level>, LevelLook>()
+    private val paces = mutableMapOf<ResourceKey<Level>, ClockPace>()
     private val audiences = mutableListOf<LevelLookAudience>()
     private val told = mutableMapOf<UUID, MutableSet<ResourceKey<Level>>>()
 
@@ -47,8 +48,12 @@ object LevelAppearance {
      * appearance rather than the one it opened with.
      */
     fun give(server: MinecraftServer, dimension: ResourceKey<Level>, look: LevelLook) {
-        looks[dimension] = look
-        val entry = LevelLookPayload.Entry(dimension, look)
+        // The pace is read off the sky as it was given, and the sky kept is the one measured against that pace
+        // — which every reader on both sides then draws from ([ClockPace]).
+        paces[dimension] = ClockPace.of(look.sky)
+        val clocked = look.copy(sky = look.sky.clocked())
+        looks[dimension] = clocked
+        val entry = LevelLookPayload.Entry(dimension, clocked)
         for (player in server.playerList.players) {
             if (shouldKnow(player, dimension)) send(player, listOf(entry))
         }
@@ -65,11 +70,15 @@ object LevelAppearance {
      */
     fun forget(dimension: ResourceKey<Level>) {
         looks.remove(dimension)
+        paces.remove(dimension)
         for (levels in told.values) levels.remove(dimension)
     }
 
     /** What the server says a level looks like, or **null** where nothing has said. */
     fun of(dimension: ResourceKey<Level>): LevelLook? = looks[dimension]
+
+    /** How fast [dimension]'s own clock should run by its sky, or **null** where nothing has said. */
+    fun paceOf(dimension: ResourceKey<Level>): ClockPace? = paces[dimension]
 
     /**
      * Tell every client about every level as it joins — the default, and right for almost everyone.
@@ -162,6 +171,7 @@ object LevelAppearance {
     /** Dropped with the server that owned them: these keys mean nothing in the next world, and ids repeat. */
     fun forgetAll() {
         looks.clear()
+        paces.clear()
         told.clear()
     }
 

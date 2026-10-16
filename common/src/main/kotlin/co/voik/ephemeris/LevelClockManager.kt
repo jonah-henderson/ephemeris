@@ -1,5 +1,6 @@
 package co.voik.ephemeris
 
+import co.voik.ephemeris.sky.ClockPace
 import net.minecraft.core.Holder
 import net.minecraft.core.registries.Registries
 import net.minecraft.resources.ResourceKey
@@ -50,6 +51,16 @@ class LevelClockManager internal constructor(
 
     /** Takes up [saved] in place of where the clock was told to start — a level opened again after a restart. */
     fun resume(saved: ClockState) = own.loadFrom(saved)
+
+    /** The last pace the level's sky set, so a `/time rate` given by hand holds until the sky changes. */
+    private var kept: ClockPace? = null
+
+    /** Runs the level's own clock at [pace] — what its sky says the day is ([ClockPace]) — once each time it changes. */
+    fun keepPace(pace: ClockPace) {
+        if (pace == kept) return
+        kept = pace
+        changeOwn { it.copyWith(rate = pace.rate, paused = pace.paused) }
+    }
 
     /** One tick of the level's own clock, under the game rule that stops every clock. */
     fun advance() {

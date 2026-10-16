@@ -1,6 +1,7 @@
 package co.voik.ephemeris
 
 import io.netty.buffer.ByteBuf
+import co.voik.ephemeris.sky.LevelAppearance
 import net.minecraft.core.registries.Registries
 import net.minecraft.network.codec.ByteBufCodecs
 import net.minecraft.network.codec.StreamCodec
@@ -74,6 +75,7 @@ object LevelClocks {
     @JvmStatic
     fun tick(level: ServerLevel) {
         val manager = managers[level.dimension()] ?: return
+        LevelAppearance.paceOf(level.dimension())?.let(manager::keepPace)
         manager.advance()
         if (level.server.tickCount % TELLING_THE_CLIENTS == 0) changed(level)
     }

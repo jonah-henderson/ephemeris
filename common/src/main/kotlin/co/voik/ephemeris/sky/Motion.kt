@@ -30,6 +30,9 @@ sealed interface Motion {
     /** The codec dispatch key. A new motion is a key and a [MapCodec], nothing more. */
     val kindKey: String
 
+    /** This motion taking [factor] times as long — see [CelestialPath.paced]. A fixed turn is itself. */
+    fun paced(factor: Double): Motion = this
+
     /**
      * A fixed turn, which never moves.
      *
@@ -67,6 +70,8 @@ sealed interface Motion {
         val pacing: Pacing = Pacing.VANILLAS,
     ) : Motion {
         override val periodTicks: Int get() = period
+
+        override fun paced(factor: Double): Motion = copy(period = pacedPeriod(period, factor))
         override val kindKey: String get() = SWEEP
 
         override fun turn(frame: Quaternionf, dayTime: Long): Quaternionf =
@@ -115,6 +120,8 @@ sealed interface Motion {
         val phaseDegrees: Float = 0.0f,
     ) : Motion {
         override val periodTicks: Int get() = period
+
+        override fun paced(factor: Double): Motion = copy(period = pacedPeriod(period, factor))
         override val kindKey: String get() = OSCILLATE
 
         override fun turn(frame: Quaternionf, dayTime: Long): Quaternionf {
@@ -203,3 +210,6 @@ enum class Pacing(private val key: String) {
         )
     }
 }
+
+/** [period] taken [factor] times as long, never shorter than a tick. */
+internal fun pacedPeriod(period: Int, factor: Double): Int = Math.round(period * factor).toInt().coerceAtLeast(1)
