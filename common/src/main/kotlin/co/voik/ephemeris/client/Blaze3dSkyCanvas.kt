@@ -31,6 +31,7 @@ import net.minecraft.client.renderer.MappableRingBuffer
 import net.minecraft.client.renderer.BindGroupLayouts
 import net.minecraft.client.renderer.RenderPipelines
 import com.mojang.blaze3d.platform.NativeImage
+import net.minecraft.client.renderer.texture.AbstractTexture
 import net.minecraft.client.renderer.texture.DynamicTexture
 import net.minecraft.client.renderer.texture.TextureAtlas
 import net.minecraft.client.renderer.texture.TextureAtlasSprite
@@ -784,6 +785,8 @@ object Blaze3dSkyCanvas : SkyCanvas {
      */
     private fun shapeMeshOf(quads: List<SkyQuad>, blend: SkyBlend): ShapeMesh? {
         if (quads.isEmpty()) return null
+        // As `readyCloudDeck` does: a texture not yet loaded is uploaded on first ask, which a pass forbids.
+        if (blend == SkyBlend.STARFIELD) starfieldTextures()
         val coloured = blend != SkyBlend.STARFIELD
         val format = if (coloured) DefaultVertexFormat.POSITION_COLOR else DefaultVertexFormat.POSITION
         return ByteBufferBuilder.exactlySized(quads.size * QUAD_VERTICES * format.vertexSize).use { bytes ->
@@ -818,15 +821,19 @@ object Blaze3dSkyCanvas : SkyCanvas {
         RenderSystem.bindDefaultUniforms(pass)
         pass.setUniform("DynamicTransforms", transforms)
         if (mesh.blend == SkyBlend.STARFIELD) {
-            val textures = Minecraft.getInstance().textureManager
-            val sky = textures.getTexture(END_SKY)
-            val portal = textures.getTexture(END_PORTAL)
+            val (sky, portal) = starfieldTextures()
             pass.setUniform("Sampler0", sky.textureView, sky.sampler)
             pass.setUniform("Sampler1", portal.textureView, portal.sampler)
         }
         pass.setVertexBuffer(ONLY_VERTEX_BINDING, mesh.vertices.slice())
         pass.setIndexBuffer(quadIndices.getBuffer(mesh.indices), quadIndices.type())
         pass.drawIndexed(mesh.indices, ONE_INSTANCE, FROM_THE_FIRST_INDEX, NO_VERTEX_OFFSET, FROM_THE_FIRST_INSTANCE)
+    }
+
+    /** The End's sky and portal pictures the starfield is drawn from, loaded on first ask. */
+    private fun starfieldTextures(): Pair<AbstractTexture, AbstractTexture> {
+        val textures = Minecraft.getInstance().textureManager
+        return textures.getTexture(END_SKY) to textures.getTexture(END_PORTAL)
     }
 
     /** How far off a caller's shapes hang — where the sky's bodies do. */
