@@ -155,11 +155,14 @@ sealed interface Motion {
          */
         const val QUARTER_TURN = 0.25
 
-        private val KINDS: Map<String, MapCodec<out Motion>> = mapOf(
-            TURN to Turn.MAP_CODEC,
-            SWEEP to Sweep.MAP_CODEC,
-            OSCILLATE to Oscillate.MAP_CODEC,
-        )
+        // Lazy, because a subclass loaded first starts this companion while its own is still unset.
+        private val KINDS: Map<String, MapCodec<out Motion>> by lazy {
+            mapOf(
+                TURN to Turn.MAP_CODEC,
+                SWEEP to Sweep.MAP_CODEC,
+                OSCILLATE to Oscillate.MAP_CODEC,
+            )
+        }
 
         val CODEC: Codec<Motion> = Codec.STRING.dispatch("kind", Motion::kindKey) { key ->
             KINDS[key] ?: Turn.MAP_CODEC
