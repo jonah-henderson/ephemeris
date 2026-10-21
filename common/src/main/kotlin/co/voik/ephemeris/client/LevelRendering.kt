@@ -6,6 +6,7 @@ import co.voik.ephemeris.Rgba
 import co.voik.ephemeris.RuntimeLevelLog
 import co.voik.ephemeris.sky.CloudDeck
 import co.voik.ephemeris.sky.LevelLooks
+import co.voik.ephemeris.sky.SkySpec
 import com.mojang.blaze3d.pipeline.RenderTarget
 import net.minecraft.client.Camera
 import net.minecraft.client.multiplayer.ClientLevel
@@ -152,6 +153,10 @@ object LevelRendering {
      */
     fun ownsTheSky(level: ClientLevel): Boolean =
         LevelLooks.of(level.dimension())?.sky?.isOrdinary == false
+
+    /** How many times vanilla's speed [level]'s clouds drift at, or vanilla's own where it said nothing. */
+    fun cloudPace(level: ClientLevel?): Float =
+        level?.let { LevelLooks.of(it.dimension())?.sky?.cloudPace } ?: SkySpec.ORDINARY_CLOUD_PACE
 
     /**
      * Asked by the sky Mixin, from **both** of its injectors — once where a renderer claimed the sky, and

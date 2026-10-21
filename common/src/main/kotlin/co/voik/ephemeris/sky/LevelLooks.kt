@@ -129,7 +129,7 @@ data class LevelLook(
     /** Whether this says anything at all, so a renderer can decline cheaply. */
     val saysNothing: Boolean
         get() = sky.isOrdinary && air.saysNothing && corners.isEmpty() && sky.decks.isEmpty() && airFrom == null &&
-            filters.isEmpty() && rain.isOrdinary
+            filters.isEmpty() && rain.isOrdinary && sky.cloudPace == SkySpec.ORDINARY_CLOUD_PACE
 
     companion object {
         /** The filter this library ships: the level drained of colour, to its own brightness. */

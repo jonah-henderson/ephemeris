@@ -24,6 +24,8 @@ data class SkySpec(
     val aurora: Aurora? = null,
     /** The bow that stands opposite its light in the right weather, or null where nothing asked for one. */
     val rainbow: Rainbow? = null,
+    /** How many times vanilla's speed its clouds drift at — nought holds them still. */
+    val cloudPace: Float = ORDINARY_CLOUD_PACE,
 ) {
 
     /**
@@ -163,8 +165,9 @@ data class SkySpec(
                     .forGetter { spec -> java.util.Optional.ofNullable(spec.aurora) },
                 Rainbow.CODEC.optionalFieldOf("rainbow")
                     .forGetter { spec -> java.util.Optional.ofNullable(spec.rainbow) },
-            ).apply(instance) { bodies, stars, decks, aurora, rainbow ->
-                SkySpec(bodies, stars, decks, aurora.orElse(null), rainbow.orElse(null))
+                Codec.FLOAT.optionalFieldOf("cloud_pace", ORDINARY_CLOUD_PACE).forGetter(SkySpec::cloudPace),
+            ).apply(instance) { bodies, stars, decks, aurora, rainbow, cloudPace ->
+                SkySpec(bodies, stars, decks, aurora.orElse(null), rainbow.orElse(null), cloudPace)
             }
         }
 
@@ -309,6 +312,9 @@ data class SkySpec(
 
         /** Vanilla's own, and what [StarField.glow] is a multiple of. */
         const val ORDINARY_STAR_GLOW = 1.0f
+
+        /** Vanilla's own cloud drift, and what [cloudPace] is a multiple of. */
+        const val ORDINARY_CLOUD_PACE = 1.0f
 
         private const val FULL_TURN = 360.0f
         private const val WIDEST_INCLINATION = 85.0f

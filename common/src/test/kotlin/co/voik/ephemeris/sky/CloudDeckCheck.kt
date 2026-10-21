@@ -54,4 +54,13 @@ class CloudDeckCheck : FunSpec({
         )
         check(sent(elaborate) == elaborate) { "A deck changed on the way: ${sent(elaborate)}" }
     }
+
+    test("a sky carries the pace its clouds drift at, and one that said nothing still says nothing") {
+        fun arrived(spec: SkySpec) =
+            SkySpec.CODEC.parse(JsonOps.INSTANCE, SkySpec.CODEC.encodeStart(JsonOps.INSTANCE, spec).getOrThrow()).getOrThrow()
+        val slowed = SkySpec.VANILLA.copy(cloudPace = 0.25f)
+        check(arrived(slowed).cloudPace == slowed.cloudPace) { "A sky's clouds arrived at ${arrived(slowed).cloudPace}" }
+        check(arrived(SkySpec.VANILLA).cloudPace == SkySpec.ORDINARY_CLOUD_PACE) { "Vanilla's clouds arrived at another pace" }
+        check(!LevelLook(slowed).saysNothing) { "A level whose clouds drift slowly was taken to say nothing" }
+    }
 })

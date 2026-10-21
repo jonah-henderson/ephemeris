@@ -4,6 +4,7 @@ import co.voik.ephemeris.client.Blaze3dSkyCanvas;
 import co.voik.ephemeris.client.CloudMoment;
 import co.voik.ephemeris.client.LevelRendering;
 import co.voik.ephemeris.client.OffscreenLevelRender;
+import co.voik.ephemeris.sky.SkySpec;
 import com.mojang.renderpearl.api.commands.RenderPass;
 import com.mojang.renderpearl.api.textures.GpuTextureView;
 import net.minecraft.client.CloudStatus;
@@ -12,14 +13,18 @@ import net.minecraft.client.renderer.CloudRenderer;
 import net.minecraft.client.renderer.oit.OitRenderPassProvider;
 import net.minecraft.client.renderer.oit.OitStage;
 import net.minecraft.world.phys.Vec3;
+import org.jetbrains.annotations.Nullable;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.ModifyVariable;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
- * Lets a level draw its own overcast instead of vanilla's one drifting sheet.
+ * Lets a level draw its own overcast instead of vanilla's one drifting sheet, and drift vanilla's at a pace of its
+ * own where it keeps vanilla's ({@code SkySpec.cloudPace}).
  *
  * <p><b>Two injectors for one draw, because 26.3 split what a cloud layer is from when it is drawn.</b>
  * {@code prepare} carries every number — the colour, the height, the range, where the eye is and what time
@@ -64,6 +69,13 @@ public class CloudRendererMixin {
         + "Lcom/mojang/renderpearl/api/textures/GpuTextureView;"
         + "Lnet/minecraft/client/renderer/oit/OitRenderPassProvider$Parameters;)V";
 
+    /** How many ticks vanilla's clouds take to drift one cell, which a whole texture's width of cells repeats on. */
+    @Unique
+    private static final double TICKS_PER_CELL = 400.0;
+
+    @Shadow
+    private CloudRenderer.@Nullable TextureData texture;
+
     @Unique
     private int ephemeris$color;
     @Unique
@@ -95,6 +107,23 @@ public class CloudRendererMixin {
         if (moment != null) {
             LevelRendering.INSTANCE.readyClouds(moment);
         }
+    }
+
+    /**
+     * Vanilla's clouds drifted at the level's own pace. The offset is worked out again from the frame's time rather
+     * than scaled, and wrapped where vanilla wraps it — one texture's width — so a pace that is no whole number does
+     * not jump the sheet sideways each time the wrap comes round.
+     */
+    @ModifyVariable(method = PREPARE, at = @At("STORE"), name = "cloudOffset")
+    private float ephemeris$driftAtTheLevelsPace(float cloudOffset) {
+        float pace = LevelRendering.INSTANCE.cloudPace(OffscreenLevelRender.INSTANCE.levelBeingDrawn());
+        CloudRenderer.TextureData drawn = this.texture;
+        if (pace == SkySpec.ORDINARY_CLOUD_PACE || drawn == null) {
+            return cloudOffset;
+        }
+        double period = drawn.width() * TICKS_PER_CELL;
+        double ticks = ((this.ephemeris$gameTime % period) + this.ephemeris$partialTicks) * pace;
+        return (float) (ticks % period);
     }
 
     @Inject(method = RENDER, at = @At("HEAD"), cancellable = true)
