@@ -174,6 +174,10 @@ renderer works off-screen for free, with nothing to remember and nothing to revi
 written. The scope is only for what cannot be reached that way: deciding which level a moment is *for*, and
 giving a shared singleton canvas somewhere to draw.
 
+**The level is lit by its own lightmap inside the scope**, its sky and ambient light read from the camera it is
+seen through rather than from where the player stands — so a daylit level seen from a cave is daylit. Brightness,
+night vision and darkness stay the player's, being the viewer's eyes. Open the scope where no render pass is open.
+
 Render thread only, and it nests. **One known gap:** block colours are asked for during section
 compilation, on a worker thread, so a leaf in an off-screen level is tinted for the player's level instead.
 That wants the level threaded through section compilation, which is vanilla's to give and does not.

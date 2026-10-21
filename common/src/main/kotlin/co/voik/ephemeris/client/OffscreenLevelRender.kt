@@ -53,6 +53,9 @@ object OffscreenLevelRender {
      *
      * Nests safely: the previous scope is restored afterwards, including the outermost case of no scope at
      * all, so a failure inside [block] cannot leave the renderer pointed at a level that has gone.
+     *
+     * The level is lit by its own lightmap for the length of the scope ([OffscreenLightmap]), seen [from] the
+     * camera, so call this where no render pass is open.
      */
     fun <T> drawing(
         level: ClientLevel,
@@ -69,6 +72,7 @@ object OffscreenLevelRender {
         drawnTarget = onto
         drawnCloudTarget = clouds
         drawnCamera = from
+        OffscreenLightmap.light(level, from)
         try {
             return block()
         } finally {
@@ -76,6 +80,7 @@ object OffscreenLevelRender {
             drawnTarget = outerTarget
             drawnCloudTarget = outerCloudTarget
             drawnCamera = outerCamera
+            if (outerLevel != null && outerCamera != null) OffscreenLightmap.light(outerLevel, outerCamera)
         }
     }
 
