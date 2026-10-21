@@ -10,6 +10,7 @@ import co.voik.ephemeris.client.SkyThroughFog;
 import com.mojang.blaze3d.pipeline.RenderTarget;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.renderpearl.api.buffers.GpuBufferSlice;
+import net.minecraft.client.Camera;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.renderer.SkyRenderer;
@@ -24,6 +25,7 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.ModifyArg;
 import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 /**
  * Lets a level draw a sky of its own — the whole of it.
@@ -151,6 +153,21 @@ public class SkyRendererMixin {
             return;
         }
         LevelRendering.INSTANCE.drawSkyOverlays(ephemeris$momentOf(level, state));
+    }
+
+    /**
+     * Whether the disc below the horizon goes down, asked of the camera a level is drawn from off-screen. Vanilla
+     * asks the player's eye, so a level drawn from a sky camera while the player stood deep underground had the
+     * lower half of its sky blacked out.
+     */
+    @Inject(method = "shouldRenderDarkDisc", at = @At("HEAD"), cancellable = true)
+    private void ephemeris$belowTheHorizonOfTheCameraDrawnFrom(
+            float partialTick, ClientLevel level, CallbackInfoReturnable<Boolean> callback) {
+        if (!OffscreenLevelRender.INSTANCE.isDrawingElsewhere()) {
+            return;
+        }
+        Camera camera = OffscreenLevelRender.INSTANCE.cameraBeingDrawnFrom();
+        callback.setReturnValue(camera.position().y - level.getLevelData().getHorizonHeight(level) < 0.0);
     }
 
     private SkyMoment ephemeris$momentOf(ClientLevel level, SkyRenderState state) {
