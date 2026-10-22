@@ -68,6 +68,11 @@ if ! $offline; then
     remote_tags="$(git ls-remote --tags origin "refs/tags/$tag")" ||
         fail "origin cannot be reached; fix the remote or pass --offline"
     [[ -z "$remote_tags" ]] || fail "$tag already exists on origin"
+    # The release is published as whoever gh is acting as, which is not who git pushes as.
+    slug="$(git remote get-url origin | sed -E 's#.*github\.com[:/]([^/]+/[^/]+)$#\1#; s#\.git$##')"
+    account="$(gh api user -q .login 2>/dev/null)" || fail "gh is not logged in: run 'gh auth login'"
+    [[ "$(gh api "repos/$slug" -q .permissions.push 2>/dev/null)" == "true" ]] ||
+        fail "gh is acting as $account, who cannot publish to $slug: run 'gh auth switch -u ${slug%%/*}' first"
 fi
 
 if [[ -f .sdkmanrc ]]; then
