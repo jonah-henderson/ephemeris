@@ -195,6 +195,7 @@ Written in Kotlin, callable from Java (`RuntimeLevels.INSTANCE`, and the `fun in
 `notes/day-and-night.md` is how a sky decides the day, and the record of everything built into one.
 `notes/renderer-compatibility.md` is an open audit: which of the client hooks stand on a seam every
 renderer shares and which are bets on vanilla's own, after Fabric's Indigo cost three walks on a leaf.
+`notes/sky-limits.md` is what a per-level sky can and cannot change, and why.
 
 ## Building
 
