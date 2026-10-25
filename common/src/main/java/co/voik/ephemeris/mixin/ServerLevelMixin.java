@@ -73,12 +73,15 @@ public abstract class ServerLevelMixin {
      *
      * <p>The two level-change packets after them are already scoped to the dimension, which is vanilla
      * saying it which way it meant these to go.
+     *
+     * <p>NeoForge patches all four into the dimension-scoped call already, so there it finds nothing to redirect.
      */
     @Redirect(
             method = "advanceWeatherCycle",
             at = @At(
                     value = "INVOKE",
-                    target = "Lnet/minecraft/server/players/PlayerList;broadcastAll(Lnet/minecraft/network/protocol/Packet;)V"))
+                    target = "Lnet/minecraft/server/players/PlayerList;broadcastAll(Lnet/minecraft/network/protocol/Packet;)V"),
+            require = 0)
     private void ephemeris$tellOnlyThisLevel(PlayerList players, Packet<?> packet) {
         players.broadcastAll(packet, ((ServerLevel) (Object) this).dimension());
     }
