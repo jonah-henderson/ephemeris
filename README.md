@@ -116,6 +116,13 @@ its celestial sprites carry no alpha at all: they are indexed colour with no `tR
 a night-sky gradient painted around it. Ephemeris crops that away — a moon sprite is 32 by 32 with the moon
 in the middle 8 by 8 — so a body can cover, which is how a moon eclipses a sun, something vanilla cannot do.
 
+**An eclipse is answered, not only drawn.** `Eclipse.of(spec, time)` says how much of each sun a nearer
+covering body hides, by their discs rather than their sprites, and `Eclipse.passagesBetween` finds every one
+coming. Under `auto`, the day under an eclipse darkens with it, to night's own at totality, so hostile spawning
+follows; on the client the light, sky, fog and clouds go with it, and a corona, the diamond ring and a sunset on
+every side show near totality. A phase cycle marked `lit_by_sun` takes its shape from where the moon stands
+against the first sun, so a moon crossing one is new.
+
 The crop is **vanilla's moon only**. Its sun is left whole, because what surrounds *it* is not sky but its
 own corona; and a texture of yours is left whole because it is presumed drawn as you want it seen.
 `SpriteCuts.register(shape, pipeline)` is there for one that needs a rule of its own.
