@@ -90,6 +90,23 @@ class EclipseCheck : FunSpec({
         check(passages.all(::totalityInside)) { "Totality did not sit inside its eclipse: $passages" }
     }
 
+    test("an eclipse darkens the day as far as night at totality, and a graze not at all") {
+        fun darkeningWith(moon: CelestialBody): Int {
+            val sky = skyOf(sun(), moon)
+            val sun = SkyReading.of(sky, noon).suns.single()
+            return LevelDaylight.darkeningUnder(sky, sun, noon)
+        }
+
+        check(darkeningWith(moon(sameApparentSize)) == 11) { "Totality at noon left ${darkeningWith(moon(sameApparentSize))}" }
+        check(darkeningWith(moon(sameApparentSize, phaseDegrees = 20.0f)) == 0) { "A moon well clear darkened noon" }
+        val ring = darkeningWith(moon(sameApparentSize * 0.88f))
+        check(ring in 1..4) { "A ring of fire darkened noon by $ring, where it should dim it a little" }
+
+        val steps = (0..100).map { LevelDaylight.darkeningCoveredBy(it / 100.0f) }
+        check(steps.zipWithNext().all { (less, more) -> more >= less }) { "Darkening fell as coverage grew: $steps" }
+        check(steps.take(51).all { it == 0 }) { "Half a sun covered already darkened the day: $steps" }
+    }
+
     test("two equal discs a radius apart share the closed form's lens") {
         val radius = 0.05
         val lens = radius * radius * (2 * PI / 3 - sqrt(3.0) / 2)

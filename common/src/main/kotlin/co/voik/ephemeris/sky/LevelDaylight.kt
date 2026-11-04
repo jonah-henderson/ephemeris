@@ -33,7 +33,27 @@ object LevelDaylight {
 
         val reading = look.readAt(level.defaultClockTime)
         val deciding = decidingSun(reading, look.rules) ?: return null
-        return darkeningFor(deciding.altitudeDegrees)
+        return darkeningUnder(look.sky, deciding, reading.dayTime)
+    }
+
+    /**
+     * How dark it is under [deciding]: by its height, and **deeper still while something covers it** — an
+     * eclipse is the one thing that darkens a sun standing high, and it darkens it for everything that reads
+     * the light, the spawning of monsters included.
+     */
+    fun darkeningUnder(sky: SkySpec, deciding: BodyReading, dayTime: Long): Int {
+        val coverage = Eclipse.of(sky, deciding.index, dayTime)?.coverage ?: 0.0f
+        return maxOf(darkeningFor(deciding.altitudeDegrees), darkeningCoveredBy(coverage))
+    }
+
+    /**
+     * How dark a sun [coverage] covered leaves the day, on the same `0..11` scale: nothing until half the disc is
+     * gone, then steeply, as an eclipse is — about two steps at an annular eclipse's four-fifths, six at nine-tenths,
+     * and night's own at totality.
+     */
+    fun darkeningCoveredBy(coverage: Float): Int {
+        val pastHalf = ((coverage - ECLIPSE_DARKENS_FROM) / (1.0f - ECLIPSE_DARKENS_FROM)).coerceIn(0.0f, 1.0f)
+        return Math.round(pastHalf * pastHalf * pastHalf * NIGHT_DARKENING)
     }
 
     /**
@@ -93,24 +113,29 @@ object LevelDaylight {
         if (look.sky.isOrdinary) return null
         if (look.rules.daylight == Daylight.VANILLA_CLOCK) return null
 
-        return starlitnessOf(look.readAt(level.defaultClockTime), look.rules)
+        return starlitnessOf(look.readAt(level.defaultClockTime), look.rules, look.sky)
     }
 
     /**
-     * The same, of a reading rather than a level — pure, so the three cases can be checked without a game.
+     * The same, of a reading rather than a level — pure, so the three cases can be checked without a game. Given
+     * the [sky] the reading was taken of, an eclipse brings the stars out too.
      *
      * **A sky with no sun in it is never lit**, whatever hour the clock says, and that is the one case
      * that cannot be read off an altitude because there is none to read. [skyDarkenFor] answers null to
      * the same absence because it is asking a different question: what the *world* should do, where
      * leaving vanilla's own curve alone is the safer silence.
      */
-    fun starlitnessOf(reading: SkyReading, rules: SkyRules): Float {
+    fun starlitnessOf(reading: SkyReading, rules: SkyRules, sky: SkySpec? = null): Float {
         val deciding = decidingSun(reading, rules) ?: return FULLY_STARLIT
-        return darkeningFor(deciding.altitudeDegrees) / NIGHT_DARKENING.toFloat()
+        val darkening = sky?.let { darkeningUnder(it, deciding, reading.dayTime) } ?: darkeningFor(deciding.altitudeDegrees)
+        return darkening / NIGHT_DARKENING.toFloat()
     }
 
     /** Stars at their fullest — what a sky with nothing lighting it shows at every hour. */
     private const val FULLY_STARLIT = 1.0f
+
+    /** How much of a sun has to be covered before the day begins to darken. */
+    private const val ECLIPSE_DARKENS_FROM = 0.5f
 
     /** Where the ramp begins and ends, in degrees of altitude. */
     private const val FULLY_LIT_ABOVE = 5.0f
