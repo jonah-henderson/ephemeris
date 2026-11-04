@@ -199,6 +199,13 @@ sealed interface CelestialPath {
         fun altitudeOf(direction: Vector3f): Float =
             Math.toDegrees(Math.asin(direction.y.coerceIn(-1.0f, 1.0f).toDouble())).toFloat()
 
+        /** The angle between two directions in radians, by `atan2` rather than `acos`, which loses everything near nought. */
+        fun angleBetween(first: Vector3f, second: Vector3f): Double {
+            val across = Vector3f(first).cross(second).length().toDouble()
+            val along = first.dot(second).toDouble()
+            return Math.atan2(across, along)
+        }
+
         fun bearingOf(direction: Vector3f): Float {
             val degrees = Math.toDegrees(Math.atan2(direction.x.toDouble(), -direction.z.toDouble())).toFloat()
             return (degrees % FULL_TURN + FULL_TURN) % FULL_TURN

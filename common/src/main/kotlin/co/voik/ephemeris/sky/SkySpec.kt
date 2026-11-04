@@ -229,6 +229,8 @@ data class SkySpec(
                         // Vanilla has eight moon shapes, so a cycle through them has eight steps. Held by
                         // `SkyCheck`, because a mismatch would index past the last sprite.
                         steps = Appearance.MOON_SHAPES.size,
+                        // The first moon keeps the game's month, which slimes read; the rest are lit by the sun.
+                        litBySun = true,
                     ),
                     blending = Blending.COVERS,
                 )

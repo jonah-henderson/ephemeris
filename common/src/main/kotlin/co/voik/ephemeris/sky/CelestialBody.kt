@@ -145,7 +145,16 @@ sealed interface Appearance {
  * Vanilla's eight is a default rather than a rule, nothing outside the renderer being able to observe a
  * phase.
  */
-data class PhaseCycle(val periodTicks: Int, val offsetTicks: Int, val steps: Int = VANILLA_PHASES) {
+data class PhaseCycle(
+    val periodTicks: Int,
+    val offsetTicks: Int,
+    val steps: Int = VANILLA_PHASES,
+    /**
+     * Whether the shape follows where the body stands against a sun rather than this cycle: full opposite it, new
+     * beside it. The cycle still answers in a sky with no sun.
+     */
+    val litBySun: Boolean = false,
+) {
 
     /**
      * Which shape this body is showing, in `0..<steps`. Quantised rather than continuous so the stepping
@@ -157,15 +166,42 @@ data class PhaseCycle(val periodTicks: Int, val offsetTicks: Int, val steps: Int
         return (Mth.frac(revolutions) * steps).toInt().coerceIn(0, steps - 1)
     }
 
+    /** The shape of a body on [path] at [dayTime], lit by a sun on [sun] where there is one and [litBySun] says so. */
+    fun stepAt(dayTime: Long, path: CelestialPath, sun: CelestialPath?): Int =
+        if (litBySun && sun != null) stepLitBy(path, sun, dayTime) else stepAt(dayTime)
+
+    /**
+     * The shape in [steps] that the angle between the body and its sun gives, in vanilla's order: full first,
+     * waning to new halfway, then waxing back.
+     *
+     * Waxing is the angle a sun's day later beating the angle a day earlier. A whole day, because a paced sun
+     * speeds and slows through its day and over any shorter span a moon falling behind it can seem to gain. A body
+     * that never moves against its sun reads as waxing, and one that laps its sun within a day can read either way.
+     */
+    private fun stepLitBy(path: CelestialPath, sun: CelestialPath, dayTime: Long): Int {
+        if (steps <= 1) return 0
+        fun elongationAt(time: Long) = CelestialPath.angleBetween(path.directionAt(time), sun.directionAt(time))
+        val elongation = elongationAt(dayTime)
+        val aDay = if (sun.isStill) WAXING_LOOK_AHEAD else sun.periodTicks.toLong()
+        val isWaxing = elongationAt(dayTime + aDay) >= elongationAt(dayTime - aDay)
+        val newStep = steps / 2
+        val stepsFromNew = Math.round(elongation / Math.PI * newStep).toInt()
+        return if (isWaxing) (newStep + stepsFromNew) % steps else newStep - stepsFromNew
+    }
+
     companion object {
         /** Not `const`: `MoonPhase.COUNT` is `values().length`, so it is not a compile-time constant. */
         val VANILLA_PHASES = MoonPhase.COUNT
+
+        /** How far either side waxing is read beside a sun that never moves, where nothing paces it. */
+        private const val WAXING_LOOK_AHEAD = 200L
 
         val CODEC: Codec<PhaseCycle> = RecordCodecBuilder.create { instance ->
             instance.group(
                 Codec.INT.fieldOf("period").forGetter(PhaseCycle::periodTicks),
                 Codec.INT.optionalFieldOf("offset", 0).forGetter(PhaseCycle::offsetTicks),
                 Codec.INT.optionalFieldOf("steps", VANILLA_PHASES).forGetter(PhaseCycle::steps),
+                Codec.BOOL.optionalFieldOf("lit_by_sun", false).forGetter(PhaseCycle::litBySun),
             ).apply(instance, ::PhaseCycle)
         }
     }

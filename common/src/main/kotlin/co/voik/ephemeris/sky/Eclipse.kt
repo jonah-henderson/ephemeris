@@ -5,7 +5,6 @@ import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.acos
 import kotlin.math.atan
-import kotlin.math.atan2
 import kotlin.math.min
 import kotlin.math.sqrt
 
@@ -173,14 +172,8 @@ private class PassageSoFar(private val sun: Int, private val begins: Long, first
 /** A body's disc on the sky at one instant: where it points, and its angular radius in radians. */
 private class Disc(val direction: Vector3f, val radius: Double) {
 
-    fun shareHiddenBy(cover: Disc): Double = Eclipse.overlapShare(radius, cover.radius, angleTo(cover))
-
-    /** The angle between two directions, by `atan2` rather than `acos`, which loses everything near nought. */
-    private fun angleTo(other: Disc): Double {
-        val across = Vector3f(direction).cross(other.direction).length().toDouble()
-        val along = direction.dot(other.direction).toDouble()
-        return atan2(across, along)
-    }
+    fun shareHiddenBy(cover: Disc): Double =
+        Eclipse.overlapShare(radius, cover.radius, CelestialPath.angleBetween(direction, cover.direction))
 
     companion object {
         fun of(body: CelestialBody, dayTime: Long): Disc {

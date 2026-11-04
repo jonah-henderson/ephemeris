@@ -150,9 +150,10 @@ object SkyPainter {
     ) {
         // Sorted by where each body is *now*: a path that swells and shrinks changes which body is in
         // front, and the sky pass writes no depth, so order is the only thing that decides.
+        val firstSun = spec.bodies.firstOrNull { it.phase == null }?.path
         for (body in spec.bodies.sortedByDescending { it.path.distanceAt(clockTime) }) {
             val sprite = body.appearance as? Appearance.Sprite ?: continue
-            val shape = sprite.shapes[shapeIndexOf(body, sprite, clockTime, moonPhase)]
+            val shape = sprite.shapes[shapeIndexOf(body, sprite, clockTime, moonPhase, firstSun)]
             // Vanilla adds both its sun and its moon, and its sprites have no alpha to cover with — see
             // `Blending`, which is why this is the body's own choice and why the default is to add.
             val adds = body.blending == Blending.ADDS
@@ -300,13 +301,14 @@ object SkyPainter {
         sprite: Appearance.Sprite,
         clockTime: Long,
         moonPhase: MoonPhase,
+        firstSun: CelestialPath?,
     ): Int {
         val step = when {
             body.path == Orbit.VANILLA_MOON -> moonPhase.index()
             // **Held from the rising while it is up.** A phase stepping on the raw clock steps wherever the
             // clock happens to be, which changed a moon's shape at the top of its arc (Jonah, 2026-08-30,
             // walked) — something the sky does only where nobody is looking. See `CelestialPath.lastRoseAt`.
-            else -> body.phase?.stepAt(heldFrom(body.path, clockTime)) ?: 0
+            else -> body.phase?.stepAt(heldFrom(body.path, clockTime), body.path, firstSun) ?: 0
         }
         return step.coerceIn(0, sprite.shapes.size - 1)
     }
