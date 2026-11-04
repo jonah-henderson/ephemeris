@@ -109,6 +109,20 @@ interface SkyCanvas {
     )
 
     /**
+     * The corona a sun shows when it is covered: a smooth light round a disc [discSize] across in the units
+     * [drawBody] takes, bright at the rim and fading outward in soft uneven petals, longest along an equator.
+     * [colour] is the light it gives, [strength] how much of it shows, and [seed] picks this one's shape.
+     */
+    fun drawEclipseCorona(
+        orientation: Quaternionf,
+        distance: Float,
+        discSize: Float,
+        colour: Rgba,
+        strength: Float,
+        seed: Long,
+    )
+
+    /**
      * A plain quad of light — **no sprite, no texture, nothing but a colour**.
      *
      * The untextured sibling of [drawBody], and there for the case a body's sprite is working against you:

@@ -71,6 +71,15 @@ class HorizonPainterCheck : FunSpec({
             fade: Float,
         ) = Unit
 
+        override fun drawEclipseCorona(
+            orientation: Quaternionf,
+            distance: Float,
+            discSize: Float,
+            colour: Rgba,
+            strength: Float,
+            seed: Long,
+        ) = Unit
+
         override fun drawStarfield(
             seed: Long,
             count: Int,

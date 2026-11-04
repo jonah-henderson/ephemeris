@@ -121,70 +121,81 @@ object SkyPainter {
         }
 
         val skyLit = 1.0f - nightliness
-        drawBodies(canvas, camera, spec, clockTime, sunAngle, moonAngle, moonPhase, rainBrightness, look.rules, skyLit)
-        LevelDaylight.eclipseOf(look, clockTime)?.let { eclipse ->
-            drawEclipse(canvas, spec, eclipse, clockTime, sunAngle, moonAngle)
-        }
+        val eclipse = LevelDaylight.eclipseOf(look, clockTime)
+        drawBodies(canvas, camera, spec, clockTime, sunAngle, moonAngle, moonPhase, rainBrightness, look.rules, skyLit, eclipse)
+        eclipse?.let { drawDiamondRing(canvas, spec, it, clockTime) }
         return true
     }
 
+    /** How far [eclipse] is past covering [from] of its sun, `0..1` from there to wholly covered. */
+    private fun risingPast(eclipse: Eclipse, from: Float) =
+        ((eclipse.coverage - from) / (1.0f - from)).coerceIn(0.0f, 1.0f)
+
     /**
-     * What only an eclipse shows, over the bodies: the corona round a sun wholly covered, and the diamond ring, the
-     * last of the sun shining from one point of its rim just before totality and the first just after.
-     *
-     * The corona is measured from the sun's disc rather than its sprite, which for vanilla's sun is mostly glow.
-     * A sun with a corona of its own keeps it; any other is given [ECLIPSE_CORONA].
+     * The corona of a sun nearly or wholly covered, drawn straight after the sun and so under whatever covers it:
+     * a smooth light rising from behind the moon's rim in uneven petals. It takes the colour of a sun's own
+     * corona where it has one, and is a pearly white where it has not; each eclipse's is shaped by its day.
      */
-    private fun drawEclipse(
+    private fun drawEclipseCorona(
         canvas: SkyCanvas,
-        spec: SkySpec,
+        sprite: Appearance.Sprite,
         eclipse: Eclipse,
+        orientation: Quaternionf,
+        distance: Float,
         clockTime: Long,
-        sunAngle: Float,
-        moonAngle: Float,
     ) {
-        val sun = spec.bodies.getOrNull(eclipse.sun) ?: return
-        val sprite = sun.appearance as? Appearance.Sprite ?: return
-        val distance = sun.path.distanceAt(clockTime)
+        val coronaShows = risingPast(eclipse, CORONA_FROM)
+        if (coronaShows <= 0.0f) return
+        val colour = sprite.corona?.colour?.copy(alpha = 1.0f) ?: PEARLY
         val disc = sprite.angularSize * sprite.discShare
-
-        fun risingPast(from: Float) = ((eclipse.coverage - from) / (1.0f - from)).coerceIn(0.0f, 1.0f)
-        val coronaShows = risingPast(CORONA_FROM)
-        if (coronaShows > 0.0f) {
-            val corona = sprite.corona ?: ECLIPSE_CORONA
-            val facing = facingOf(sun, clockTime, sunAngle, moonAngle)
-            canvas.drawCorona(facing, distance, disc, corona.raysAt(clockTime), corona.colour, coronaShows)
-        }
-
-        val ringShows = if (eclipse.isTotal) 0.0f else risingPast(DIAMOND_FROM)
-        if (ringShows > 0.0f) {
-            val lastLight = Eclipse.lastLightOf(spec, eclipse, clockTime) ?: return
-            val toward = Quaternionf().rotationTo(UP, lastLight.direction)
-            val bloom = Rgba.WHITE.copy(alpha = ringShows * DIAMOND_BLOOM_STRENGTH)
-            canvas.drawGlow(toward, distance, disc * DIAMOND_POINT, Rgba.WHITE.copy(alpha = ringShows))
-            canvas.drawGlow(toward, distance, disc * DIAMOND_BLOOM, bloom)
-        }
+        canvas.drawEclipseCorona(orientation, distance, disc, colour, coronaShows, seed = (clockTime + DAWN_TO_MIDNIGHT) / A_DAY)
     }
 
-    /** How much of the sun is covered before its corona starts to show, and the diamond ring to burn. */
-    private const val CORONA_FROM = 0.96f
-    private const val DIAMOND_FROM = 0.95f
+    /**
+     * The diamond ring: the last of the sun shining through one point of the covering rim just before totality, and
+     * the first just after, as a small burst over the rim. It brightens to the moment the sun is gone and goes out.
+     */
+    private fun drawDiamondRing(canvas: SkyCanvas, spec: SkySpec, eclipse: Eclipse, clockTime: Long) {
+        val ringShows = if (eclipse.isTotal) 0.0f else risingPast(eclipse, DIAMOND_FROM)
+        if (ringShows <= 0.0f) return
+        val sun = spec.bodies.getOrNull(eclipse.sun) ?: return
+        val sprite = sun.appearance as? Appearance.Sprite ?: return
+        val lastLight = Eclipse.lastLightOf(spec, eclipse, clockTime) ?: return
+        val distance = sun.path.distanceAt(clockTime)
+        val disc = sprite.angularSize * sprite.discShare
+        val toward = Quaternionf().rotationTo(UP, lastLight.direction)
+        canvas.drawGlow(toward, distance, disc * DIAMOND_POINT, Rgba.WHITE.copy(alpha = ringShows))
+        canvas.drawCorona(toward, distance, disc * DIAMOND_BURST, DIAMOND_RAYS, DIAMOND_LIGHT, ringShows)
+    }
 
-    /** The diamond's point and the bloom round it, as shares of the sun's disc, and how strong the bloom is. */
-    private const val DIAMOND_POINT = 0.35f
-    private const val DIAMOND_BLOOM = 1.5f
-    private const val DIAMOND_BLOOM_STRENGTH = 0.35f
+    /**
+     * How much of the sun is covered before its corona starts to show, and the diamond ring to burn: about ten
+     * seconds and six before totality, at the eighty seconds of totality an eclipsing moon gives.
+     */
+    private const val CORONA_FROM = 0.98f
+    private const val DIAMOND_FROM = 0.99f
+
+    /** The diamond's point, and the burst round it, as shares of the sun's disc. */
+    private const val DIAMOND_POINT = 0.12f
+    private const val DIAMOND_BURST = 0.6f
+
+    /** Eight rays round the diamond, long and short by turns, reaching about a disc and half of one. */
+    private val DIAMOND_RAYS = (0..<8).map { index ->
+        val isLong = index % 2 == 0
+        Corona.Ray(turn = index / 8.0f, length = if (isLong) 1.4f else 0.6f, strength = 1.0f)
+    }
+
+    /** Pure light: it hides nothing behind it. */
+    private val DIAMOND_LIGHT = Rgba(1.0f, 1.0f, 1.0f, 0.0f)
 
     private val UP = Vector3f(0.0f, 1.0f, 0.0f)
 
-    /** A pale corona for a sun that has none of its own: long faint streamers, slowly turning, gently pulsing. */
-    private val ECLIPSE_CORONA = Corona(
-        rays = 18,
-        reach = 2.0f,
-        colour = Rgba(0.75f, 0.80f, 0.95f, 0.0f),
-        turnsPerDay = 0.02f,
-        shimmer = 0.25f,
-    )
+    /** The corona of a sun with none of its own. */
+    private val PEARLY = Rgba(0.92f, 0.94f, 1.0f, 1.0f)
+
+    /** A day, and how far a day's ticks run from its dawn to midnight: a corona's shape changes with the date at midnight. */
+    private const val A_DAY = 24_000L
+    private const val DAWN_TO_MIDNIGHT = 6_000L
 
     /**
      * Where the viewer's eye is, for a [co.voik.ephemeris.sky.StarReveal] to read.
@@ -210,11 +221,14 @@ object SkyPainter {
         rainBrightness: Float,
         rules: SkyRules,
         skyLit: Float,
+        eclipse: Eclipse?,
     ) {
         // Sorted by where each body is *now*: a path that swells and shrinks changes which body is in
         // front, and the sky pass writes no depth, so order is the only thing that decides.
         val firstSun = spec.bodies.firstOrNull { it.phase == null }?.path
-        for (body in spec.bodies.sortedByDescending { it.path.distanceAt(clockTime) }) {
+        val farthestFirst = spec.bodies.indices.sortedByDescending { spec.bodies[it].path.distanceAt(clockTime) }
+        for (index in farthestFirst) {
+            val body = spec.bodies[index]
             val sprite = body.appearance as? Appearance.Sprite ?: continue
             val shape = sprite.shapes[shapeIndexOf(body, sprite, clockTime, moonPhase, firstSun)]
             // Vanilla adds both its sun and its moon, and its sprites have no alpha to cover with — see
@@ -252,6 +266,9 @@ object SkyPainter {
             // Over the body, so a ray's root lies across its rim rather than under it.
             if (corona != null) {
                 canvas.drawCorona(orientation, distance, sprite.angularSize, corona.raysAt(clockTime), corona.colour, tint.alpha)
+            }
+            if (eclipse != null && eclipse.sun == index) {
+                drawEclipseCorona(canvas, sprite, eclipse, orientation, distance, clockTime)
             }
         }
     }

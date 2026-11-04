@@ -1026,6 +1026,108 @@ object Blaze3dSkyCanvas : SkyCanvas {
 
     private const val ONE_WHOLE = 1.0f
 
+    override fun drawEclipseCorona(
+        orientation: Quaternionf,
+        distance: Float,
+        discSize: Float,
+        colour: Rgba,
+        strength: Float,
+        seed: Long,
+    ) {
+        if (strength <= NOTHING_TO_DRAW) return
+        val modelViewStack = RenderSystem.getModelViewStack()
+        modelViewStack.pushMatrix()
+        modelViewStack.rotate(orientation)
+        modelViewStack.translate(0.0f, distance, 0.0f)
+        val halfWidth = discSize * ECLIPSE_CORONA_SPAN
+        modelViewStack.scale(halfWidth, 1.0f, halfWidth)
+
+        val transforms = RenderSystem.getDynamicUniforms().writeTransform(
+            modelViewNow(),
+            Vector4f(colour.red, colour.green, colour.blue, ONE_WHOLE),
+            Vector3f(),
+            Matrix4f(),
+        )
+        val ownPlace = wrapped(seed * CORONA_SEED_STRIDE, CORONA_NOISE_SPAN)
+        val equator = wrapped(seed * GOLDEN_TURN, FULL_TURN) * FULL_TURN_RADIANS
+        coronaInfo.currentBuffer().map(false, true).use { view ->
+            Std140Builder.intoBuffer(view.data()).putVec4(ONE_WHOLE / ECLIPSE_CORONA_SPAN, strength, ownPlace, equator)
+        }
+        val quadIndices = RenderSystem.getSequentialBuffer(PrimitiveTopology.QUADS)
+
+        renderPass("Ephemeris eclipse corona")?.use { pass ->
+            pass.setPipeline(RenderSystem.getCompiledPipeline(ECLIPSE_CORONA_PIPELINE))
+            RenderSystem.bindDefaultUniforms(pass)
+            pass.setUniform("DynamicTransforms", transforms)
+            pass.setUniform("CoronaInfo", coronaInfo.currentBuffer())
+            pass.setVertexBuffer(ONLY_VERTEX_BINDING, coronaQuad().slice())
+            pass.setIndexBuffer(quadIndices.getBuffer(QUAD_INDICES), quadIndices.type())
+            pass.drawIndexed(QUAD_INDICES, ONE_INSTANCE, FROM_THE_FIRST_INDEX, NO_VERTEX_OFFSET, FROM_THE_FIRST_INSTANCE)
+        }
+        coronaInfo.rotate()
+
+        modelViewStack.popMatrix()
+    }
+
+    /**
+     * The eclipse's corona, worked out per pixel by `eclipse_corona.fsh` on one quad: light added to the sky, as
+     * the stars and the aurora are.
+     */
+    private val ECLIPSE_CORONA_PIPELINE: RenderPipeline = RenderPipeline.builder()
+        .withLocation(Identifier.fromNamespaceAndPath(NAMESPACE, "pipeline/eclipse_corona"))
+        .withVertexShader(Identifier.fromNamespaceAndPath(NAMESPACE, "eclipse_corona"))
+        .withFragmentShader(Identifier.fromNamespaceAndPath(NAMESPACE, "eclipse_corona"))
+        .withBindGroupLayout(
+            BindGroupLayout.builder()
+                .withUniform("DynamicTransforms", UniformType.UNIFORM_BUFFER)
+                .withUniform("Projection", UniformType.UNIFORM_BUFFER)
+                .withUniform("CoronaInfo", UniformType.UNIFORM_BUFFER)
+                .build(),
+        )
+        .withColorTargetState(ColorTargetState(BlendFunction.OVERLAY))
+        .withCull(false)
+        .withVertexBinding(ONLY_VERTEX_BINDING, DefaultVertexFormat.POSITION_TEX)
+        .withPrimitiveTopology(PrimitiveTopology.QUADS)
+        .build()
+
+    /** How far out the corona's quad reaches, in the disc's radii. The light has faded to nothing well before. */
+    private const val ECLIPSE_CORONA_SPAN = 7.0f
+
+    /** One `vec4`, matching `CoronaInfo` in the shader. */
+    private const val CORONA_INFO_BYTES = 4 * Float.SIZE_BYTES
+
+    /** How far apart in the noise one eclipse's corona is read from the next, and the span that wraps in. */
+    private const val CORONA_SEED_STRIDE = 37.3
+    private const val CORONA_NOISE_SPAN = 4096.0
+
+    /** A golden share of a turn, so one eclipse's equator lies well away from the last's. */
+    private const val GOLDEN_TURN = 0.618034
+    private const val FULL_TURN = 1.0
+
+    private val coronaInfo: MappableRingBuffer by lazy {
+        MappableRingBuffer({ "Ephemeris eclipse corona UBO" }, GpuBuffer.USAGE_UNIFORM or GpuBuffer.USAGE_MAP_WRITE, CORONA_INFO_BYTES)
+    }
+
+    private var coronaQuadBuffer: GpuBuffer? = null
+
+    /** A unit quad across the body's plane, `-1..1`, with its corners' place on it, `0..1`. Built once and kept. */
+    private fun coronaQuad(): GpuBuffer = coronaQuadBuffer ?: buildCoronaQuad().also { coronaQuadBuffer = it }
+
+    private fun buildCoronaQuad(): GpuBuffer {
+        val format = DefaultVertexFormat.POSITION_TEX
+        return ByteBufferBuilder.exactlySized(QUAD_VERTICES * format.vertexSize).use { bytes ->
+            val builder = BufferBuilder(bytes, PrimitiveTopology.QUADS, format)
+            builder.addVertex(-1.0f, 0.0f, -1.0f).setUv(0.0f, 0.0f)
+            builder.addVertex(1.0f, 0.0f, -1.0f).setUv(1.0f, 0.0f)
+            builder.addVertex(1.0f, 0.0f, 1.0f).setUv(1.0f, 1.0f)
+            builder.addVertex(-1.0f, 0.0f, 1.0f).setUv(0.0f, 1.0f)
+            builder.buildOrThrow().use { mesh ->
+                RenderSystem.getDevice()
+                    .createBuffer({ "Ephemeris eclipse corona quad" }, GpuBuffer.USAGE_VERTEX, mesh.vertexBuffer())
+            }
+        }
+    }
+
     /** [GLOW_PIPELINE] with the colour moved into the vertices. */
     private val GLOWS_PIPELINE: RenderPipeline = RenderPipeline.builder()
         .withLocation(Identifier.fromNamespaceAndPath(NAMESPACE, "pipeline/glows"))
