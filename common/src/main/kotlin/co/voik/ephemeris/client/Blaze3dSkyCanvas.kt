@@ -1055,13 +1055,13 @@ object Blaze3dSkyCanvas : SkyCanvas {
 
     /**
      * `RenderPipelines.STARS`' own arrangement — a position in, one flat colour out — with the blend
-     * swapped for one that adds. Nothing else about it differs, which is why it borrows vanilla's shaders
-     * rather than carrying any of its own.
+     * swapped for one that adds. Nothing else about it differs, which is why it borrows the stars' shaders
+     * rather than carrying any of its own. Not `core/position`, which applies fog and needs its uniform bound.
      */
     private val GLOW_PIPELINE: RenderPipeline = RenderPipeline.builder()
         .withLocation(Identifier.fromNamespaceAndPath(NAMESPACE, "pipeline/glow"))
-        .withVertexShader(Identifier.withDefaultNamespace("core/position"))
-        .withFragmentShader(Identifier.withDefaultNamespace("core/position"))
+        .withVertexShader(Identifier.withDefaultNamespace("core/stars"))
+        .withFragmentShader(Identifier.withDefaultNamespace("core/stars"))
         .withBindGroupLayout(
             BindGroupLayout.builder()
                 .withUniform("DynamicTransforms", UniformType.UNIFORM_BUFFER)
