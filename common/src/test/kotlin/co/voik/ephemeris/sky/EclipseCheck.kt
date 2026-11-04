@@ -71,6 +71,25 @@ class EclipseCheck : FunSpec({
         check(eclipsed.isEmpty()) { "The vanilla sky had an eclipse at ${eclipsed.first()}" }
     }
 
+    test("a moon a month slower than the sun eclipses it once a month") {
+        val month = 8 * 24000L
+        val period = (1.0 / (1.0 / 24000 - 1.0 / month)).toInt()
+        val trailing = moon(sameApparentSize * 1.25f).let { it.copy(path = (it.path as Orbit).copy(periodTicks = period)) }
+        val passages = Eclipse.passagesBetween(skyOf(sun(), trailing), from = 8000L, until = 2 * month + 8000L)
+
+        check(passages.size == 2) { "Two months held ${passages.size} eclipses: $passages" }
+        check(passages.all { it.isTotal && it.coveredBy == listOf(1) }) { "Not every eclipse was the moon's, total" }
+        val offMonth = passages.mapIndexed { index, passage -> abs(passage.greatestAt - month * (index + 1)) }
+        check(offMonth.all { it < 1000L }) { "The eclipses fell this far from each month's end: $offMonth" }
+
+        fun totalityInside(passage: EclipsePassage): Boolean {
+            val from = passage.totalFrom ?: return false
+            val until = passage.totalUntil ?: return false
+            return passage.begins < from && until < passage.ends
+        }
+        check(passages.all(::totalityInside)) { "Totality did not sit inside its eclipse: $passages" }
+    }
+
     test("two equal discs a radius apart share the closed form's lens") {
         val radius = 0.05
         val lens = radius * radius * (2 * PI / 3 - sqrt(3.0) / 2)

@@ -50,6 +50,41 @@ data class Eclipse(val sun: Int, val coverage: Float, val coveredBy: List<Int>) 
         }
 
         /**
+         * Every eclipse of every sun between [from] and [until], in the order they begin.
+         *
+         * Walked rather than solved, for [HorizonCrossing]'s reason, at [PASSAGE_STEP]: a graze shorter than a
+         * step can be missed, and every time is good to within one. One already under way at [from] begins
+         * there, and one still under way at [until] ends there.
+         */
+        fun passagesBetween(spec: SkySpec, from: Long, until: Long): List<EclipsePassage> {
+            val suns = spec.bodies.indices.filter { spec.bodies[it].phase == null }
+            // Mutable and imperative on purpose: a month of sky is tens of thousands of samples.
+            val underWay = mutableMapOf<Int, PassageSoFar>()
+            val finished = mutableListOf<EclipsePassage>()
+            var time = from
+            while (time <= until) {
+                for (sun in suns) {
+                    val eclipse = of(spec, sun, time)
+                    val soFar = underWay[sun]
+                    when {
+                        eclipse != null && soFar == null -> underWay[sun] = PassageSoFar(sun, time, eclipse)
+                        eclipse != null && soFar != null -> soFar.add(time, eclipse)
+                        eclipse == null && soFar != null -> {
+                            finished += soFar.endedAt(time - PASSAGE_STEP)
+                            underWay.remove(sun)
+                        }
+                    }
+                }
+                time += PASSAGE_STEP
+            }
+            finished += underWay.values.map { it.endedAt(until) }
+            return finished.sortedBy { it.begins }
+        }
+
+        /** Ticks between samples of [passagesBetween]: a second, and far shorter than any eclipse worth seeing. */
+        const val PASSAGE_STEP = 20L
+
+        /**
          * What share of a disc of [sunRadius] a disc of [coverRadius] hides with their centres [separation] apart,
          * all as angles in radians: the overlap of two circles, over the first one's area.
          *
@@ -83,6 +118,56 @@ data class Eclipse(val sun: Int, val coverage: Float, val coveredBy: List<Int>) 
         /** At or past this, the disc reads as wholly hidden. Short of one only for rounding. */
         private const val TOTAL = 0.999f
     }
+}
+
+/**
+ * One sun's eclipse from first contact to last.
+ *
+ * [totalFrom] and [totalUntil] are null where it never covered the whole disc: a partial eclipse, or an annular one,
+ * whose [greatest] is as much of the sun as a smaller body can hide.
+ */
+data class EclipsePassage(
+    val sun: Int,
+    val coveredBy: List<Int>,
+    val begins: Long,
+    val ends: Long,
+    val greatestAt: Long,
+    val greatest: Float,
+    val totalFrom: Long?,
+    val totalUntil: Long?,
+) {
+    val isTotal: Boolean get() = totalFrom != null
+
+    /** How long the disc was wholly hidden, in ticks; nought for an eclipse that never was. */
+    val totalTicks: Long get() = if (totalFrom != null && totalUntil != null) totalUntil - totalFrom + 1 else 0L
+}
+
+/** A passage [Eclipse.passagesBetween] is still walking through. */
+private class PassageSoFar(private val sun: Int, private val begins: Long, first: Eclipse) {
+    private val coveredBy = linkedSetOf<Int>()
+    private var greatestAt = begins
+    private var greatest = 0.0f
+    private var totalFrom: Long? = null
+    private var totalUntil: Long? = null
+
+    init {
+        add(begins, first)
+    }
+
+    fun add(time: Long, eclipse: Eclipse) {
+        coveredBy += eclipse.coveredBy
+        if (eclipse.coverage > greatest) {
+            greatest = eclipse.coverage
+            greatestAt = time
+        }
+        if (eclipse.isTotal) {
+            if (totalFrom == null) totalFrom = time
+            totalUntil = time
+        }
+    }
+
+    fun endedAt(time: Long) =
+        EclipsePassage(sun, coveredBy.toList(), begins, time, greatestAt, greatest, totalFrom, totalUntil)
 }
 
 /** A body's disc on the sky at one instant: where it points, and its angular radius in radians. */
