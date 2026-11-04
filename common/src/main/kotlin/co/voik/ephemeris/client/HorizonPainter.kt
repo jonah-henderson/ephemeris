@@ -12,6 +12,8 @@ import net.minecraft.client.Minecraft
 import net.minecraft.client.multiplayer.ClientLevel
 import net.minecraft.world.attribute.EnvironmentAttributeSystem
 import net.minecraft.world.attribute.EnvironmentAttributes
+import co.voik.ephemeris.sky.Eclipse
+import co.voik.ephemeris.sky.LevelDaylight
 
 /**
  * Sunrises and sunsets, one per sun.
@@ -97,7 +99,10 @@ object HorizonPainter {
         if (look.sky.isOrdinary) return false
         if (look.rules.glow == HorizonGlow.NONE) return true
 
-        val lit = look.readAt(dayTime).suns.filter { it.horizonNearness > 0.0f }
+        val reading = look.readAt(dayTime)
+        LevelDaylight.eclipseOf(look, dayTime)?.let { eclipse -> drawRingUnder(canvas, reading.bodies[eclipse.sun], eclipse) }
+
+        val lit = reading.suns.filter { it.horizonNearness > 0.0f }
         if (lit.isEmpty()) return true
 
         for ((sun, strength) in strengths(lit, look.rules.glow)) {
@@ -106,6 +111,23 @@ object HorizonPainter {
         }
         return true
     }
+
+    /**
+     * A sunset on every side under an eclipse: what lies outside the shadow, lit, seen all round the horizon. As
+     * strong as the shadow is deep, and in the colour [sun]'s own glow would be.
+     */
+    private fun drawRingUnder(canvas: SkyCanvas, sun: BodyReading, eclipse: Eclipse) {
+        val strength = eclipse.shadow * RING_STRENGTH
+        if (strength <= 0.0f) return
+        for (step in 0..<RING_BEARINGS) {
+            canvas.drawHorizonGlow(step * FULL_TURN_DEGREES / RING_BEARINGS, colourOf(sun).copy(alpha = strength))
+        }
+    }
+
+    /** How many glows make the ring, each one a sunset's width, and how strong it burns at totality. */
+    private const val RING_BEARINGS = 8
+    private const val RING_STRENGTH = 0.6f
+    private const val FULL_TURN_DEGREES = 360.0f
 
     /**
      * How strongly each sun paints, under the level's rule.

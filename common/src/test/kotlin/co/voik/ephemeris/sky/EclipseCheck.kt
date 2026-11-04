@@ -107,6 +107,25 @@ class EclipseCheck : FunSpec({
         check(steps.take(51).all { it == 0 }) { "Half a sun covered already darkened the day: $steps" }
     }
 
+    test("the last light of a sun about to go dark is on the rim farthest from the moon") {
+        val sky = skyOf(sun(), moon(sameApparentSize * 1.25f, phaseDegrees = 1.0f))
+        val eclipse = Eclipse.of(sky, noon).single()
+        val lastLight = Eclipse.lastLightOf(sky, eclipse, noon) ?: error("a larger moon gave no last light")
+
+        val sunAt = sky.bodies[0].path.directionAt(noon)
+        val moonAt = sky.bodies[1].path.directionAt(noon)
+        val fromSun = CelestialPath.angleBetween(lastLight.direction, sunAt)
+        check(abs(fromSun - lastLight.sunRadius) < 1e-3) { "The last light was $fromSun from the sun's centre, off its rim" }
+        check(CelestialPath.angleBetween(lastLight.direction, moonAt) > CelestialPath.angleBetween(sunAt, moonAt)) {
+            "The last light was on the moon's side of the sun"
+        }
+
+        val smaller = skyOf(sun(), moon(sameApparentSize * 0.8f, phaseDegrees = 1.0f))
+        check(Eclipse.lastLightOf(smaller, Eclipse.of(smaller, noon).single(), noon) == null) {
+            "A moon too small to cover the sun gave a single last light, where its last light is a ring"
+        }
+    }
+
     test("two equal discs a radius apart share the closed form's lens") {
         val radius = 0.05
         val lens = radius * radius * (2 * PI / 3 - sqrt(3.0) / 2)

@@ -1,5 +1,6 @@
 package co.voik.ephemeris.sky
 
+import co.voik.ephemeris.Rgba
 import org.joml.Vector3f
 import kotlin.math.PI
 import kotlin.math.abs
@@ -23,7 +24,50 @@ data class Eclipse(val sun: Int, val coverage: Float, val coveredBy: List<Int>) 
     /** Whether the whole disc is hidden, which only a covering body at least the sun's apparent size can do. */
     val isTotal: Boolean get() = coverage >= TOTAL
 
+    /** How far toward night an eclipse this deep takes the day, `0..1` — see [shadowOf]. */
+    val shadow: Float get() = shadowOf(coverage)
+
     companion object {
+        /**
+         * How far toward night a sun [coverage] covered takes the day: nothing until half the disc is gone, then
+         * steeply, as an eclipse is, to night itself at totality. What the light the game reads and the air the
+         * eye sees both follow, so the two cannot disagree.
+         */
+        fun shadowOf(coverage: Float): Float {
+            val pastHalf = ((coverage - SHADOW_FROM) / (1.0f - SHADOW_FROM)).coerceIn(0.0f, 1.0f)
+            return pastHalf * pastHalf * pastHalf
+        }
+
+        /**
+         * Where the last of [eclipse]'s sun shines from at [dayTime]: the point of its rim farthest from the body
+         * covering it, and the sun's angular radius in radians. Null where that body is smaller than the sun, whose
+         * last light is a whole ring rather than a point.
+         */
+        fun lastLightOf(spec: SkySpec, eclipse: Eclipse, dayTime: Long): LastLight? {
+            val sun = spec.bodies.getOrNull(eclipse.sun) ?: return null
+            val cover = eclipse.coveredBy.firstOrNull()?.let(spec.bodies::getOrNull) ?: return null
+            val sunDisc = Disc.of(sun, dayTime)
+            val coverDisc = Disc.of(cover, dayTime)
+            if (coverDisc.radius < sunDisc.radius) return null
+            val away = Vector3f(sunDisc.direction).sub(coverDisc.direction)
+            // Only the part across the sky: what points along the sun's own direction is not a way across it.
+            away.sub(Vector3f(sunDisc.direction).mul(away.dot(sunDisc.direction)))
+            if (away.lengthSquared() == 0.0f) return null
+            away.normalize().mul(Math.tan(sunDisc.radius).toFloat())
+            return LastLight(Vector3f(sunDisc.direction).add(away).normalize(), sunDisc.radius)
+        }
+
+        /** How much of a sun has to be covered before the day begins to darken. */
+        private const val SHADOW_FROM = 0.5f
+
+        /**
+         * What totality looks like: a dusky violet sky and fog, and a cold light. A sun that burns black is a
+         * totality that never ends, so it takes these too, and the two agree.
+         */
+        val TOTALITY_SKY = Rgba(0.20f, 0.15f, 0.31f)
+        val TOTALITY_FOG = Rgba(0.24f, 0.19f, 0.33f)
+        val TOTALITY_LIGHT = Rgba(0.42f, 0.38f, 0.62f)
+
         /** Every sun some body is covering at [dayTime], in the spec's order. */
         fun of(spec: SkySpec, dayTime: Long): List<Eclipse> =
             spec.bodies.indices.mapNotNull { index -> of(spec, index, dayTime) }
@@ -140,6 +184,9 @@ data class EclipsePassage(
     /** How long the disc was wholly hidden, in ticks; nought for an eclipse that never was. */
     val totalTicks: Long get() = if (totalFrom != null && totalUntil != null) totalUntil - totalFrom + 1 else 0L
 }
+
+/** The last of an eclipsed sun's light: which way it lies, and the sun's angular radius in radians. */
+data class LastLight(val direction: Vector3f, val sunRadius: Double)
 
 /** A passage [Eclipse.passagesBetween] is still walking through. */
 private class PassageSoFar(private val sun: Int, private val begins: Long, first: Eclipse) {

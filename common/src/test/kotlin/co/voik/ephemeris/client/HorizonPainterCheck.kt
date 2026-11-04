@@ -2,6 +2,7 @@ package co.voik.ephemeris.client
 
 import co.voik.ephemeris.Rgba
 import co.voik.ephemeris.sky.Appearance
+import co.voik.ephemeris.sky.Blending
 import co.voik.ephemeris.sky.CelestialBody
 import co.voik.ephemeris.sky.HorizonCrossing
 import co.voik.ephemeris.sky.HorizonGlow
@@ -232,5 +233,25 @@ class HorizonPainterCheck : FunSpec({
         check(painted.red > blue.red) {
             "A blue sun set at $painted with no warming at all, so it would read as airless"
         }
+    }
+    test("a sun wholly eclipsed at noon lights the horizon on every side") {
+        val noon = 6000L
+        val coveringMoon = CelestialBody(
+            Orbit.VANILLA_SUN.copy(distance = Orbit.MOON_DISTANCE),
+            Appearance.Sprite(Rgba.WHITE, 30.0f * Orbit.MOON_DISTANCE / 100.0f * 1.25f, Appearance.MOON_SHAPES),
+            PhaseCycle(24000, 0),
+            Blending.COVERS,
+        )
+        val canvas = RecordingCanvas()
+        HorizonPainter.paint(canvas, lookOf(HorizonGlow.BLENDED, sun(Orbit.VANILLA_SUN), coveringMoon), noon)
+
+        val bearings = canvas.glows.map { it.bearingDegrees }.sorted()
+        check(bearings.size == 8 && bearings.zipWithNext().all { (a, b) -> b - a == 45.0f }) {
+            "Totality at noon painted the horizon at $bearings, not all the way round"
+        }
+
+        val uncovered = RecordingCanvas()
+        HorizonPainter.paint(uncovered, lookOf(HorizonGlow.BLENDED, sun(tilted)), noon)
+        check(uncovered.glows.isEmpty()) { "A sun high and uncovered lit a horizon: ${uncovered.glows}" }
     }
 })

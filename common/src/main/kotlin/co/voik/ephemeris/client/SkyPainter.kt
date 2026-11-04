@@ -1,6 +1,8 @@
 package co.voik.ephemeris.client
 
 import co.voik.ephemeris.Rgba
+import co.voik.ephemeris.sky.Corona
+import co.voik.ephemeris.sky.Eclipse
 import co.voik.ephemeris.sky.Airiness
 import co.voik.ephemeris.sky.Appearance
 import co.voik.ephemeris.sky.Blending
@@ -120,8 +122,69 @@ object SkyPainter {
 
         val skyLit = 1.0f - nightliness
         drawBodies(canvas, camera, spec, clockTime, sunAngle, moonAngle, moonPhase, rainBrightness, look.rules, skyLit)
+        LevelDaylight.eclipseOf(look, clockTime)?.let { eclipse ->
+            drawEclipse(canvas, spec, eclipse, clockTime, sunAngle, moonAngle)
+        }
         return true
     }
+
+    /**
+     * What only an eclipse shows, over the bodies: the corona round a sun wholly covered, and the diamond ring, the
+     * last of the sun shining from one point of its rim just before totality and the first just after.
+     *
+     * The corona is measured from the sun's disc rather than its sprite, which for vanilla's sun is mostly glow.
+     * A sun with a corona of its own keeps it; any other is given [ECLIPSE_CORONA].
+     */
+    private fun drawEclipse(
+        canvas: SkyCanvas,
+        spec: SkySpec,
+        eclipse: Eclipse,
+        clockTime: Long,
+        sunAngle: Float,
+        moonAngle: Float,
+    ) {
+        val sun = spec.bodies.getOrNull(eclipse.sun) ?: return
+        val sprite = sun.appearance as? Appearance.Sprite ?: return
+        val distance = sun.path.distanceAt(clockTime)
+        val disc = sprite.angularSize * sprite.discShare
+
+        fun risingPast(from: Float) = ((eclipse.coverage - from) / (1.0f - from)).coerceIn(0.0f, 1.0f)
+        val coronaShows = risingPast(CORONA_FROM)
+        if (coronaShows > 0.0f) {
+            val corona = sprite.corona ?: ECLIPSE_CORONA
+            val facing = facingOf(sun, clockTime, sunAngle, moonAngle)
+            canvas.drawCorona(facing, distance, disc, corona.raysAt(clockTime), corona.colour, coronaShows)
+        }
+
+        val ringShows = if (eclipse.isTotal) 0.0f else risingPast(DIAMOND_FROM)
+        if (ringShows > 0.0f) {
+            val lastLight = Eclipse.lastLightOf(spec, eclipse, clockTime) ?: return
+            val toward = Quaternionf().rotationTo(UP, lastLight.direction)
+            val bloom = Rgba.WHITE.copy(alpha = ringShows * DIAMOND_BLOOM_STRENGTH)
+            canvas.drawGlow(toward, distance, disc * DIAMOND_POINT, Rgba.WHITE.copy(alpha = ringShows))
+            canvas.drawGlow(toward, distance, disc * DIAMOND_BLOOM, bloom)
+        }
+    }
+
+    /** How much of the sun is covered before its corona starts to show, and the diamond ring to burn. */
+    private const val CORONA_FROM = 0.96f
+    private const val DIAMOND_FROM = 0.95f
+
+    /** The diamond's point and the bloom round it, as shares of the sun's disc, and how strong the bloom is. */
+    private const val DIAMOND_POINT = 0.35f
+    private const val DIAMOND_BLOOM = 1.5f
+    private const val DIAMOND_BLOOM_STRENGTH = 0.35f
+
+    private val UP = Vector3f(0.0f, 1.0f, 0.0f)
+
+    /** A pale corona for a sun that has none of its own: long faint streamers, slowly turning, gently pulsing. */
+    private val ECLIPSE_CORONA = Corona(
+        rays = 18,
+        reach = 2.0f,
+        colour = Rgba(0.75f, 0.80f, 0.95f, 0.0f),
+        turnsPerDay = 0.02f,
+        shimmer = 0.25f,
+    )
 
     /**
      * Where the viewer's eye is, for a [co.voik.ephemeris.sky.StarReveal] to read.

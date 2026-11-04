@@ -47,13 +47,19 @@ object LevelDaylight {
     }
 
     /**
-     * How dark a sun [coverage] covered leaves the day, on the same `0..11` scale: nothing until half the disc is
-     * gone, then steeply, as an eclipse is — about two steps at an annular eclipse's four-fifths, six at nine-tenths,
-     * and night's own at totality.
+     * How dark a sun [coverage] covered leaves the day, on the same `0..11` scale ([Eclipse.shadowOf]): about two
+     * steps at an annular eclipse's four-fifths, six at nine-tenths, and night's own at totality.
      */
-    fun darkeningCoveredBy(coverage: Float): Int {
-        val pastHalf = ((coverage - ECLIPSE_DARKENS_FROM) / (1.0f - ECLIPSE_DARKENS_FROM)).coerceIn(0.0f, 1.0f)
-        return Math.round(pastHalf * pastHalf * pastHalf * NIGHT_DARKENING)
+    fun darkeningCoveredBy(coverage: Float): Int = Math.round(Eclipse.shadowOf(coverage) * NIGHT_DARKENING)
+
+    /**
+     * The eclipse of the sun [look]'s level follows at [dayTime], or null where nothing covers it — or where the
+     * level keeps vanilla's clock, and so follows no sun of its own.
+     */
+    fun eclipseOf(look: LevelLook, dayTime: Long): Eclipse? {
+        if (look.sky.isOrdinary || look.rules.daylight == Daylight.VANILLA_CLOCK) return null
+        val deciding = decidingSun(look.readAt(dayTime), look.rules) ?: return null
+        return Eclipse.of(look.sky, deciding.index, dayTime)
     }
 
     /**
@@ -133,9 +139,6 @@ object LevelDaylight {
 
     /** Stars at their fullest — what a sky with nothing lighting it shows at every hour. */
     private const val FULLY_STARLIT = 1.0f
-
-    /** How much of a sun has to be covered before the day begins to darken. */
-    private const val ECLIPSE_DARKENS_FROM = 0.5f
 
     /** Where the ramp begins and ends, in degrees of altitude. */
     private const val FULLY_LIT_ABOVE = 5.0f
