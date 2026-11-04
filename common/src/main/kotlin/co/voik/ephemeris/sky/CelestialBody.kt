@@ -83,7 +83,18 @@ sealed interface Appearance {
         /** How many distinct shapes this body can show. */
         val cells: Int get() = shapes.size
 
+        /**
+         * How much of [angularSize] is the body's disc rather than what is drawn round it. Vanilla's sun and
+         * moons are an 8×8 disc in a 32×32 picture, the rest glow or painted sky; a sprite of anybody else's
+         * is taken to be all disc.
+         */
+        val discShare: Float get() = if (shapes.all(::isVanillas)) VANILLAS_DISC_SHARE else 1.0f
+
         companion object {
+            private const val VANILLAS_DISC_SHARE = 8.0f / 32.0f
+
+            private fun isVanillas(shape: Identifier) = shape in SUN_SHAPES || shape in MOON_SHAPES
+
             val MAP_CODEC: MapCodec<Sprite> = RecordCodecBuilder.mapCodec { instance ->
                 instance.group(
                     Rgba.CODEC.optionalFieldOf("tint", Rgba.WHITE).forGetter(Sprite::tint),
@@ -163,28 +174,16 @@ data class PhaseCycle(val periodTicks: Int, val offsetTicks: Int, val steps: Int
 /**
  * How a body's sprite meets the sky behind it.
  *
- * **[COVERS] needs a sprite with real transparency, and vanilla's have none.** Every texture in the
- * celestials atlas — the sun and all eight moon shapes — is indexed colour with no `tRNS` chunk, so every
- * pixel is fully opaque, and about two thirds of each is near-black. Vanilla never notices because it draws
- * both bodies additively, where black contributes nothing. Draw one of them covering and that black square
- * is painted over the sky: a moon in daylight with an enormous dark blob around it, which is exactly what it
- * looked like. `CelestialTextureCheck` holds the fact the default rests on.
+ * Every texture in the celestials atlas is fully opaque, about two thirds of it near-black, which vanilla never
+ * shows because it adds both bodies. Vanilla's moon shapes still cover cleanly: the canvas crops them to their
+ * disc and adds the glow round it. A covering sprite of anybody else's is drawn whole, so it needs an alpha
+ * channel of its own. `CelestialTextureCheck` holds the fact about the atlas.
  */
 enum class Blending(private val key: String) {
-    /**
-     * Added to the sky, so the sprite reads as a light source and its dark parts are simply not there.
-     *
-     * **Vanilla's way for both its sun and its moon**, and the only one that works with vanilla's own
-     * sprites. The default for that reason.
-     */
+    /** Added to the sky, so the sprite reads as a light source and its dark parts are not there. Vanilla's way. */
     ADDS("adds"),
 
-    /**
-     * Painted over the sky, so the body hides whatever is behind it — one moon eclipsing another, or a sun.
-     *
-     * Only worth asking for with a sprite that has an alpha channel. With one of vanilla's, this paints the
-     * texture's opaque black background across the sky.
-     */
+    /** Painted over the sky, so the body hides whatever is behind it: one moon eclipsing another, or a sun. */
     COVERS("covers"),
     ;
 
