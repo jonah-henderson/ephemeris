@@ -262,5 +262,10 @@ class HorizonPainterCheck : FunSpec({
         val uncovered = RecordingCanvas()
         HorizonPainter.paint(uncovered, lookOf(HorizonGlow.BLENDED, sun(tilted)), noon)
         check(uncovered.glows.isEmpty()) { "A sun high and uncovered lit a horizon: ${uncovered.glows}" }
+
+        // The moon never leaves this sun, so at midnight it is still covered, and set.
+        val midnight = RecordingCanvas()
+        HorizonPainter.paint(midnight, lookOf(HorizonGlow.BLENDED, sun(Orbit.VANILLA_SUN), coveringMoon), noon + 12000L)
+        check(midnight.glows.isEmpty()) { "A sun eclipsed below the horizon lit it at midnight: ${midnight.glows}" }
     }
 })

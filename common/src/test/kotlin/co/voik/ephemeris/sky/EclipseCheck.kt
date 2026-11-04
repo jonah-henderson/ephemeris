@@ -144,4 +144,11 @@ class EclipseCheck : FunSpec({
         }
         check(shares.first() == 0.0 && shares.last() == 1.0) { "The ends were ${shares.first()} and ${shares.last()}" }
     }
+
+    test("an eclipse's look is whole while its sun is up, and gone once it has set") {
+        check(Eclipse.lookAt(30.0f) == 1.0f) { "an eclipse high in the sky was not whole" }
+        check(Eclipse.lookAt(-30.0f) == 0.0f) { "an eclipse at midnight still showed" }
+        val setting = Eclipse.lookAt(-1.0f)
+        check(setting > 0.0f && setting < 1.0f) { "an eclipse on the horizon was $setting, not fading" }
+    }
 })

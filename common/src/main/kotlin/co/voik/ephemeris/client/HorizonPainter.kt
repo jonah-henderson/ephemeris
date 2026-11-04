@@ -115,9 +115,11 @@ object HorizonPainter {
     /**
      * A sunset on every side under an eclipse: what lies outside the shadow, lit, seen all round the horizon. As
      * strong as the shadow is deep, and in the colour [sun]'s own glow would be.
+     *
+     * **Only while [sun] is up**, fading as it sets ([Eclipse.lookAt]).
      */
     private fun drawRingUnder(canvas: SkyCanvas, sun: BodyReading, eclipse: Eclipse) {
-        val strength = eclipse.shadow * RING_STRENGTH
+        val strength = eclipse.shadow * RING_STRENGTH * Eclipse.lookAt(sun.altitudeDegrees)
         if (strength <= 0.0f) return
         for (step in 0..<RING_BEARINGS) {
             canvas.drawHorizonGlow(step * FULL_TURN_DEGREES / RING_BEARINGS, colourOf(sun).copy(alpha = strength))
@@ -127,6 +129,7 @@ object HorizonPainter {
     /** How many glows make the ring, each one a sunset's width, and how strong it burns at totality. */
     private const val RING_BEARINGS = 8
     private const val RING_STRENGTH = 0.6f
+
     private const val FULL_TURN_DEGREES = 360.0f
 
     /**

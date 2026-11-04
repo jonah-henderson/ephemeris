@@ -61,6 +61,20 @@ data class Eclipse(val sun: Int, val coverage: Float, val coveredBy: List<Int>) 
         private const val SHADOW_FROM = 0.5f
 
         /**
+         * How much of an eclipse's look is in the sky with its sun at [altitudeDegrees], `0..1`: all of it while the
+         * sun is up, fading as it sets, and none once it is down — past that the world outside the shadow is in night
+         * too, so a moon that never leaves its sun keeps neither a violet sky nor a sunset ring burning at midnight.
+         * The corona and the diamond need nothing of this, the horizon hiding them with the sun; the light the game
+         * reads needs nothing either, night being as dark.
+         */
+        fun lookAt(altitudeDegrees: Float): Float =
+            ((altitudeDegrees - LOOK_GONE_BELOW) / (LOOK_WHOLE_ABOVE - LOOK_GONE_BELOW)).coerceIn(0.0f, 1.0f)
+
+        /** The sun's altitude, in degrees, by which an eclipse's look is gone, and above which it is whole. */
+        private const val LOOK_GONE_BELOW = -4.0f
+        private const val LOOK_WHOLE_ABOVE = 2.0f
+
+        /**
          * What totality looks like: a dusky violet sky and fog, and a cold light. A sun that burns black is a
          * totality that never ends, so it takes these too, and the two agree.
          */

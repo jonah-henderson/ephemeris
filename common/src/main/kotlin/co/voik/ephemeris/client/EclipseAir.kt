@@ -16,7 +16,8 @@ import org.joml.Vector4f
  * night's grey, all by the deciding sun's [Eclipse.shadow], the same curve the light the game reads follows.
  *
  * **Laid over every other painter's air**, so an Age whose sky is red goes dark from red rather than having its
- * eclipse painted over.
+ * eclipse painted over. And only while the eclipsed sun is up ([Eclipse.lookAt]): a moon that never leaves its sun
+ * kept the sky violet all night.
  */
 object EclipseAir {
 
@@ -56,7 +57,12 @@ object EclipseAir {
             if (clock != askedAt) {
                 askedAt = clock
                 val look = LevelLooks.of(level.dimension())
-                shadow = look?.let { LevelDaylight.eclipseOf(it, clock) }?.shadow ?: 0.0f
+                val eclipse = look?.let { LevelDaylight.eclipseOf(it, clock) }
+                shadow = if (look == null || eclipse == null) {
+                    0.0f
+                } else {
+                    eclipse.shadow * Eclipse.lookAt(look.readAt(clock).bodies[eclipse.sun].altitudeDegrees)
+                }
             }
             return shadow
         }
