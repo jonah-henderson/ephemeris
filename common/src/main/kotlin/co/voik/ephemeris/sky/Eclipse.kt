@@ -183,6 +183,12 @@ data class EclipsePassage(
 
     /** How long the disc was wholly hidden, in ticks; nought for an eclipse that never was. */
     val totalTicks: Long get() = if (totalFrom != null && totalUntil != null) totalUntil - totalFrom + 1 else 0L
+
+    /**
+     * The middle of totality, or the moment of greatest coverage where there was none. Not [greatestAt], which is
+     * totality's first moment and for a slow moon minutes from its middle.
+     */
+    val deepestAt: Long get() = if (totalFrom != null && totalUntil != null) (totalFrom + totalUntil) / 2 else greatestAt
 }
 
 /** The last of an eclipsed sun's light: which way it lies, and the sun's angular radius in radians. */
