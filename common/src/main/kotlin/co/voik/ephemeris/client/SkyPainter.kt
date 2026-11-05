@@ -234,7 +234,8 @@ object SkyPainter {
             // Vanilla adds both its sun and its moon, and its sprites have no alpha to cover with — see
             // `Blending`, which is why this is the body's own choice and why the default is to add.
             val adds = body.blending == Blending.ADDS
-            val plain = if (adds) sprite.tint.dimmed(LUMINOUS_ADDS) else sprite.tint
+            val lit = if (adds) sprite.tint.dimmed(LUMINOUS_ADDS) else sprite.tint
+            val plain = lit.dimmed(1.0f - body.dimming * DIMMEST_DISC)
             val altitude = body.path.altitudeAt(clockTime)
             // Air only hides what covers. A luminous body *adds* its light, and scattered sky cannot take
             // light away — which is why the sun stays the sun at noon and the moon does not.
@@ -291,6 +292,9 @@ object SkyPainter {
     }
 
     private const val WHOLE_TICK = 1.0f
+
+    /** How much of its light a body at full [CelestialBody.dimming] loses from its disc. */
+    private const val DIMMEST_DISC = 0.65f
 
     /**
      * How much of an authored tint a **luminous** body actually adds to the sky (Jonah, 2026-08-09, walked:

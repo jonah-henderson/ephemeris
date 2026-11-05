@@ -42,6 +42,18 @@ class StarlitnessCheck : FunSpec({
      * **The case this was written for.** A sky with nothing lighting it is never lit, so the stars stand at
      * every hour — where the timeline track said "it is noon" and took them in.
      */
+    test("a dim sun holds the day toward night, and brings the stars out with it") {
+        val dim = skyOf(sun(Orbit.VANILLA_SUN).copy(dimming = 1.0f))
+        val dusky = skyOf(sun(Orbit.VANILLA_SUN).copy(dimming = 0.3f))
+        fun starlitUnder(sky: SkySpec, dayTime: Long) = LevelDaylight.starlitnessOf(SkyReading.of(sky, dayTime), SkyRules.DEFAULT, sky)
+        check(starlitUnder(dim, noon) == 1.0f) { "a fully dim sun's noon gave ${starlitUnder(dim, noon)} of the stars" }
+        check(starlitUnder(dusky, noon) in 0.2f..0.4f) { "a third-dim sun's noon gave ${starlitUnder(dusky, noon)}" }
+        check(starlitUnder(dusky, midnight) == 1.0f) { "a dim sun's midnight is not night" }
+        check(LevelDaylight.darkeningDimmedBy(0.0f) == 0 && LevelDaylight.darkeningDimmedBy(1.0f) == 11) { "dimming's ends moved" }
+        val spelled = CelestialBody.CODEC.encodeStart(com.mojang.serialization.JsonOps.INSTANCE, dusky.bodies.single()).getOrThrow()
+        check(CelestialBody.CODEC.parse(com.mojang.serialization.JsonOps.INSTANCE, spelled).getOrThrow().dimming == 0.3f) { "dimming lost in $spelled" }
+    }
+
     test("a sky with no sun keeps its stars at every hour") {
         val sunless = skyOf(moon(Orbit.VANILLA_MOON))
         for (hour in listOf(dawn, noon, dusk, midnight)) {

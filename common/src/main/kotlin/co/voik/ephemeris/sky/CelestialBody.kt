@@ -23,6 +23,11 @@ data class CelestialBody(
     val phase: PhaseCycle? = null,
     /** How the sprite meets the sky behind it. Vanilla's way by default — see [Blending]. */
     val blending: Blending = Blending.ADDS,
+    /**
+     * How far toward night this body holds the day while it is the sun the level follows, `0..1`: none by default, a
+     * dusky noon at a third, night's own dark at one. The disc and the air dim with it.
+     */
+    val dimming: Float = 0.0f,
 ) {
     companion object {
         val CODEC: Codec<CelestialBody> = RecordCodecBuilder.create { instance ->
@@ -31,8 +36,9 @@ data class CelestialBody(
                 Appearance.CODEC.fieldOf("appearance").forGetter(CelestialBody::appearance),
                 PhaseCycle.CODEC.optionalFieldOf("phase").forGetter { body -> java.util.Optional.ofNullable(body.phase) },
                 Blending.CODEC.optionalFieldOf("blending", Blending.ADDS).forGetter(CelestialBody::blending),
-            ).apply(instance) { path, appearance, phase, blending ->
-                CelestialBody(path, appearance, phase.orElse(null), blending)
+                Codec.FLOAT.optionalFieldOf("dimming", 0.0f).forGetter(CelestialBody::dimming),
+            ).apply(instance) { path, appearance, phase, blending, dimming ->
+                CelestialBody(path, appearance, phase.orElse(null), blending, dimming)
             }
         }
     }

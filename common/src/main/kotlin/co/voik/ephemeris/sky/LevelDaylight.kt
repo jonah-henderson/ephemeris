@@ -37,13 +37,27 @@ object LevelDaylight {
     }
 
     /**
-     * How dark it is under [deciding]: by its height, and **deeper still while something covers it** — an
-     * eclipse is the one thing that darkens a sun standing high, and it darkens it for everything that reads
-     * the light, the spawning of monsters included.
+     * How dark it is under [deciding]: by its height, and **deeper still while something covers it or it is dim**
+     * — an eclipse and a dim sun are what darken a sun standing high, and they darken it for everything that reads
+     * the light, the spawning of monsters and the stars included.
      */
     fun darkeningUnder(sky: SkySpec, deciding: BodyReading, dayTime: Long): Int {
         val coverage = Eclipse.of(sky, deciding.index, dayTime)?.coverage ?: 0.0f
-        return maxOf(darkeningFor(deciding.altitudeDegrees), darkeningCoveredBy(coverage))
+        val dimmed = darkeningDimmedBy(deciding.body.dimming)
+        return maxOf(darkeningFor(deciding.altitudeDegrees), darkeningCoveredBy(coverage), dimmed)
+    }
+
+    /** How dark a sun of [dimming] holds the day at its brightest, on the same `0..11` scale. */
+    fun darkeningDimmedBy(dimming: Float): Int = Math.round(dimming.coerceIn(0.0f, 1.0f) * NIGHT_DARKENING)
+
+    /**
+     * How dim the sun [look]'s level follows is at [dayTime], as far as the air shows it: its [CelestialBody.dimming]
+     * while it is up, fading as it sets as an eclipse's look does ([Eclipse.lookAt]), since night is as dark.
+     */
+    fun dimmingOf(look: LevelLook, dayTime: Long): Float {
+        if (look.sky.isOrdinary || look.rules.daylight == Daylight.VANILLA_CLOCK) return 0.0f
+        val deciding = decidingSun(look.readAt(dayTime), look.rules) ?: return 0.0f
+        return deciding.body.dimming * Eclipse.lookAt(deciding.altitudeDegrees)
     }
 
     /**
