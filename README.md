@@ -111,6 +111,11 @@ and a deck wanting thinner or thicker cover supplies a different picture rather 
 **The texture decides where there is cloud; the roil decides the tone of the cloud that is there.** Two
 separate things, and worth keeping separate — one moves the clouds, the other stirs their surface.
 
+A level can have a **wind** (`LevelLook.wind`): a bearing, a strength, and a swing of a few degrees either way
+from one day to the next, all drawn from a seed so every client reads the same air. Clouds, vanilla's and
+decks alike, are carried along it, faster the harder it blows, and rain and snow lean with it. `LevelWind.now`
+answers which way it blows on either side, for anything of a consumer's own that should drift with it.
+
 A body **adds** to the sky or **covers** it — `Blending`. Vanilla adds both its sun and its moon, because
 its celestial sprites carry no alpha at all: they are indexed colour with no `tRNS`, and vanilla's moon has
 a night-sky gradient painted around it. Ephemeris crops that away — a moon sprite is 32 by 32 with the moon

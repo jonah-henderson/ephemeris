@@ -483,7 +483,7 @@ object Blaze3dSkyCanvas : SkyCanvas {
     }
 
     /** Four `vec4`s, matching `DeckInfo` in the shaders. */
-    private const val DECK_INFO_BYTES = 4 * 4 * Float.SIZE_BYTES
+    private const val DECK_INFO_BYTES = 5 * 4 * Float.SIZE_BYTES
 
     private var slabBuffer: GpuBuffer? = null
 
@@ -1939,7 +1939,7 @@ object Blaze3dSkyCanvas : SkyCanvas {
      */
     private fun modelViewNow(): Matrix4f = RenderSystem.getModelViewMatrixCopy()
 
-    private fun writeDeckInfo(deck: CloudDeck, eye: Vec3, timeTicks: Double) {
+    private fun writeDeckInfo(deck: CloudDeck, eye: Vec3, timeTicks: Double, carried: CloudCarry.Carried) {
         deckInfo.currentBuffer().map(false, true).use { view ->
             Std140Builder.intoBuffer(view.data())
                 .putVec4(deck.low.red, deck.low.green, deck.low.blue, deck.low.alpha)
@@ -1954,8 +1954,9 @@ object Blaze3dSkyCanvas : SkyCanvas {
                     DECK_RADIUS,
                     CloudDeck.CELL_BLOCKS,
                     if (deck.texture == null) 0.0f else 1.0f,
-                    cloudScroll(timeTicks),
+                    0.0f,
                 )
+                .putVec4(carried.x.toFloat(), carried.z.toFloat(), 0.0f, 0.0f)
         }
     }
 
@@ -1970,11 +1971,11 @@ object Blaze3dSkyCanvas : SkyCanvas {
     private fun cloudTexture(texture: Identifier) =
         Minecraft.getInstance().textureManager.getTexture(texture)
 
-    override fun readyCloudDeck(deck: CloudDeck, eye: Vec3, timeTicks: Double) {
+    override fun readyCloudDeck(deck: CloudDeck, eye: Vec3, timeTicks: Double, carried: CloudCarry.Carried?) {
         // The picture first: a texture vanilla has not loaded is *uploaded* on first ask, and an upload is
         // one of the things a pass forbids.
         cloudTexture(deck.texture ?: CloudDeck.VANILLA_CLOUDS)
-        writeDeckInfo(deck, eye, timeTicks)
+        writeDeckInfo(deck, eye, timeTicks, carried ?: CloudCarry.Carried(-cloudScroll(timeTicks), 0.0))
         readiedDecks[deck] = deckInfo.currentBuffer().slice()
         // Per deck, not per frame: each draw needs its own copy of the uniforms to survive until it runs.
         deckInfo.rotate()
@@ -1996,8 +1997,8 @@ object Blaze3dSkyCanvas : SkyCanvas {
      * other stirs their *tone*, and a deck reading one number for both could not have a still sky with a
      * churning surface, or racing clouds with an even one.
      */
-    private fun cloudScroll(timeTicks: Double): Float =
-        wrapped(timeTicks * VANILLA_BLOCKS_PER_TICK, SCROLL_WRAP)
+    private fun cloudScroll(timeTicks: Double): Double =
+        wrapped(timeTicks * VANILLA_BLOCKS_PER_TICK, SCROLL_WRAP).toDouble()
 
     /** Vanilla's `BLOCKS_PER_SECOND = 0.6`, per tick. */
     private const val VANILLA_BLOCKS_PER_TICK = 0.6 / 20.0

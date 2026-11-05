@@ -24,7 +24,8 @@ object CloudPainter {
     fun ready(canvas: SkyCanvas, level: ClientLevel, eye: Vec3, timeTicks: Double) {
         val spec = LevelLooks.of(level.dimension())?.sky ?: return
         val drifted = driftFor(level, timeTicks)
-        for (deck in spec.decks) canvas.readyCloudDeck(deck, eye, drifted)
+        val carried = CloudCarry.of(level, drifted, spec.cloudPace)
+        for (deck in spec.decks) canvas.readyCloudDeck(deck, eye, drifted, carried)
     }
 
     /** Draws the level's decks, or returns false having drawn nothing so vanilla's clouds run instead. */

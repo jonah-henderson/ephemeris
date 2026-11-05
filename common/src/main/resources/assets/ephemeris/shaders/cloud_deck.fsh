@@ -10,6 +10,7 @@ layout(std140) uniform DeckInfo {
     vec4 HighTone;
     vec4 SampleAndRoil;
     vec4 Extent;
+    vec4 Carried;
 };
 
 uniform sampler2D Sampler0;
@@ -48,14 +49,14 @@ void main() {
     float contrast = SampleAndRoil.w;
     float cellBlocks = Extent.y;
     float cutFromTexture = Extent.z;
-    float scroll = Extent.w;
 
     // **Where the deck has cloud and where it has sky** — nothing to do with the roil below, which only
     // decides the tone of the cloud that is here. Vanilla's own grid: the picture is read a cell at a time
     // rather than smoothly, which is what gives clouds their blocky edge instead of an airbrushed one.
     // Wrapping is the sampler's, so the picture tiles across the world the way vanilla's does.
     if (cutFromTexture > 0.5) {
-        vec2 cell = floor(vec2(worldSample.x + scroll, worldSample.y) / cellBlocks);
+        // Read upwind of here, so the picture moves downwind.
+        vec2 cell = floor((worldSample - Carried.xy) / cellBlocks);
         // Asked of the texture rather than passed in, so a consumer's own picture may be any size it likes
         // and still tile correctly. Wrapping is the sampler's.
         if (texture(Sampler0, cell / vec2(textureSize(Sampler0, 0))).a < SOLID_ENOUGH) discard;

@@ -88,7 +88,12 @@ class HorizonPainterCheck : FunSpec({
             timeTicks: Long,
         ) = Unit
 
-        override fun readyCloudDeck(deck: co.voik.ephemeris.sky.CloudDeck, eye: Vec3, timeTicks: Double) = Unit
+        override fun readyCloudDeck(
+            deck: co.voik.ephemeris.sky.CloudDeck,
+            eye: Vec3,
+            timeTicks: Double,
+            carried: CloudCarry.Carried?,
+        ) = Unit
 
         override fun drawCloudDeck(deck: co.voik.ephemeris.sky.CloudDeck, eye: Vec3, timeTicks: Double) = Unit
 

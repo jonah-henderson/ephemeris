@@ -122,6 +122,8 @@ data class LevelLook(
     val filters: List<Identifier> = emptyList(),
     /** How its rain falls and sounds. */
     val rain: RainLook = RainLook(),
+    /** Which way its air moves, which its clouds drift along and its rain leans with. */
+    val wind: Wind = Wind.STILL,
 ) {
     /** Where everything stands at [dayTime]. Pure, so both sides get the same answer without asking. */
     fun readAt(dayTime: Long): SkyReading = SkyReading.of(sky, dayTime)
@@ -129,7 +131,7 @@ data class LevelLook(
     /** Whether this says anything at all, so a renderer can decline cheaply. */
     val saysNothing: Boolean
         get() = sky.isOrdinary && air.saysNothing && corners.isEmpty() && sky.decks.isEmpty() && airFrom == null &&
-            filters.isEmpty() && rain.isOrdinary && sky.cloudPace == SkySpec.ORDINARY_CLOUD_PACE
+            filters.isEmpty() && rain.isOrdinary && sky.cloudPace == SkySpec.ORDINARY_CLOUD_PACE && wind.isStill
 
     companion object {
         /** The filter this library ships: the level drained of colour, to its own brightness. */

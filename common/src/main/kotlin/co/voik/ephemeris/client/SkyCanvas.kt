@@ -170,9 +170,11 @@ interface SkyCanvas {
      * `CloudRenderer.prepare` runs and no pass is open — the same split, for the same reason, that vanilla
      * made for its own clouds.
      *
-     * Given the same [eye] and [timeTicks] the draw will be given, so anything derived from them agrees.
+     * Given the same [eye] and [timeTicks] the draw will be given, so anything derived from them agrees, and how
+     * far the level's wind has [carried] its clouds, or null where its air is still and the picture slides
+     * vanilla's way.
      */
-    fun readyCloudDeck(deck: CloudDeck, eye: Vec3, timeTicks: Double)
+    fun readyCloudDeck(deck: CloudDeck, eye: Vec3, timeTicks: Double, carried: CloudCarry.Carried?)
 
     /**
      * One overcast layer, as a slab centred on the viewer. [eye] places it and also anchors the roil, which

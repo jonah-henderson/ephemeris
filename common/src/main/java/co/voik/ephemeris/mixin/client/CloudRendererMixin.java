@@ -1,6 +1,7 @@
 package co.voik.ephemeris.mixin.client;
 
 import co.voik.ephemeris.client.Blaze3dSkyCanvas;
+import co.voik.ephemeris.client.CloudCarry;
 import co.voik.ephemeris.client.CloudMoment;
 import co.voik.ephemeris.client.LevelRendering;
 import co.voik.ephemeris.client.OffscreenLevelRender;
@@ -24,7 +25,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
  * Lets a level draw its own overcast instead of vanilla's one drifting sheet, and drift vanilla's at a pace of its
- * own where it keeps vanilla's ({@code SkySpec.cloudPace}).
+ * own where it keeps vanilla's ({@code SkySpec.cloudPace}) and along its wind where it has one ({@code CloudCarry}).
  *
  * <p><b>Two injectors for one draw, because 26.3 split what a cloud layer is from when it is drawn.</b>
  * {@code prepare} carries every number — the colour, the height, the range, where the eye is and what time
@@ -88,6 +89,9 @@ public class CloudRendererMixin {
     private long ephemeris$gameTime;
     @Unique
     private float ephemeris$partialTicks;
+    /** How far the wind has carried the clouds this frame, or null where the level's air is still. */
+    @Unique
+    private CloudCarry.@Nullable Carried ephemeris$carried;
 
     /** The frame's numbers, taken as they go past. Nothing is drawn here: it is the wrong end of the frame. */
     @Inject(method = PREPARE, at = @At("HEAD"))
@@ -124,6 +128,26 @@ public class CloudRendererMixin {
         double period = drawn.width() * TICKS_PER_CELL;
         double ticks = ((this.ephemeris$gameTime % period) + this.ephemeris$partialTicks) * pace;
         return (float) (ticks % period);
+    }
+
+    /**
+     * Vanilla's sheet carried along the level's wind. Vanilla reads its picture at the eye plus its drift along X and
+     * a constant along Z, which moves the clouds west; where the level has a wind both are read upwind of the eye
+     * instead, and the pace above has nothing left to act on.
+     */
+    @ModifyVariable(method = PREPARE, at = @At(value = "STORE", ordinal = 0), name = "cloudX")
+    private double ephemeris$carryAlongTheWindX(double cloudX) {
+        ClientLevel level = OffscreenLevelRender.INSTANCE.levelBeingDrawn();
+        this.ephemeris$carried = level == null ? null : CloudCarry.INSTANCE.of(
+                level,
+                this.ephemeris$gameTime + (double) this.ephemeris$partialTicks,
+                LevelRendering.INSTANCE.cloudPace(level));
+        return this.ephemeris$carried == null ? cloudX : this.ephemeris$cameraPosition.x - this.ephemeris$carried.getX();
+    }
+
+    @ModifyVariable(method = PREPARE, at = @At(value = "STORE", ordinal = 0), name = "cloudZ")
+    private double ephemeris$carryAlongTheWindZ(double cloudZ) {
+        return this.ephemeris$carried == null ? cloudZ : cloudZ - this.ephemeris$carried.getZ();
     }
 
     @Inject(method = RENDER, at = @At("HEAD"), cancellable = true)
