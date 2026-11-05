@@ -113,8 +113,10 @@ separate things, and worth keeping separate — one moves the clouds, the other 
 
 A level can have a **wind** (`LevelLook.wind`): a bearing, a strength, and a swing of a few degrees either way
 from one day to the next, all drawn from a seed so every client reads the same air. Clouds, vanilla's and
-decks alike, are carried along it, faster the harder it blows, and rain and snow lean with it. `LevelWind.now`
-answers which way it blows on either side, for anything of a consumer's own that should drift with it.
+decks alike, are carried along it, faster the harder it blows, and rain and snow lean with it. The light
+particles (smoke, ash, leaves, spores, snow and dust) drift downwind, and past half its strength the wind lifts
+debris off the ground around the player, dust the colour of what it blew off. `LevelWind.now` answers which way
+it blows on either side, for anything of a consumer's own that should drift with it.
 
 A body **adds** to the sky or **covers** it — `Blending`. Vanilla adds both its sun and its moon, because
 its celestial sprites carry no alpha at all: they are indexed colour with no `tRNS`, and vanilla's moon has

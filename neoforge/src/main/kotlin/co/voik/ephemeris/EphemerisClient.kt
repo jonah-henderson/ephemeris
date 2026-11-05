@@ -10,6 +10,7 @@ import co.voik.ephemeris.client.LevelRendering
 import co.voik.ephemeris.client.LookArrivals
 import co.voik.ephemeris.client.RainbowPainter
 import co.voik.ephemeris.client.SkyPainter
+import co.voik.ephemeris.client.WindBorne
 import co.voik.ephemeris.sky.LevelLooks
 import net.neoforged.api.distmarker.Dist
 import net.neoforged.bus.api.IEventBus
@@ -70,6 +71,7 @@ class EphemerisClient(eventBus: IEventBus) {
 
         NeoForge.EVENT_BUS.addListener(::onLoggingOut)
         NeoForge.EVENT_BUS.addListener { _: ClientTickEvent.Post -> LevelFilters.tick(Minecraft.getInstance()) }
+        NeoForge.EVENT_BUS.addListener { _: ClientTickEvent.Post -> WindBorne.tick(Minecraft.getInstance()) }
         eventBus.addListener(::onRegisterRangeSelectProperties)
     }
 

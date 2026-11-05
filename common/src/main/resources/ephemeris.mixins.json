@@ -14,6 +14,8 @@
     "client.BlockColorsMixin",
     "client.CloudRendererMixin",
     "client.GameRendererMixin",
+    "client.ParticleAccessor",
+    "client.ParticleGroupMixin",
     "client.SkyRendererMixin",
     "client.WeatherEffectRendererMixin"
   ],
