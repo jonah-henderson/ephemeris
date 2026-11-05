@@ -12,6 +12,7 @@ import co.voik.ephemeris.client.RainbowPainter
 import co.voik.ephemeris.client.SkyPainter
 import co.voik.ephemeris.client.WindBorne
 import co.voik.ephemeris.sky.LevelLooks
+import co.voik.ephemeris.sky.LevelWind
 import net.neoforged.api.distmarker.Dist
 import net.neoforged.bus.api.IEventBus
 import net.neoforged.fml.common.Mod
@@ -83,5 +84,6 @@ class EphemerisClient(eventBus: IEventBus) {
     private fun onLoggingOut(event: ClientPlayerNetworkEvent.LoggingOut) {
         LevelLooks.forgetAll()
         LevelClocks.forgetWhatWasTold()
+        LevelWind.forgetTheClients()
     }
 }

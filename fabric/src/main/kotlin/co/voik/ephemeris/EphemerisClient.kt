@@ -15,6 +15,7 @@ import co.voik.ephemeris.client.RainbowPainter
 import co.voik.ephemeris.client.SkyPainter
 import co.voik.ephemeris.sky.LevelLookPayload
 import co.voik.ephemeris.sky.LevelLooks
+import co.voik.ephemeris.sky.LevelWind
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking
@@ -42,6 +43,7 @@ fun initClient() {
     ClientPlayConnectionEvents.DISCONNECT.register { _, _ ->
         LevelLooks.forgetAll()
         LevelClocks.forgetWhatWasTold()
+        LevelWind.forgetTheClients()
     }
 }
 

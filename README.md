@@ -116,7 +116,8 @@ from one day to the next, all drawn from a seed so every client reads the same a
 decks alike, are carried along it, faster the harder it blows, and rain and snow lean with it. The light
 particles (smoke, ash, leaves, spores, snow and dust) drift downwind, and past half its strength the wind lifts
 debris off the ground around the player, dust the colour of what it blew off. `LevelWind.now` answers which way
-it blows on either side, for anything of a consumer's own that should drift with it.
+it blows on either side, for anything of a consumer's own that should drift with it, and `LevelWind.blowInstead`
+lays a wind of the consumer's own over the level's for as long as it keeps saying so, as a storm brings its own.
 
 A body **adds** to the sky or **covers** it — `Blending`. Vanilla adds both its sun and its moon, because
 its celestial sprites carry no alpha at all: they are indexed colour with no `tRNS`, and vanilla's moon has
