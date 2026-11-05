@@ -9,6 +9,8 @@ import co.voik.ephemeris.client.LevelCloudRenderer
 import co.voik.ephemeris.client.LevelDaytime
 import co.voik.ephemeris.client.LevelFilters
 import co.voik.ephemeris.client.WindBorne
+import co.voik.ephemeris.client.SunGlare
+import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry
 import co.voik.ephemeris.client.LevelRendering
 import co.voik.ephemeris.client.LookArrivals
 import co.voik.ephemeris.client.RainbowPainter
@@ -38,6 +40,8 @@ fun initClient() {
 
     ClientTickEvents.END_CLIENT_TICK.register(LevelFilters::tick)
     ClientTickEvents.END_CLIENT_TICK.register(WindBorne::tick)
+    ClientTickEvents.END_CLIENT_TICK.register(SunGlare::tick)
+    HudElementRegistry.addFirst(SunGlare.ID, SunGlare::draw)
 
     // Forgotten on disconnect: these keys mean nothing on the next server and an id can be reused.
     ClientPlayConnectionEvents.DISCONNECT.register { _, _ ->

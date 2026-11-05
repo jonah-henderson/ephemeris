@@ -44,7 +44,7 @@ object LevelDaylight {
     fun darkeningUnder(sky: SkySpec, deciding: BodyReading, dayTime: Long): Int {
         val coverage = Eclipse.of(sky, deciding.index, dayTime)?.coverage ?: 0.0f
         val dimmed = darkeningDimmedBy(deciding.body.dimming)
-        return maxOf(darkeningFor(deciding.altitudeDegrees), darkeningCoveredBy(coverage), dimmed)
+        return maxOf(darkeningFor(deciding.altitudeDegrees, deciding.body.glare), darkeningCoveredBy(coverage), dimmed)
     }
 
     /** How dark a sun of [dimming] holds the day at its brightest, on the same `0..11` scale. */
@@ -55,9 +55,25 @@ object LevelDaylight {
      * while it is up, fading as it sets as an eclipse's look does ([Eclipse.lookAt]), since night is as dark.
      */
     fun dimmingOf(look: LevelLook, dayTime: Long): Float {
-        if (look.sky.isOrdinary || look.rules.daylight == Daylight.VANILLA_CLOCK) return 0.0f
-        val deciding = decidingSun(look.readAt(dayTime), look.rules) ?: return 0.0f
+        val deciding = decidingSunOf(look, dayTime) ?: return 0.0f
         return deciding.body.dimming * Eclipse.lookAt(deciding.altitudeDegrees)
+    }
+
+    /**
+     * How much more of the day's light a glaring sun leaves at [dayTime] than an ordinary one at its height, `0..1`:
+     * nothing at noon or midnight, most of it through the twilight it lengthens.
+     */
+    fun lingeringOf(look: LevelLook, dayTime: Long): Float {
+        val deciding = decidingSunOf(look, dayTime) ?: return 0.0f
+        val glare = deciding.body.glare
+        if (glare <= 0.0f) return 0.0f
+        return brightnessFor(deciding.altitudeDegrees, glare) - brightnessFor(deciding.altitudeDegrees, 0.0f)
+    }
+
+    /** The sun [look]'s level follows at [dayTime], or null where it follows none of its own. */
+    fun decidingSunOf(look: LevelLook, dayTime: Long): BodyReading? {
+        if (look.sky.isOrdinary || look.rules.daylight == Daylight.VANILLA_CLOCK) return null
+        return decidingSun(look.readAt(dayTime), look.rules)
     }
 
     /**
@@ -101,14 +117,17 @@ object LevelDaylight {
      * reproduce `Timelines.OVERWORLD_DAY` keyframe for keyframe — a sky with three suns has no keyframes to
      * be faithful to.
      */
-    fun darkeningFor(altitudeDegrees: Float): Int {
-        val brightness = Mth.clamp(
-            Mth.inverseLerp(altitudeDegrees, FULLY_DARK_BELOW, FULLY_LIT_ABOVE),
-            0.0f,
-            1.0f,
-        )
-        val eased = brightness * brightness * (3.0f - 2.0f * brightness)
-        return Math.round(Mth.lerp(eased, NIGHT_DARKENING.toFloat(), DAY_DARKENING.toFloat()))
+    fun darkeningFor(altitudeDegrees: Float, glare: Float = 0.0f): Int =
+        Math.round(Mth.lerp(brightnessFor(altitudeDegrees, glare), NIGHT_DARKENING.toFloat(), DAY_DARKENING.toFloat()))
+
+    /**
+     * How lit the day is with a sun at [altitudeDegrees], `0..1`, eased. A sun of [glare] keeps its light further
+     * under the horizon, so its twilight lasts longer at both ends of the day.
+     */
+    private fun brightnessFor(altitudeDegrees: Float, glare: Float): Float {
+        val darkBelow = FULLY_DARK_BELOW - glare.coerceIn(0.0f, 1.0f) * GLARE_LINGERS_DEGREES
+        val brightness = Mth.clamp(Mth.inverseLerp(altitudeDegrees, darkBelow, FULLY_LIT_ABOVE), 0.0f, 1.0f)
+        return brightness * brightness * (3.0f - 2.0f * brightness)
     }
 
     /**
@@ -157,6 +176,9 @@ object LevelDaylight {
     /** Where the ramp begins and ends, in degrees of altitude. */
     private const val FULLY_LIT_ABOVE = 5.0f
     private const val FULLY_DARK_BELOW = -11.0f
+
+    /** How much further under the horizon a sun at full glare is before its light is gone, in degrees. */
+    private const val GLARE_LINGERS_DEGREES = 14.0f
 
     /**
      * Vanilla's own ends of the scale: `skyDarken` is `15 - skyLightLevel`, and the overworld's light runs

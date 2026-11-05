@@ -11,6 +11,8 @@ import co.voik.ephemeris.client.LookArrivals
 import co.voik.ephemeris.client.RainbowPainter
 import co.voik.ephemeris.client.SkyPainter
 import co.voik.ephemeris.client.WindBorne
+import co.voik.ephemeris.client.SunGlare
+import net.neoforged.neoforge.client.event.RegisterGuiLayersEvent
 import co.voik.ephemeris.sky.LevelLooks
 import co.voik.ephemeris.sky.LevelWind
 import net.neoforged.api.distmarker.Dist
@@ -73,7 +75,13 @@ class EphemerisClient(eventBus: IEventBus) {
         NeoForge.EVENT_BUS.addListener(::onLoggingOut)
         NeoForge.EVENT_BUS.addListener { _: ClientTickEvent.Post -> LevelFilters.tick(Minecraft.getInstance()) }
         NeoForge.EVENT_BUS.addListener { _: ClientTickEvent.Post -> WindBorne.tick(Minecraft.getInstance()) }
+        NeoForge.EVENT_BUS.addListener { _: ClientTickEvent.Post -> SunGlare.tick(Minecraft.getInstance()) }
         eventBus.addListener(::onRegisterRangeSelectProperties)
+        eventBus.addListener(::onRegisterGuiLayers)
+    }
+
+    private fun onRegisterGuiLayers(event: RegisterGuiLayersEvent) {
+        event.registerBelowAll(SunGlare.ID, SunGlare::draw)
     }
 
     private fun onRegisterRangeSelectProperties(event: RegisterRangeSelectItemModelPropertyEvent) {

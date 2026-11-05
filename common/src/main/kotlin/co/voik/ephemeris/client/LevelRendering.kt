@@ -230,7 +230,7 @@ object LevelRendering {
 
     /**
      * Asked by the client-level Mixin, once, as the level builds its attribute system. A dim sun and an eclipse
-     * go over everything registered ([DimSunAir], [EclipseAir]), so whatever air a level has goes dark from where
+     * go over everything registered ([SunlitAir], [EclipseAir]), so whatever air a level has goes dark from where
      * it is.
      */
     fun paintEnvironment(
@@ -238,7 +238,7 @@ object LevelRendering {
         layers: EnvironmentAttributeSystem.Builder,
     ): EnvironmentAttributeSystem.Builder {
         val painted = environments.fold(layers) { built, each -> each.paint(level, built) }
-        return EclipseAir.paint(level, DimSunAir.paint(level, painted))
+        return EclipseAir.paint(level, SunlitAir.paint(level, painted))
     }
 }
 

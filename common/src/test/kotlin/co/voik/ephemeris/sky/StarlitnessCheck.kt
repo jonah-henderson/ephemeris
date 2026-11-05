@@ -54,6 +54,15 @@ class StarlitnessCheck : FunSpec({
         check(CelestialBody.CODEC.parse(com.mojang.serialization.JsonOps.INSTANCE, spelled).getOrThrow().dimming == 0.3f) { "dimming lost in $spelled" }
     }
 
+    test("a glaring sun's light lingers after it sets, and its noon is noon") {
+        check(LevelDaylight.darkeningFor(-12.0f) == 11) { "an ordinary sun twelve degrees down left ${LevelDaylight.darkeningFor(-12.0f)}" }
+        check(LevelDaylight.darkeningFor(-12.0f, glare = 1.0f) < 8) { "a glaring sun twelve degrees down left ${LevelDaylight.darkeningFor(-12.0f, 1.0f)}" }
+        check(LevelDaylight.darkeningFor(60.0f, glare = 1.0f) == 0) { "a glaring sun's noon is not lit" }
+        check(LevelDaylight.darkeningFor(-30.0f, glare = 1.0f) == 11) { "a glaring sun's night is not night" }
+        val sunrise = Orbit.VANILLA_SUN.directionAt(0L)
+        check(sunrise.x > 0.9f) { "vanilla's sun rises at $sunrise rather than in the east, so its glare would face the wrong way" }
+    }
+
     test("a sky with no sun keeps its stars at every hour") {
         val sunless = skyOf(moon(Orbit.VANILLA_MOON))
         for (hour in listOf(dawn, noon, dusk, midnight)) {

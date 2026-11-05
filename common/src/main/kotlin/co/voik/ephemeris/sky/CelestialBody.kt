@@ -28,6 +28,11 @@ data class CelestialBody(
      * dusky noon at a third, night's own dark at one. The disc and the air dim with it.
      */
     val dimming: Float = 0.0f,
+    /**
+     * How much this body dazzles, `0..1`, where it is the sun the level follows: a halo round it, a glare over the
+     * view facing it, and its light lingering after it sets — the game's own light being already the most there is.
+     */
+    val glare: Float = 0.0f,
 ) {
     companion object {
         val CODEC: Codec<CelestialBody> = RecordCodecBuilder.create { instance ->
@@ -37,8 +42,9 @@ data class CelestialBody(
                 PhaseCycle.CODEC.optionalFieldOf("phase").forGetter { body -> java.util.Optional.ofNullable(body.phase) },
                 Blending.CODEC.optionalFieldOf("blending", Blending.ADDS).forGetter(CelestialBody::blending),
                 Codec.FLOAT.optionalFieldOf("dimming", 0.0f).forGetter(CelestialBody::dimming),
-            ).apply(instance) { path, appearance, phase, blending, dimming ->
-                CelestialBody(path, appearance, phase.orElse(null), blending, dimming)
+                Codec.FLOAT.optionalFieldOf("glare", 0.0f).forGetter(CelestialBody::glare),
+            ).apply(instance) { path, appearance, phase, blending, dimming, glare ->
+                CelestialBody(path, appearance, phase.orElse(null), blending, dimming, glare)
             }
         }
     }

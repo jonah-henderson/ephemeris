@@ -271,6 +271,10 @@ object SkyPainter {
             if (eclipse != null && eclipse.sun == index) {
                 drawEclipseCorona(canvas, sprite, eclipse, orientation, distance, clockTime)
             }
+            if (adds && body.glare > 0.0f) {
+                val halo = body.glare * GLARE_HALO * rainBrightness
+                canvas.drawEclipseCorona(orientation, distance, sprite.angularSize * sprite.discShare, plain.copy(alpha = 1.0f), halo, seed = index.toLong())
+            }
         }
     }
 
@@ -292,6 +296,9 @@ object SkyPainter {
     }
 
     private const val WHOLE_TICK = 1.0f
+
+    /** How strong the halo round a sun at full [CelestialBody.glare] is, against an eclipse's whole corona. */
+    private const val GLARE_HALO = 0.8f
 
     /** How much of its light a body at full [CelestialBody.dimming] loses from its disc. */
     private const val DIMMEST_DISC = 0.65f
