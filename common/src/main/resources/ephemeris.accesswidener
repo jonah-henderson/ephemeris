@@ -49,3 +49,22 @@ accessible	field	net/minecraft/client/renderer/item/properties/numeric/RangeSele
 # this class, so a level answering with its own manager has to hand back a subclass, and the one constructor is
 # private. Nothing is overridden that vanilla calls on the server's manager; the subclass is only ever a level's.
 accessible	method	net/minecraft/world/clock/ServerClockManager	<init>	(Lnet/minecraft/world/clock/PackedClockStates;)V
+
+# A creature's render type copied with its texture exchanged for a recoloured one (`RecolouredRenderTypes`): read
+# through the public builder from the fields of the one it copies, so no constructor is widened — only reads, the
+# texture binding's type, and `create`, which names it.
+accessible	field	net/minecraft/client/renderer/rendertype/RenderType	state	Lnet/minecraft/client/renderer/rendertype/RenderSetup;
+accessible	method	net/minecraft/client/renderer/rendertype/RenderType	create	(Ljava/lang/String;Lnet/minecraft/client/renderer/rendertype/RenderSetup;)Lnet/minecraft/client/renderer/rendertype/RenderType;
+accessible	class	net/minecraft/client/renderer/rendertype/RenderSetup$TextureBinding
+accessible	field	net/minecraft/client/renderer/rendertype/RenderSetup	pipeline	Lcom/mojang/renderpearl/api/pipeline/RenderPipeline;
+accessible	field	net/minecraft/client/renderer/rendertype/RenderSetup	oitPipelineSet	Lnet/minecraft/client/renderer/oit/OitPipelineSet;
+accessible	field	net/minecraft/client/renderer/rendertype/RenderSetup	textures	Ljava/util/Map;
+accessible	field	net/minecraft/client/renderer/rendertype/RenderSetup	textureTransform	Lnet/minecraft/client/renderer/rendertype/TextureTransform;
+accessible	field	net/minecraft/client/renderer/rendertype/RenderSetup	outlineProperty	Lnet/minecraft/client/renderer/rendertype/RenderSetup$OutlineProperty;
+accessible	field	net/minecraft/client/renderer/rendertype/RenderSetup	outlineTextureName	Ljava/lang/String;
+accessible	field	net/minecraft/client/renderer/rendertype/RenderSetup	useLightmap	Z
+accessible	field	net/minecraft/client/renderer/rendertype/RenderSetup	useOverlay	Z
+accessible	field	net/minecraft/client/renderer/rendertype/RenderSetup	affectsCrumbling	Z
+accessible	field	net/minecraft/client/renderer/rendertype/RenderSetup	sortOnUpload	Z
+accessible	field	net/minecraft/client/renderer/rendertype/RenderSetup	layeringTransform	Lnet/minecraft/client/renderer/rendertype/LayeringTransform;
+accessible	field	net/minecraft/client/renderer/rendertype/RenderSetup	forceSolidModelPhase	Z

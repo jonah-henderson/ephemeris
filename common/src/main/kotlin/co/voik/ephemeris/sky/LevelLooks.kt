@@ -126,6 +126,8 @@ data class LevelLook(
     val wind: Wind = Wind.STILL,
     /** Which of its colours turn round the colour wheel over time, each on its own cycle. */
     val cycles: ColourCycles = ColourCycles.NONE,
+    /** The colours its creatures are drawn in. */
+    val creatures: CreatureColours = CreatureColours.NONE,
 ) {
     /** Where everything stands at [dayTime]. Pure, so both sides get the same answer without asking. */
     fun readAt(dayTime: Long): SkyReading = SkyReading.of(sky, dayTime)
@@ -134,7 +136,7 @@ data class LevelLook(
     val saysNothing: Boolean
         get() = sky.isOrdinary && air.saysNothing && corners.isEmpty() && sky.decks.isEmpty() && airFrom == null &&
             filters.isEmpty() && rain.isOrdinary && sky.cloudPace == SkySpec.ORDINARY_CLOUD_PACE && wind.isStill &&
-            cycles.isNone
+            cycles.isNone && creatures.isNone
 
     companion object {
         /** The filter this library ships: the level drained of colour, to its own brightness. */

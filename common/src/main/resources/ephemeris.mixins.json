@@ -15,10 +15,12 @@
     "client.ClientLevelMixin",
     "client.BlockColorsMixin",
     "client.CloudRendererMixin",
+    "client.EntityRenderDispatcherMixin",
     "client.GameRendererMixin",
     "client.ParticleAccessor",
     "client.ParticleGroupMixin",
     "client.SkyRendererMixin",
+    "client.SubmitNodeCollectionMixin",
     "client.WeatherEffectRendererMixin"
   ],
   "injectors": {

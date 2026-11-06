@@ -72,8 +72,10 @@ data class LevelLookPayload(val looks: List<Entry>) : CustomPacketPayload {
             LevelLook::wind,
             ByteBufCodecs.fromCodec(ColourCycles.CODEC),
             LevelLook::cycles,
-        ) { sky, air, corners, rules, airFrom, filters, rain, wind, cycles ->
-            LevelLook(sky, air, corners, rules, airFrom.orElse(null), filters, rain, wind, cycles)
+            ByteBufCodecs.fromCodec(CreatureColours.CODEC),
+            LevelLook::creatures,
+        ) { sky, air, corners, rules, airFrom, filters, rain, wind, cycles, creatures ->
+            LevelLook(sky, air, corners, rules, airFrom.orElse(null), filters, rain, wind, cycles, creatures)
         }
 
         private val ENTRY_STREAM_CODEC: StreamCodec<ByteBuf, Entry> = StreamCodec.composite(
