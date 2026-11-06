@@ -1,7 +1,6 @@
 package co.voik.ephemeris.client
 
 import co.voik.ephemeris.sky.Eclipse
-import co.voik.ephemeris.sky.LevelDaylight
 import co.voik.ephemeris.sky.LevelLooks
 import net.minecraft.client.DeltaTracker
 import net.minecraft.client.Minecraft
@@ -15,45 +14,63 @@ import net.minecraft.world.phys.Vec3
 import org.joml.Vector3f
 
 /**
- * The glare of a sun that dazzles ([co.voik.ephemeris.sky.CelestialBody.glare]): the view washed with its light as
- * the eye turns toward it, so long as nothing stands between. Where it stands and whether it is seen are asked once a
- * tick ([tick]); how far the eye faces it, every frame ([draw]).
+ * The glare of each sun that dazzles ([co.voik.ephemeris.sky.CelestialBody.glare]): the view washed with its light as
+ * the eye turns toward it, so long as nothing stands between and no moon covers it. Where each stands and whether it
+ * is seen are asked once a tick ([tick]); how far the eye faces it, every frame ([draw]).
  */
 object SunGlare {
 
     val ID: Identifier = Identifier.fromNamespaceAndPath("ephemeris", "sun_glare")
 
-    private var strength = 0.0f
-    private var toward = Vector3f(0.0f, 1.0f, 0.0f)
+    /** One sun's glare as the eye last saw it, kept by the sun's index among the bodies. */
+    private class Glare(var strength: Float, var toward: Vector3f)
+
+    private data class Sighting(val strength: Float, val toward: Vector3f)
+
+    private val glares = mutableMapOf<Int, Glare>()
 
     fun tick(minecraft: Minecraft) {
-        strength = Mth.approach(strength, targetStrength(minecraft), EASED_PER_TICK)
+        val seen = sightings(minecraft)
+        for (index in glares.keys + seen.keys) {
+            val glare = glares.getOrPut(index) { Glare(0.0f, Vector3f(0.0f, 1.0f, 0.0f)) }
+            val sighting = seen[index]
+            if (sighting != null) glare.toward = sighting.toward
+            glare.strength = Mth.approach(glare.strength, sighting?.strength ?: 0.0f, EASED_PER_TICK)
+        }
+        glares.entries.removeIf { (index, glare) -> glare.strength <= 0.0f && index !in seen }
     }
 
-    private fun targetStrength(minecraft: Minecraft): Float {
-        val level = minecraft.level ?: return 0.0f
-        val player = minecraft.player ?: return 0.0f
-        val look = LevelLooks.of(level.dimension()) ?: return 0.0f
+    private fun sightings(minecraft: Minecraft): Map<Int, Sighting> {
+        val level = minecraft.level ?: return emptyMap()
+        val player = minecraft.player ?: return emptyMap()
+        val look = LevelLooks.of(level.dimension()) ?: return emptyMap()
         val clock = level.defaultClockTime
-        val sun = LevelDaylight.decidingSunOf(look, clock) ?: return 0.0f
-        if (sun.body.glare <= 0.0f) return 0.0f
-        toward = sun.body.path.directionAt(clock)
-        val eye = player.eyePosition
-        val sight = eye.add(Vec3(toward).scale(SIGHT_BLOCKS))
-        val blocked = level.clip(ClipContext(eye, sight, ClipContext.Block.VISUAL, ClipContext.Fluid.NONE, player)).type != HitResult.Type.MISS
-        if (blocked) return 0.0f
         val clearSky = 1.0f - level.getRainLevel(1.0f)
-        return sun.body.glare * Eclipse.lookAt(sun.altitudeDegrees) * clearSky
+        val eye = player.eyePosition
+        fun isBlockedToward(toward: Vector3f): Boolean {
+            val sight = eye.add(Vec3(toward).scale(SIGHT_BLOCKS))
+            return level.clip(ClipContext(eye, sight, ClipContext.Block.VISUAL, ClipContext.Fluid.NONE, player)).type != HitResult.Type.MISS
+        }
+        return look.readAt(clock).suns.filter { it.body.glare > 0.0f }.associate { sun ->
+            val toward = sun.body.path.directionAt(clock)
+            val uncovered = 1.0f - (Eclipse.of(look.sky, sun.index, clock)?.coverage ?: 0.0f)
+            val strength = if (isBlockedToward(toward)) 0.0f
+                else sun.body.glare * Eclipse.lookAt(sun.altitudeDegrees) * uncovered * clearSky
+            sun.index to Sighting(strength, toward)
+        }
     }
 
     fun draw(graphics: GuiGraphicsExtractor, delta: DeltaTracker) {
-        if (strength <= 0.0f) return
+        if (glares.isEmpty()) return
         val player = Minecraft.getInstance().player ?: return
-        val facing = player.getViewVector(delta.getGameTimeDeltaPartialTick(false)).toVector3f().dot(toward)
-        val turnedToward = Mth.clamp(Mth.inverseLerp(facing, FACING_FROM, 1.0f), 0.0f, 1.0f)
-        val wash = strength * turnedToward * turnedToward * BRIGHTEST
-        if (wash <= 0.0f) return
-        graphics.fill(0, 0, graphics.guiWidth(), graphics.guiHeight(), ARGB.colorFromFloat(wash, GLARE_RED, GLARE_GREEN, GLARE_BLUE))
+        val looking = player.getViewVector(delta.getGameTimeDeltaPartialTick(false)).toVector3f()
+        for (glare in glares.values) {
+            val facing = looking.dot(glare.toward)
+            val turnedToward = Mth.clamp(Mth.inverseLerp(facing, FACING_FROM, 1.0f), 0.0f, 1.0f)
+            val wash = glare.strength * turnedToward * turnedToward * BRIGHTEST
+            if (wash <= 0.0f) continue
+            graphics.fill(0, 0, graphics.guiWidth(), graphics.guiHeight(), ARGB.colorFromFloat(wash, GLARE_RED, GLARE_GREEN, GLARE_BLUE))
+        }
     }
 
     /** How far toward the sun its glare is looked for, in blocks: past this a hill is too far off to shade the eye. */
