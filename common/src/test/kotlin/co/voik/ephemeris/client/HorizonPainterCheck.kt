@@ -87,6 +87,7 @@ class HorizonPainterCheck : FunSpec({
             brightness: Float,
             timeTicks: Long,
             tint: co.voik.ephemeris.Rgba,
+            starSize: Float,
         ) = Unit
 
         override fun readyCloudDeck(

@@ -51,7 +51,9 @@ data class SkySpec(
                 stars.reveal == null &&
                 stars.glow == VANILLA.stars.glow &&
                 stars.byDay == VANILLA.stars.byDay &&
-                stars.tint == null
+                stars.tint == null &&
+                stars.pace == StarField.VANILLAS_PACE &&
+                stars.size == StarField.VANILLAS_SIZE
             return bodiesAreVanillas && starsAreVanillas
         }
 
@@ -382,6 +384,13 @@ data class StarField(
     val byDay: Float = NONE_BY_DAY,
     /** A colour every star's light is multiplied by, or null for their own whites. */
     val tint: Rgba? = null,
+    /**
+     * How fast the field wheels against vanilla's, which turns with the day: nought holds it where it is, and the
+     * stars then no longer keep step with the sun.
+     */
+    val pace: Float = VANILLAS_PACE,
+    /** How many times its own size each star is drawn. */
+    val size: Float = VANILLAS_SIZE,
 ) {
     companion object {
         val CODEC: Codec<StarField> = RecordCodecBuilder.create { instance ->
@@ -393,11 +402,15 @@ data class StarField(
                 Codec.FLOAT.optionalFieldOf("glow", SkySpec.ORDINARY_STAR_GLOW).forGetter(StarField::glow),
                 Codec.FLOAT.optionalFieldOf("by_day", NONE_BY_DAY).forGetter(StarField::byDay),
                 Rgba.CODEC.optionalFieldOf("tint").forGetter { field -> java.util.Optional.ofNullable(field.tint) },
-            ).apply(instance) { count, seed, reveal, glow, byDay, tint ->
-                StarField(count, seed, reveal.orElse(null), glow, byDay, tint.orElse(null))
+                Codec.FLOAT.optionalFieldOf("pace", VANILLAS_PACE).forGetter(StarField::pace),
+                Codec.FLOAT.optionalFieldOf("size", VANILLAS_SIZE).forGetter(StarField::size),
+            ).apply(instance) { count, seed, reveal, glow, byDay, tint, pace, size ->
+                StarField(count, seed, reveal.orElse(null), glow, byDay, tint.orElse(null), pace, size)
             }
         }
 
         const val NONE_BY_DAY = 0.0f
+        const val VANILLAS_PACE = 1.0f
+        const val VANILLAS_SIZE = 1.0f
     }
 }

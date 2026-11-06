@@ -95,7 +95,7 @@ object Blaze3dSkyCanvas : SkyCanvas {
      * Never cleared: a field is one buffer and a player visits a bounded number of Ages, so eviction
      * bookkeeping would cost more than the memory it saves.
      */
-    private val starfields = mutableMapOf<Pair<Long, Int>, Starfield>()
+    private val starfields = mutableMapOf<Triple<Long, Int, Float>, Starfield>()
 
     private const val STAR_DISTANCE = 100.0
 
@@ -1391,9 +1391,10 @@ object Blaze3dSkyCanvas : SkyCanvas {
         brightness: Float,
         timeTicks: Long,
         tint: Rgba,
+        starSize: Float,
     ) {
         if (count <= 0) return
-        val field = starfieldOf(seed, count)
+        val field = starfieldOf(seed, count, starSize)
         if (field.indexCount == 0) return
 
         val modelViewStack = RenderSystem.getModelViewStack()
@@ -2197,8 +2198,8 @@ object Blaze3dSkyCanvas : SkyCanvas {
     private fun t(x: Int, y: Int, z: Int) = Triple(x.toFloat(), y.toFloat(), z.toFloat())
 
     /** This level's stars, built once and kept. */
-    private fun starfieldOf(seed: Long, count: Int): Starfield = starfields.getOrPut(seed to count) {
-        buildStarfield(seed, count)
+    private fun starfieldOf(seed: Long, count: Int, starSize: Float): Starfield = starfields.getOrPut(Triple(seed, count, starSize)) {
+        buildStarfield(seed, count, starSize)
     }
 
     /**
@@ -2208,7 +2209,7 @@ object Blaze3dSkyCanvas : SkyCanvas {
      * Placed rather than rejected, unlike vanilla's — it samples a cube and drops what falls outside, so
      * "1500" is an attempt rather than a count. A writer asking for a number of stars should get it.
      */
-    private fun buildStarfield(seed: Long, count: Int): Starfield {
+    private fun buildStarfield(seed: Long, count: Int, starSize: Float): Starfield {
         val random = Random(seed)
         val starSphere = Sphere(STAR_DISTANCE)
         val format = DefaultVertexFormat.POSITION_TEX_COLOR
@@ -2216,7 +2217,7 @@ object Blaze3dSkyCanvas : SkyCanvas {
             val builder = BufferBuilder(bytes, PrimitiveTopology.QUADS, format)
             repeat(count) {
                 val center = starSphere.randomSurfacePoint(random)
-                val halfSize = MIN_STAR_SIZE + random.nextDouble() * STAR_SIZE_VARIATION
+                val halfSize = (MIN_STAR_SIZE + random.nextDouble() * STAR_SIZE_VARIATION) * starSize
                 val spin = random.nextDouble() * FULL_CIRCLE_RADIANS
                 val tint = WARM_STAR.lerp(COOL_STAR, random.nextFloat())
                 val phase = (random.nextDouble() * FULL_CIRCLE_RADIANS).toFloat()

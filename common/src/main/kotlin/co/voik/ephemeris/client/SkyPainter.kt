@@ -16,6 +16,7 @@ import co.voik.ephemeris.sky.Orbit
 import co.voik.ephemeris.sky.SkyRules
 import co.voik.ephemeris.sky.VanillasBody
 import co.voik.ephemeris.sky.SkySpec
+import co.voik.ephemeris.sky.StarWheel
 import net.minecraft.client.Camera
 import net.minecraft.client.multiplayer.ClientLevel
 import net.minecraft.world.attribute.EnvironmentAttributes
@@ -128,10 +129,11 @@ object SkyPainter {
             canvas.drawStarfield(
                 stars.seed,
                 stars.count,
-                aroundVanillasAxis(starAngle),
+                aroundVanillasAxis(StarWheel.angleAt(starAngle, stars.pace, clockTime)),
                 visibility,
                 twinkle,
                 (stars.tint ?: Rgba.WHITE).let { tint -> look.cycles.stars?.over(tint, gameTime) ?: tint },
+                stars.size,
             )
         }
 

@@ -153,8 +153,8 @@ interface SkyCanvas {
     fun drawShapes(quads: List<SkyQuad>, blend: SkyBlend)
 
     /**
-     * The level's stars, arranged by [seed], turned up to [brightness] and coloured by [tint]. Named by seed and
-     * count rather than passed as points, the geometry never changing once built.
+     * The level's stars, arranged by [seed], turned up to [brightness], coloured by [tint] and [starSize] times their
+     * own size. Named by seed, count and size rather than passed as points, the geometry never changing once built.
      *
      * [timeTicks] drives the twinkle and carries no partial tick — a fraction added to a counter that may
      * not have moved ratchets, and a twinkle is slow enough that whole ticks are smooth (see `Orbit`).
@@ -166,6 +166,7 @@ interface SkyCanvas {
         brightness: Float,
         timeTicks: Long,
         tint: Rgba = Rgba.WHITE,
+        starSize: Float = 1.0f,
     )
 
     /**
