@@ -80,6 +80,12 @@ data class Rgba(val red: Float, val green: Float, val blue: Float, val alpha: Fl
         return Rgba(pushed(red), pushed(green), pushed(blue), alpha)
     }
 
+    /**
+     * This colour's hue turned [turn] of the way round the colour wheel, in [Oklch] so it looks as light after as
+     * before. A grey has no hue to turn and comes back as it was.
+     */
+    fun hueTurned(turn: Float): Rgba = Oklch.of(this).turned(turn).toRgba(alpha)
+
     companion object {
         val WHITE = Rgba(1.0f, 1.0f, 1.0f)
 

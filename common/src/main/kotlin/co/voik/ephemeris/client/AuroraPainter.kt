@@ -80,7 +80,8 @@ object AuroraPainter {
         // The fold drifts; which night this is, just above, is a question about the world and keeps the
         // real clock. See [SkyDrift].
         val folded = SkyDrift.steady(level, SkyPainter.SKY_DRIFT, level.defaultClockTime.toDouble()).toLong()
-        canvas.drawAurora(within, strength, folded)
+        val turned = look.cycles.aurora?.let { cycle -> Turned(cycle.turnAt(level.gameTime), cycle.tinge) } ?: Turned.NOT
+        canvas.drawAurora(within, strength, folded, turned)
     }
 
     /** How much of the ground around the viewer answers this curtain's rule, `1` where it asks for none. */

@@ -4,12 +4,14 @@
 
 #include <minecraft:dynamictransforms.glsl>
 #include <ephemeris:noise.glsl>
+#include <ephemeris:oklch.glsl>
 
 layout(std140) uniform AuroraInfo {
     vec4 Shape;
     vec4 Fold;
     vec4 Arc;
-    // x: how far the crown leans past the hem, in kilometres. The rest is spare.
+    // x: how far the crown leans past the hem, in kilometres. y: how far round the wheel its colours have turned,
+    // z: how far a pale colour is tinged toward that turn's hue (`HueCycle`). w is spare.
     vec4 Lean;
 };
 
@@ -149,7 +151,7 @@ void main() {
 
     // Crown at 0, hem at 1 — the order the colours were written in, so what the ramp holds and what a report
     // says about it cannot drift apart.
-    vec3 tone = texture(Sampler0, vec2(1.0 - up, 0.5)).rgb;
+    vec3 tone = cycled(texture(Sampler0, vec2(1.0 - up, 0.5)).rgb, Lean.y, Lean.z);
 
     fragColor = vec4(tone, alpha) * ColorModulator;
 }

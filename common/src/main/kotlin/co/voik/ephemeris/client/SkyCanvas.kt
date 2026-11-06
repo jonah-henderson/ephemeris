@@ -203,7 +203,7 @@ interface SkyCanvas {
      * [timeTicks] drives the fold and carries no partial tick, as [drawStarfield]'s does not — the motion is
      * far slower than a frame and a fraction added to a counter that may not have moved ratchets.
      */
-    fun drawAurora(aurora: Aurora, strength: Float, timeTicks: Long)
+    fun drawAurora(aurora: Aurora, strength: Float, timeTicks: Long, turned: Turned = Turned.NOT)
 
     /**
      * A bow of [Rainbow.radiusDegrees] standing opposite a light at [lightAltitudeDegrees] and
@@ -224,6 +224,13 @@ interface SkyCanvas {
         lightBearingDegrees: Float,
         strength: Float,
     )
+}
+
+/** How far a drawn colour has turned round the wheel, and how far a pale one is tinged ([co.voik.ephemeris.sky.HueCycle]). */
+data class Turned(val turn: Float, val tinge: Float) {
+    companion object {
+        val NOT = Turned(0.0f, 0.0f)
+    }
 }
 
 /** One corner of a [SkyQuad]: which way it lies from the eye, and its colour there. */

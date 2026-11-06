@@ -229,16 +229,16 @@ object LevelRendering {
     fun drawHorizon(moment: HorizonMoment): Boolean = horizons.any { it.draw(moment) }
 
     /**
-     * Asked by the client-level Mixin, once, as the level builds its attribute system. A dim sun and an eclipse
-     * go over everything registered ([SunlitAir], [EclipseAir]), so whatever air a level has goes dark from where
-     * it is.
+     * Asked by the client-level Mixin, once, as the level builds its attribute system. Turning colours go over
+     * everything registered ([CyclingAir]), and a dim sun and an eclipse over those ([SunlitAir], [EclipseAir]), so
+     * whatever air a level has turns from its own colour and goes dark from where it is.
      */
     fun paintEnvironment(
         level: ClientLevel,
         layers: EnvironmentAttributeSystem.Builder,
     ): EnvironmentAttributeSystem.Builder {
         val painted = environments.fold(layers) { built, each -> each.paint(level, built) }
-        return EclipseAir.paint(level, SunlitAir.paint(level, painted))
+        return EclipseAir.paint(level, SunlitAir.paint(level, CyclingAir.paint(level, painted)))
     }
 }
 

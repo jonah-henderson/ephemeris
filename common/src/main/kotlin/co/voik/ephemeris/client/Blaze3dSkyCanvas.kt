@@ -1492,7 +1492,7 @@ object Blaze3dSkyCanvas : SkyCanvas {
      * into one quarter — and gets its own phase, lean and length besides, so what is drawn several times is
      * never the same curtain twice.
      */
-    override fun drawAurora(aurora: Aurora, strength: Float, timeTicks: Long) {
+    override fun drawAurora(aurora: Aurora, strength: Float, timeTicks: Long, turned: Turned) {
         if (strength <= NOTHING_TO_DRAW) return
         val ramp = rampOf(aurora.ramp)
         val drifted = wrapped(timeTicks.toDouble() * AURORA_DRIFT, AURORA_TIME_WRAP)
@@ -1500,7 +1500,7 @@ object Blaze3dSkyCanvas : SkyCanvas {
         for (curtain in 0..<many) {
             val showing = strength * swellOf(curtain, drifted)
             if (showing <= NOTHING_TO_DRAW) continue
-            drawOneCurtain(aurora, curtain, many, showing, drifted, ramp)
+            drawOneCurtain(aurora, curtain, many, showing, drifted, ramp, turned)
         }
     }
 
@@ -1527,6 +1527,7 @@ object Blaze3dSkyCanvas : SkyCanvas {
         showing: Float,
         drifted: Float,
         ramp: DynamicTexture,
+        turned: Turned,
     ) {
         val modelViewStack = RenderSystem.getModelViewStack()
         modelViewStack.pushMatrix()
@@ -1545,7 +1546,7 @@ object Blaze3dSkyCanvas : SkyCanvas {
             Vector3f(),
             Matrix4f(),
         )
-        writeAuroraInfo(aurora, curtain, many, showing, drifted)
+        writeAuroraInfo(aurora, curtain, many, showing, drifted, turned)
         val quadIndices = RenderSystem.getSequentialBuffer(PrimitiveTopology.QUADS)
 
         val pass = renderPass("Ephemeris aurora")
@@ -1584,7 +1585,7 @@ object Blaze3dSkyCanvas : SkyCanvas {
      * curtain but the first down near the horizon. Equal steps in ratio put them at even heights, which is
      * what the eye reads as a sky filling up.
      */
-    private fun writeAuroraInfo(aurora: Aurora, curtain: Int, many: Int, showing: Float, drifted: Float) {
+    private fun writeAuroraInfo(aurora: Aurora, curtain: Int, many: Int, showing: Float, drifted: Float, turned: Turned) {
         val phase = curtain * CURTAINS_APART.toFloat()
         val varied = 1.0f - CURTAIN_VARIANCE * ((curtain * CURTAIN_STRIDE) % 1.0f)
         val away = standingOff(curtain, many)
@@ -1598,7 +1599,7 @@ object Blaze3dSkyCanvas : SkyCanvas {
                     .putVec4(showing, drifted, aurora.breadth.coerceIn(0.05f, 1.0f), 0.0f)
                     .putVec4(SNAKE_KM * varied, AURORA_RAY_FINENESS, phase, AURORA_FLARE_RATE)
                     .putVec4(away, LONGEST_ARC_KM * varied, LOWEST_KM, reaches)
-                    .putVec4(LEAN_KM * varied, 0.0f, 0.0f, 0.0f)
+                    .putVec4(LEAN_KM * varied, turned.turn, turned.tinge, 0.0f)
             }
     }
 

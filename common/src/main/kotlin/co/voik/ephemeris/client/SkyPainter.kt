@@ -1,6 +1,7 @@
 package co.voik.ephemeris.client
 
 import co.voik.ephemeris.Rgba
+import co.voik.ephemeris.sky.ColourCycles
 import co.voik.ephemeris.sky.Corona
 import co.voik.ephemeris.sky.Eclipse
 import co.voik.ephemeris.sky.Airiness
@@ -38,6 +39,11 @@ import org.joml.Vector3f
  * serve a sky with suns of its own.
  */
 object SkyPainter {
+
+    /** Each body's colour as its cycle stands at [gameTime], or its own where it has none. */
+    class Turning(private val cycles: ColourCycles, private val gameTime: Long) {
+        fun bodyAt(index: Int, tint: Rgba): Rgba = cycles.bodies[index]?.over(tint, gameTime) ?: tint
+    }
 
     /** Below this the stars are too faint to be worth the draw. */
     private const val STARS_WORTH_DRAWING = 0.01f
@@ -87,7 +93,9 @@ object SkyPainter {
     ): Boolean {
         val look = LevelLooks.of(level.dimension()) ?: return false
         val spec = look.sky
-        if (spec.isOrdinary) return false
+        // Vanilla's sky with a turning colour in it is one vanilla cannot draw.
+        if (spec.isOrdinary && !look.cycles.turnsTheSky) return false
+        val gameTime = level.gameTime
 
         val clockTime = level.defaultClockTime
         val stars = spec.stars
@@ -123,13 +131,14 @@ object SkyPainter {
                 aroundVanillasAxis(starAngle),
                 visibility,
                 twinkle,
-                stars.tint ?: Rgba.WHITE,
+                (stars.tint ?: Rgba.WHITE).let { tint -> look.cycles.stars?.over(tint, gameTime) ?: tint },
             )
         }
 
         val skyLit = 1.0f - nightliness
         val eclipse = LevelDaylight.eclipseOf(look, clockTime)
-        drawBodies(canvas, camera, spec, clockTime, sunAngle, moonAngle, moonPhase, rainBrightness, look.rules, skyLit, eclipse)
+        val turning = Turning(look.cycles, gameTime)
+        drawBodies(canvas, camera, spec, clockTime, sunAngle, moonAngle, moonPhase, rainBrightness, look.rules, skyLit, eclipse, turning)
         eclipse?.let { drawDiamondRing(canvas, spec, it, clockTime) }
         return true
     }
@@ -229,6 +238,7 @@ object SkyPainter {
         rules: SkyRules,
         skyLit: Float,
         eclipse: Eclipse?,
+        turning: Turning,
     ) {
         // Sorted by where each body is *now*: a path that swells and shrinks changes which body is in
         // front, and the sky pass writes no depth, so order is the only thing that decides.
@@ -241,7 +251,8 @@ object SkyPainter {
             // Vanilla adds both its sun and its moon, and its sprites have no alpha to cover with — see
             // `Blending`, which is why this is the body's own choice and why the default is to add.
             val adds = body.blending == Blending.ADDS
-            val lit = if (adds) sprite.tint.dimmed(LUMINOUS_ADDS) else sprite.tint
+            val own = turning.bodyAt(index, sprite.tint)
+            val lit = if (adds) own.dimmed(LUMINOUS_ADDS) else own
             val plain = lit.dimmed(1.0f - body.dimming * DIMMEST_DISC)
             val altitude = body.path.altitudeAt(clockTime)
             // Air only hides what covers. A luminous body *adds* its light, and scattered sky cannot take
