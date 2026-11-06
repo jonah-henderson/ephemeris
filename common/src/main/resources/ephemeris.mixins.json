@@ -10,6 +10,8 @@
     "TimelineLayersMixin"
   ],
   "client": [
+    "client.ChunkSectionLayerMixin",
+    "client.ChunkSectionsToRenderMixin",
     "client.ClientLevelMixin",
     "client.BlockColorsMixin",
     "client.CloudRendererMixin",

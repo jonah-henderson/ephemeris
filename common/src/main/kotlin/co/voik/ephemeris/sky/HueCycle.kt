@@ -63,7 +63,9 @@ data class HueCycle(val periodTicks: Int, val offset: Float = 0.0f, val tinge: F
 
 /**
  * Which of a level's colours turn ([HueCycle]), each on its own cycle: the sky, the fog, the clouds (vanilla's and the
- * decks), the light, the water's fog, the stars, the aurora, and each body by its index in the sky.
+ * decks), the light, the water's fog, the stars, the aurora, and each body by its index in the sky; and in the chunk
+ * mesh ([co.voik.ephemeris.client.TurningTerrain]), the [ground]'s tinted blocks — grass, leaves, anything a biome
+ * tints on land — and the [water]'s surface, which a shader can tell apart only by the layer they are drawn in.
  */
 data class ColourCycles(
     val sky: HueCycle? = null,
@@ -74,10 +76,12 @@ data class ColourCycles(
     val stars: HueCycle? = null,
     val aurora: HueCycle? = null,
     val bodies: Map<Int, HueCycle> = emptyMap(),
+    val ground: HueCycle? = null,
+    val water: HueCycle? = null,
 ) {
     val isNone: Boolean
         get() = sky == null && fog == null && cloud == null && light == null && waterFog == null &&
-            stars == null && aurora == null && bodies.isEmpty()
+            stars == null && aurora == null && bodies.isEmpty() && ground == null && water == null
 
     /** Whether anything in the sky itself turns, which vanilla's own sky cannot draw. */
     val turnsTheSky: Boolean get() = stars != null || bodies.isNotEmpty()
@@ -101,10 +105,13 @@ data class ColourCycles(
                 named("aurora", ColourCycles::aurora),
                 Codec.unboundedMap(BODY_INDEX, HueCycle.CODEC).optionalFieldOf("bodies", emptyMap())
                     .forGetter(ColourCycles::bodies),
-            ).apply(instance) { sky, fog, cloud, light, waterFog, stars, aurora, bodies ->
+                named("ground", ColourCycles::ground),
+                named("water", ColourCycles::water),
+            ).apply(instance) { sky, fog, cloud, light, waterFog, stars, aurora, bodies, ground, water ->
                 ColourCycles(
                     sky.orElse(null), fog.orElse(null), cloud.orElse(null), light.orElse(null),
                     waterFog.orElse(null), stars.orElse(null), aurora.orElse(null), bodies,
+                    ground.orElse(null), water.orElse(null),
                 )
             }
         }
