@@ -1384,7 +1384,14 @@ object Blaze3dSkyCanvas : SkyCanvas {
         return SpriteCuts.of(shape) ?: OCCLUDING_BODY_PIPELINE
     }
 
-    override fun drawStarfield(seed: Long, count: Int, orientation: Quaternionf, brightness: Float, timeTicks: Long) {
+    override fun drawStarfield(
+        seed: Long,
+        count: Int,
+        orientation: Quaternionf,
+        brightness: Float,
+        timeTicks: Long,
+        tint: Rgba,
+    ) {
         if (count <= 0) return
         val field = starfieldOf(seed, count)
         if (field.indexCount == 0) return
@@ -1393,10 +1400,10 @@ object Blaze3dSkyCanvas : SkyCanvas {
         modelViewStack.pushMatrix()
         modelViewStack.rotate(orientation)
 
-        // The field's overall brightness; each star's own tint and twinkle ride on its vertices.
+        // The field's overall brightness and colour; each star's own tint and twinkle ride on its vertices.
         val transforms = RenderSystem.getDynamicUniforms().writeTransform(
             modelViewNow(),
-            Vector4f(brightness, brightness, brightness, brightness),
+            Vector4f(brightness * tint.red, brightness * tint.green, brightness * tint.blue, brightness),
             Vector3f(),
             Matrix4f(),
         )

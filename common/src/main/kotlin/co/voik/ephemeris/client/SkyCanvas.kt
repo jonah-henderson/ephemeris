@@ -153,13 +153,20 @@ interface SkyCanvas {
     fun drawShapes(quads: List<SkyQuad>, blend: SkyBlend)
 
     /**
-     * The level's stars, arranged by [seed] and turned up to [brightness]. Named by seed and count rather
-     * than passed as points, the geometry never changing once built.
+     * The level's stars, arranged by [seed], turned up to [brightness] and coloured by [tint]. Named by seed and
+     * count rather than passed as points, the geometry never changing once built.
      *
      * [timeTicks] drives the twinkle and carries no partial tick — a fraction added to a counter that may
      * not have moved ratchets, and a twinkle is slow enough that whole ticks are smooth (see `Orbit`).
      */
-    fun drawStarfield(seed: Long, count: Int, orientation: Quaternionf, brightness: Float, timeTicks: Long)
+    fun drawStarfield(
+        seed: Long,
+        count: Int,
+        orientation: Quaternionf,
+        brightness: Float,
+        timeTicks: Long,
+        tint: Rgba = Rgba.WHITE,
+    )
 
     /**
      * Everything [drawCloudDeck] will need uploaded, **before the frame reaches a render pass**.

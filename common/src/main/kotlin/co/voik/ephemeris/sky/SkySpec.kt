@@ -48,7 +48,8 @@ data class SkySpec(
             val starsAreVanillas = stars.count == VANILLA.stars.count &&
                 stars.reveal == null &&
                 stars.glow == VANILLA.stars.glow &&
-                stars.byDay == VANILLA.stars.byDay
+                stars.byDay == VANILLA.stars.byDay &&
+                stars.tint == null
             return bodiesAreVanillas && starsAreVanillas
         }
 
@@ -123,8 +124,9 @@ data class SkySpec(
                 second,
             )
         },
-        "stars ${stars.count}" + if (stars.glow == ORDINARY_STAR_GLOW) "" else
-            " burning %.2f times vanilla's".format(stars.glow),
+        "stars ${stars.count}" + (if (stars.glow == ORDINARY_STAR_GLOW) "" else
+            " burning %.2f times vanilla's".format(stars.glow)) +
+            (stars.tint?.let { " tinted %.2f %.2f %.2f".format(it.red, it.green, it.blue) } ?: ""),
         stars.reveal?.let { "— hidden below %.0f, fully shown above %.0f".format(it.hiddenBelow, it.fullyShownAbove) },
         "— an ordinary sky, so vanilla draws this one and we stay out of it".takeIf { isOrdinary },
     )
@@ -375,6 +377,8 @@ data class StarField(
      * under the night's own curve, so the stars are never fainter at midnight than they would have been.
      */
     val byDay: Float = NONE_BY_DAY,
+    /** A colour every star's light is multiplied by, or null for their own whites. */
+    val tint: Rgba? = null,
 ) {
     companion object {
         val CODEC: Codec<StarField> = RecordCodecBuilder.create { instance ->
@@ -385,8 +389,9 @@ data class StarField(
                     .forGetter { field -> java.util.Optional.ofNullable(field.reveal) },
                 Codec.FLOAT.optionalFieldOf("glow", SkySpec.ORDINARY_STAR_GLOW).forGetter(StarField::glow),
                 Codec.FLOAT.optionalFieldOf("by_day", NONE_BY_DAY).forGetter(StarField::byDay),
-            ).apply(instance) { count, seed, reveal, glow, byDay ->
-                StarField(count, seed, reveal.orElse(null), glow, byDay)
+                Rgba.CODEC.optionalFieldOf("tint").forGetter { field -> java.util.Optional.ofNullable(field.tint) },
+            ).apply(instance) { count, seed, reveal, glow, byDay, tint ->
+                StarField(count, seed, reveal.orElse(null), glow, byDay, tint.orElse(null))
             }
         }
 

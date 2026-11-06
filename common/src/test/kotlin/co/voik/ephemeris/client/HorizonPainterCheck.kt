@@ -86,6 +86,7 @@ class HorizonPainterCheck : FunSpec({
             orientation: Quaternionf,
             brightness: Float,
             timeTicks: Long,
+            tint: co.voik.ephemeris.Rgba,
         ) = Unit
 
         override fun readyCloudDeck(
