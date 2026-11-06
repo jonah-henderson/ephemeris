@@ -135,7 +135,8 @@ data class LevelLook(
     /** Whether this says anything at all, so a renderer can decline cheaply. */
     val saysNothing: Boolean
         get() = sky.isOrdinary && air.saysNothing && corners.isEmpty() && sky.decks.isEmpty() && airFrom == null &&
-            filters.isEmpty() && rain.isOrdinary && sky.cloudPace == SkySpec.ORDINARY_CLOUD_PACE && wind.isStill &&
+            filters.isEmpty() && rain.isOrdinary && sky.cloudPace == SkySpec.ORDINARY_CLOUD_PACE && sky.cloudPattern == null &&
+            wind.isStill &&
             cycles.isNone && creatures.isNone
 
     companion object {

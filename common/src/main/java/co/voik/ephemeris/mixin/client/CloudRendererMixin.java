@@ -3,11 +3,14 @@ package co.voik.ephemeris.mixin.client;
 import co.voik.ephemeris.client.Blaze3dSkyCanvas;
 import co.voik.ephemeris.client.CloudCarry;
 import co.voik.ephemeris.client.CloudMoment;
+import co.voik.ephemeris.client.CloudPictures;
 import co.voik.ephemeris.client.LevelRendering;
 import co.voik.ephemeris.client.OffscreenLevelRender;
+import co.voik.ephemeris.sky.CloudPattern;
 import co.voik.ephemeris.sky.SkySpec;
 import com.mojang.renderpearl.api.commands.RenderPass;
 import com.mojang.renderpearl.api.textures.GpuTextureView;
+import java.util.Objects;
 import net.minecraft.client.CloudStatus;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.renderer.CloudRenderer;
@@ -19,7 +22,9 @@ import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
+import org.spongepowered.asm.mixin.injection.Constant;
 import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.ModifyConstant;
 import org.spongepowered.asm.mixin.injection.ModifyVariable;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
@@ -77,6 +82,62 @@ public class CloudRendererMixin {
     @Shadow
     private CloudRenderer.@Nullable TextureData texture;
 
+    @Shadow
+    private boolean needsRebuild;
+
+    /** Vanilla's own picture, as resources last loaded it, for a level with none of its own to go back to. */
+    @Unique
+    private CloudRenderer.@Nullable TextureData ephemeris$vanillas;
+
+    /** The picture of ours this renderer holds now, or null where it holds vanilla's. */
+    @Unique
+    private @Nullable CloudPattern ephemeris$worn;
+
+    @Inject(
+        method = "apply(Ljava/util/Optional;Lnet/minecraft/server/packs/resources/ResourceManager;Lnet/minecraft/util/profiling/ProfilerFiller;)V",
+        at = @At("TAIL")
+    )
+    private void ephemeris$rememberVanillasPicture(CallbackInfo callback) {
+        this.ephemeris$vanillas = this.texture;
+        this.ephemeris$worn = null;
+    }
+
+    /**
+     * The level's own picture in vanilla's place, or vanilla's back where it has none — a change only when the level
+     * being drawn asks for another, since the mesh is rebuilt from it.
+     */
+    @Unique
+    private void ephemeris$wearTheLevelsPicture() {
+        CloudPattern wanted = CloudPictures.INSTANCE.pictureFor(OffscreenLevelRender.INSTANCE.levelBeingDrawn());
+        if (Objects.equals(wanted, this.ephemeris$worn)) {
+            return;
+        }
+        // A renderer drawing another level off-screen may never have been handed resources; what it holds is its own.
+        if (this.ephemeris$worn == null) {
+            this.ephemeris$vanillas = this.texture;
+        }
+        this.texture = wanted == null ? this.ephemeris$vanillas : CloudPictures.INSTANCE.of(wanted);
+        this.ephemeris$worn = wanted;
+        this.needsRebuild = true;
+    }
+
+    /** A cell's width, vanilla's twelve blocks times the level's own scale. */
+    @ModifyConstant(method = PREPARE, constant = @Constant(floatValue = 12.0F))
+    private float ephemeris$cellWidth(float vanillas) {
+        return vanillas * CloudPictures.INSTANCE.cellScaleFor(OffscreenLevelRender.INSTANCE.levelBeingDrawn());
+    }
+
+    @ModifyConstant(method = PREPARE, constant = @Constant(doubleValue = 12.0))
+    private double ephemeris$cellWidthInBlocks(double vanillas) {
+        return vanillas * CloudPictures.INSTANCE.cellScaleFor(OffscreenLevelRender.INSTANCE.levelBeingDrawn());
+    }
+
+    /** A cell's thickness, vanilla's four blocks grown with the cell but less: a colossal cloud is broad, not a tower. */
+    @ModifyConstant(method = PREPARE, constant = @Constant(floatValue = 4.0F))
+    private float ephemeris$cellThickness(float vanillas) {
+        return vanillas * CloudPictures.INSTANCE.thicknessScaleFor(OffscreenLevelRender.INSTANCE.levelBeingDrawn());
+    }
+
     @Unique
     private int ephemeris$color;
     @Unique
@@ -104,6 +165,7 @@ public class CloudRendererMixin {
         this.ephemeris$cameraPosition = cameraPosition;
         this.ephemeris$gameTime = gameTime;
         this.ephemeris$partialTicks = partialTicks;
+        ephemeris$wearTheLevelsPicture();
         // **And the uploads, here rather than at the draw.** Inside a pass a renderer may issue pass
         // commands and nothing else — no texture load, no buffer map, no ring-buffer rotation — and the
         // draw is inside one. See LevelCloudRenderer.ready.

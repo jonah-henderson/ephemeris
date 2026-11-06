@@ -26,6 +26,8 @@ data class SkySpec(
     val rainbow: Rainbow? = null,
     /** How many times vanilla's speed its clouds drift at — nought holds them still. */
     val cloudPace: Float = ORDINARY_CLOUD_PACE,
+    /** The shape of its vanilla clouds — how much, in what clumps, how large — or null for vanilla's own. */
+    val cloudPattern: CloudPattern? = null,
 ) {
 
     /**
@@ -168,8 +170,9 @@ data class SkySpec(
                 Rainbow.CODEC.optionalFieldOf("rainbow")
                     .forGetter { spec -> java.util.Optional.ofNullable(spec.rainbow) },
                 Codec.FLOAT.optionalFieldOf("cloud_pace", ORDINARY_CLOUD_PACE).forGetter(SkySpec::cloudPace),
-            ).apply(instance) { bodies, stars, decks, aurora, rainbow, cloudPace ->
-                SkySpec(bodies, stars, decks, aurora.orElse(null), rainbow.orElse(null), cloudPace)
+                CloudPattern.CODEC.optionalFieldOf("cloud_pattern").forGetter { java.util.Optional.ofNullable(it.cloudPattern) },
+            ).apply(instance) { bodies, stars, decks, aurora, rainbow, cloudPace, cloudPattern ->
+                SkySpec(bodies, stars, decks, aurora.orElse(null), rainbow.orElse(null), cloudPace, cloudPattern.orElse(null))
             }
         }
 
