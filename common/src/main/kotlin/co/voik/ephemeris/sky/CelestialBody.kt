@@ -178,6 +178,26 @@ data class PhaseCycle(
         return (Mth.frac(revolutions) * steps).toInt().coerceIn(0, steps - 1)
     }
 
+    /**
+     * The shape a body on [path] shows at [dayTime]: read at its last rising while it is up, so it never changes
+     * overhead (Jonah, 2026-08-30, walked), and the hour itself while it is away.
+     */
+    fun stepShownAt(dayTime: Long, path: CelestialPath, sun: CelestialPath?): Int {
+        val heldFrom = if (path.isUpAt(dayTime)) path.lastRoseAt(dayTime) ?: dayTime else dayTime
+        return stepAt(heldFrom, path, sun)
+    }
+
+    /**
+     * How much of the body is lit at [step], `0..1`: whole at the first shape, which is full, and none half a cycle
+     * on. A body with one shape is always whole.
+     */
+    fun fullnessAt(step: Int): Float {
+        if (steps < 2) return WHOLE
+        val halfACycle = steps / 2.0f
+        val fromFull = minOf(step, steps - step)
+        return (1.0f - fromFull / halfACycle).coerceIn(0.0f, WHOLE)
+    }
+
     /** The shape of a body on [path] at [dayTime], lit by a sun on [sun] where there is one and [litBySun] says so. */
     fun stepAt(dayTime: Long, path: CelestialPath, sun: CelestialPath?): Int =
         if (litBySun && sun != null) stepLitBy(path, sun, dayTime) else stepAt(dayTime)
@@ -207,6 +227,8 @@ data class PhaseCycle(
 
         /** How far either side waxing is read beside a sun that never moves, where nothing paces it. */
         private const val WAXING_LOOK_AHEAD = 200L
+
+        private const val WHOLE = 1.0f
 
         val CODEC: Codec<PhaseCycle> = RecordCodecBuilder.create { instance ->
             instance.group(

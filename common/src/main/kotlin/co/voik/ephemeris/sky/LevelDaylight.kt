@@ -33,7 +33,28 @@ object LevelDaylight {
 
         val reading = look.readAt(level.defaultClockTime)
         val deciding = decidingSun(reading, look.rules) ?: return null
-        return darkeningUnder(look.sky, deciding, reading.dayTime)
+        return moonlit(darkeningUnder(look.sky, deciding, reading.dayTime), reading)
+    }
+
+    /**
+     * [darkening] lightened by the moons up in [reading]: a moon that glares lifts the night by up to
+     * [MOST_MOONLIGHT_LIFTS] steps when it is full and high, enough at the top to keep monsters from the open, and a
+     * moon never darkens what the sun has lit.
+     */
+    fun moonlit(darkening: Int, reading: SkyReading): Int {
+        val sun = reading.suns.firstOrNull()?.body?.path
+        val brightest = reading.moons.maxOfOrNull { moonlightOf(it, sun, reading.dayTime) } ?: return darkening
+        return minOf(darkening, NIGHT_DARKENING - Math.round(brightest * MOST_MOONLIGHT_LIFTS))
+    }
+
+    /** How much [moon] lights the night, `0..1`: by its glare, how full it shows and how high it stands. */
+    private fun moonlightOf(moon: BodyReading, sun: CelestialPath?, dayTime: Long): Float {
+        val glare = moon.body.glare
+        val phase = moon.body.phase
+        if (glare <= 0.0f || phase == null) return 0.0f
+        val fullness = phase.fullnessAt(phase.stepShownAt(dayTime, moon.body.path, sun))
+        val risen = Mth.clamp(Mth.inverseLerp(moon.altitudeDegrees, 0.0f, MOONLIGHT_WHOLE_ABOVE), 0.0f, 1.0f)
+        return glare * fullness * risen * risen * (3.0f - 2.0f * risen)
     }
 
     /**
@@ -167,7 +188,7 @@ object LevelDaylight {
     fun starlitnessOf(reading: SkyReading, rules: SkyRules, sky: SkySpec? = null): Float {
         val deciding = decidingSun(reading, rules) ?: return FULLY_STARLIT
         val darkening = sky?.let { darkeningUnder(it, deciding, reading.dayTime) } ?: darkeningFor(deciding.altitudeDegrees)
-        return darkening / NIGHT_DARKENING.toFloat()
+        return moonlit(darkening, reading) / NIGHT_DARKENING.toFloat()
     }
 
     /** Stars at their fullest — what a sky with nothing lighting it shows at every hour. */
@@ -176,6 +197,15 @@ object LevelDaylight {
     /** Where the ramp begins and ends, in degrees of altitude. */
     private const val FULLY_LIT_ABOVE = 5.0f
     private const val FULLY_DARK_BELOW = -11.0f
+
+    /**
+     * How many steps of the night's darkness a full moon at full glare lifts. A glare of 0.8 lifts four, leaving the
+     * open at a sky light of eight, above the seven vanilla's overworld lets monsters spawn at.
+     */
+    private const val MOST_MOONLIGHT_LIFTS = 5.0f
+
+    /** How high a moon stands before its light is whole, in degrees; it gives none below the horizon. */
+    private const val MOONLIGHT_WHOLE_ABOVE = 15.0f
 
     /** How much further under the horizon a sun at full glare is before its light is gone, in degrees. */
     private const val GLARE_LINGERS_DEGREES = 14.0f

@@ -299,8 +299,11 @@ object SkyPainter {
                 drawEclipseCorona(canvas, sprite, eclipse, orientation, distance, clockTime)
             }
             if (adds && body.glare > 0.0f) {
-                val halo = body.glare * GLARE_HALO * rainBrightness
-                canvas.drawEclipseCorona(orientation, distance, sprite.angularSize * sprite.discShare, plain.copy(alpha = 1.0f), halo, seed = index.toLong())
+                val isAMoon = body.phase != null
+                val halo = body.glare * (if (isAMoon) MOON_HALO else GLARE_HALO) * rainBrightness
+                val reach = if (isAMoon) MOON_HALO_REACH else SkyCanvas.ECLIPSE_REACH
+                val disc = sprite.angularSize * sprite.discShare
+                canvas.drawEclipseCorona(orientation, distance, disc, plain.copy(alpha = 1.0f), halo, seed = index.toLong(), reach = reach)
             }
         }
     }
@@ -352,6 +355,13 @@ object SkyPainter {
 
     /** How strong the halo round a sun at full [CelestialBody.glare] is, against an eclipse's whole corona. */
     private const val GLARE_HALO = 0.8f
+
+    /**
+     * How strong the halo round a moon at full [CelestialBody.glare] is, and how many times farther than an eclipse's
+     * corona it spreads: a moon is looked at full on, so its halo must be wider and stronger than a sun's to show.
+     */
+    private const val MOON_HALO = 1.3f
+    private const val MOON_HALO_REACH = 2.0f
 
     /** How much of its light a body at full [CelestialBody.dimming] loses from its disc. */
     private const val DIMMEST_DISC = 0.65f
@@ -449,22 +459,10 @@ object SkyPainter {
     ): Int {
         val step = when {
             body.path == Orbit.VANILLA_MOON -> moonPhase.index()
-            // **Held from the rising while it is up.** A phase stepping on the raw clock steps wherever the
-            // clock happens to be, which changed a moon's shape at the top of its arc (Jonah, 2026-08-30,
-            // walked) — something the sky does only where nobody is looking. See `CelestialPath.lastRoseAt`.
-            else -> body.phase?.stepAt(heldFrom(body.path, clockTime), body.path, firstSun) ?: 0
+            else -> body.phase?.stepShownAt(clockTime, body.path, firstSun) ?: 0
         }
         return step.coerceIn(0, sprite.shapes.size - 1)
     }
-
-    /**
-     * The tick a body's shape should be read at: when it last came up, or the hour itself while it is away.
-     *
-     * A path that never rises has no visit to hold from and reads the clock, which is the right answer for
-     * something that is never seen anyway.
-     */
-    private fun heldFrom(path: CelestialPath, clockTime: Long): Long =
-        if (path.isUpAt(clockTime)) path.lastRoseAt(clockTime) ?: clockTime else clockTime
 
     /**
      * Vanilla turns its sky about the world's ±X axis, reaching it with a quarter turn about the vertical

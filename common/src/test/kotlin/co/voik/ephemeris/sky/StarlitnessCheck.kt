@@ -54,6 +54,28 @@ class StarlitnessCheck : FunSpec({
         check(CelestialBody.CODEC.parse(com.mojang.serialization.JsonOps.INSTANCE, spelled).getOrThrow().dimming == 0.3f) { "dimming lost in $spelled" }
     }
 
+    test("a glaring moon lifts the night by how full it shows, enough at the top to keep monsters out of the open") {
+        val month = 24000 * 8
+        fun glaringMoon(glare: Float, offsetTicks: Int = 0) = CelestialBody(
+            Orbit.VANILLA_MOON,
+            Appearance.Sprite(Rgba.WHITE, 20.0f, Appearance.MOON_SHAPES),
+            PhaseCycle(month, offsetTicks),
+            glare = glare,
+        )
+        fun darkeningAt(moon: CelestialBody, dayTime: Long): Int {
+            val reading = SkyReading.of(skyOf(sun(Orbit.VANILLA_SUN), moon), dayTime)
+            val bySun = LevelDaylight.darkeningFor(reading.suns.single().altitudeDegrees)
+            return LevelDaylight.moonlit(bySun, reading)
+        }
+        val full = darkeningAt(glaringMoon(0.8f), midnight)
+        val new = darkeningAt(glaringMoon(0.8f, offsetTicks = month / 2), midnight)
+        val plain = darkeningAt(glaringMoon(0.0f), midnight)
+        check(full <= 7) { "a full moon of glare 0.8 overhead left the night at $full" }
+        check(new == 11) { "a new moon left the night at $new" }
+        check(plain == 11) { "a moon that does not glare left the night at $plain" }
+        check(darkeningAt(glaringMoon(1.0f), noon) == 0) { "a glaring moon darkened noon" }
+    }
+
     test("a glaring sun's light lingers after it sets, and its noon is noon") {
         check(LevelDaylight.darkeningFor(-12.0f) == 11) { "an ordinary sun twelve degrees down left ${LevelDaylight.darkeningFor(-12.0f)}" }
         check(LevelDaylight.darkeningFor(-12.0f, glare = 1.0f) < 8) { "a glaring sun twelve degrees down left ${LevelDaylight.darkeningFor(-12.0f, 1.0f)}" }

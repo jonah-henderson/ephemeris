@@ -111,7 +111,8 @@ interface SkyCanvas {
     /**
      * The corona a sun shows when it is covered: a smooth light round a disc [discSize] across in the units
      * [drawBody] takes, bright at the rim and fading outward in soft uneven petals, longest along an equator.
-     * [colour] is the light it gives, [strength] how much of it shows, and [seed] picks this one's shape.
+     * [colour] is the light it gives, [strength] how much of it shows, and [seed] picks this one's shape; [reach]
+     * stretches how far out it falls away, as a multiple of an eclipse's.
      */
     fun drawEclipseCorona(
         orientation: Quaternionf,
@@ -120,6 +121,7 @@ interface SkyCanvas {
         colour: Rgba,
         strength: Float,
         seed: Long,
+        reach: Float = ECLIPSE_REACH,
     )
 
     /**
@@ -225,6 +227,11 @@ interface SkyCanvas {
         lightBearingDegrees: Float,
         strength: Float,
     )
+
+    companion object {
+        /** An eclipse's own reach, which every other corona is a multiple of. */
+        const val ECLIPSE_REACH = 1.0f
+    }
 }
 
 /** How far a drawn colour has turned round the wheel, and how far a pale one is tinged ([co.voik.ephemeris.sky.HueCycle]). */

@@ -1033,13 +1033,14 @@ object Blaze3dSkyCanvas : SkyCanvas {
         colour: Rgba,
         strength: Float,
         seed: Long,
+        reach: Float,
     ) {
         if (strength <= NOTHING_TO_DRAW) return
         val modelViewStack = RenderSystem.getModelViewStack()
         modelViewStack.pushMatrix()
         modelViewStack.rotate(orientation)
         modelViewStack.translate(0.0f, distance, 0.0f)
-        val halfWidth = discSize * ECLIPSE_CORONA_SPAN
+        val halfWidth = discSize * ECLIPSE_CORONA_SPAN * reach
         modelViewStack.scale(halfWidth, 1.0f, halfWidth)
 
         val transforms = RenderSystem.getDynamicUniforms().writeTransform(
@@ -1051,7 +1052,9 @@ object Blaze3dSkyCanvas : SkyCanvas {
         val ownPlace = wrapped(seed * CORONA_SEED_STRIDE, CORONA_NOISE_SPAN)
         val equator = wrapped(seed * GOLDEN_TURN, FULL_TURN) * FULL_TURN_RADIANS
         coronaInfo.currentBuffer().map(false, true).use { view ->
-            Std140Builder.intoBuffer(view.data()).putVec4(ONE_WHOLE / ECLIPSE_CORONA_SPAN, strength, ownPlace, equator)
+            Std140Builder.intoBuffer(view.data())
+                .putVec4(ONE_WHOLE / (ECLIPSE_CORONA_SPAN * reach), strength, ownPlace, equator)
+                .putVec4(reach, 0.0f, 0.0f, 0.0f)
         }
         val quadIndices = RenderSystem.getSequentialBuffer(PrimitiveTopology.QUADS)
 
@@ -1093,8 +1096,8 @@ object Blaze3dSkyCanvas : SkyCanvas {
     /** How far out the corona's quad reaches, in the disc's radii. The light has faded to nothing well before. */
     private const val ECLIPSE_CORONA_SPAN = 7.0f
 
-    /** One `vec4`, matching `CoronaInfo` in the shader. */
-    private const val CORONA_INFO_BYTES = 4 * Float.SIZE_BYTES
+    /** Two `vec4`s, matching `CoronaInfo` in the shader. */
+    private const val CORONA_INFO_BYTES = 8 * Float.SIZE_BYTES
 
     /** How far apart in the noise one eclipse's corona is read from the next, and the span that wraps in. */
     private const val CORONA_SEED_STRIDE = 37.3

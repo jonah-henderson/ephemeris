@@ -78,6 +78,7 @@ class HorizonPainterCheck : FunSpec({
             colour: Rgba,
             strength: Float,
             seed: Long,
+            reach: Float,
         ) = Unit
 
         override fun drawStarfield(

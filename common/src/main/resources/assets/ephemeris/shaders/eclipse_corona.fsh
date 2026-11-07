@@ -9,6 +9,8 @@ layout(std140) uniform CoronaInfo {
     // x: the disc's radius, as a share of the quad's half-width.  y: how much of the corona shows, 0..1.
     // z: this corona's own place in the noise.  w: the bearing its equator lies along, in radians.
     vec4 Shape;
+    // x: how many times farther than an eclipse's the light reaches.
+    vec4 Reach;
 };
 
 layout(location = 0) in vec2 fromTheCentre;
@@ -45,7 +47,7 @@ void main() {
     if (edge <= 0.0) discard;
 
     // Past the rim, in the disc's radii. Inside it is the sun's, and whatever covers the sun covers this too.
-    float pastTheRim = max(outward / Shape.x - 1.0, 0.0);
+    float pastTheRim = max(outward / Shape.x - 1.0, 0.0) / Reach.x;
 
     // Read round a circle, so the noise closes on itself with no seam.
     float bearing = atan(fromTheCentre.y, fromTheCentre.x);
