@@ -19,6 +19,7 @@ import co.voik.ephemeris.sky.SkySpec
 import co.voik.ephemeris.sky.StarWheel
 import net.minecraft.client.Camera
 import net.minecraft.client.multiplayer.ClientLevel
+import net.minecraft.resources.Identifier
 import net.minecraft.world.attribute.EnvironmentAttributes
 import net.minecraft.world.level.MoonPhase
 import org.joml.Quaternionf
@@ -140,7 +141,8 @@ object SkyPainter {
         val skyLit = 1.0f - nightliness
         val eclipse = LevelDaylight.eclipseOf(look, clockTime)
         val turning = Turning(look.cycles, gameTime)
-        drawBodies(canvas, camera, spec, clockTime, sunAngle, moonAngle, moonPhase, rainBrightness, look.rules, skyLit, eclipse, turning)
+        val starsShowing = if (stars.count > 0) visibility / VANILLAS_BRIGHTEST_STARS else 0.0f
+        drawBodies(canvas, camera, spec, clockTime, sunAngle, moonAngle, moonPhase, rainBrightness, look.rules, skyLit, eclipse, turning, starsShowing)
         eclipse?.let { drawDiamondRing(canvas, spec, it, clockTime) }
         return true
     }
@@ -241,6 +243,7 @@ object SkyPainter {
         skyLit: Float,
         eclipse: Eclipse?,
         turning: Turning,
+        starsShowing: Float,
     ) {
         // Sorted by where each body is *now*: a path that swells and shrinks changes which body is in
         // front, and the sky pass writes no depth, so order is the only thing that decides.
@@ -273,6 +276,10 @@ object SkyPainter {
             val orientation = facingOf(body, clockTime, sunAngle, moonAngle)
             val distance = body.path.distanceAt(clockTime)
             val corona = sprite.corona
+            if (adds && body.dimming > 0.0f && starsShowing > 0.0f) {
+                val cover = airOver(camera, altitude, (starsShowing / STARS_A_DIM_DISC_HIDES_WHOLLY).coerceAtMost(1.0f))
+                coverBehind(canvas, sprite, shape, orientation, distance, cover)
+            }
             canvas.drawBody(
                 shape = shape,
                 orientation = orientation,
@@ -297,6 +304,32 @@ object SkyPainter {
             }
         }
     }
+
+    /**
+     * The sky laid over where a dimmed luminous body's disc stands, in [cover], before the body adds its light: a body
+     * that adds so little would otherwise let the stars behind it through and read as a hole in the sky. Vanilla's
+     * sprites carry no alpha, so their square disc is shaded as a plain quad; a sprite of a level's own covers by its
+     * own alpha.
+     */
+    private fun coverBehind(
+        canvas: SkyCanvas,
+        sprite: Appearance.Sprite,
+        shape: Identifier,
+        orientation: Quaternionf,
+        distance: Float,
+        cover: Rgba,
+    ) {
+        if (sprite.discShare >= 1.0f) {
+            canvas.drawBody(shape, orientation, distance, sprite.angularSize, cover, Rgba.CLEAR, emitsOwnLight = false, palette = null, glowStrength = 0.0f)
+            return
+        }
+        val halfDisc = sprite.angularSize * sprite.discShare
+        fun corner(across: Float, along: Float) = SkyCorner(Vector3f(across * halfDisc, distance, along * halfDisc).rotate(orientation), cover)
+        canvas.drawShapes(listOf(SkyQuad(corner(-1.0f, -1.0f), corner(1.0f, -1.0f), corner(1.0f, 1.0f), corner(-1.0f, 1.0f))), SkyBlend.SHADE)
+    }
+
+    /** How strongly the stars show by the time a dimmed body's disc hides them wholly. */
+    private const val STARS_A_DIM_DISC_HIDES_WHOLLY = 0.1f
 
     /**
      * The light the air lays over a body at [altitudeDegrees], at [strength] of its full measure.
