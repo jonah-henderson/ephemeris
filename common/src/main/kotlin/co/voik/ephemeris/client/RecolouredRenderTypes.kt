@@ -66,7 +66,7 @@ object RecolouredRenderTypes {
     /** [original] rebuilt through the public builder with its creature's own textures recoloured, or null where it has none. */
     private fun recolouredCopyOf(original: RenderType, colour: Rgba): RenderType? {
         val setup = original.state
-        val textures = setup.textures.entries.map { (name, binding) -> name to (binding as RenderSetup.TextureBinding) }
+        val textures = setup.textures.toList()
         if (textures.none { (_, binding) -> isACreaturesOwn(binding.location()) }) return null
         val builder = RenderSetup.builder(setup.pipeline)
         for ((name, binding) in textures) {

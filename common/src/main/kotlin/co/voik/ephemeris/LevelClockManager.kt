@@ -26,7 +26,11 @@ class LevelClockManager internal constructor(
     startsAt: Long,
 ) : ServerClockManager(PackedClockStates.EMPTY) {
 
-    /** The level's own reading of its clock — the one instance every timeline sampler of the level holds. */
+    /**
+     * The level's own reading of its clock — the one instance every timeline sampler of the level holds. NeoForge
+     * deprecates vanilla's constructor and `tick` for its own overloads, which common code cannot name.
+     */
+    @Suppress("DEPRECATION")
     private val own = ServerClockInstance().apply { loadFrom(ClockState(startsAt, NO_PARTIAL, ORDINARY_RATE, false)) }
 
     private val shared: ServerClockManager get() = level.server.clockManager()
@@ -63,8 +67,9 @@ class LevelClockManager internal constructor(
     }
 
     /** One tick of the level's own clock, under the game rule that stops every clock. */
+    @Suppress("DEPRECATION")
     fun advance() {
-        if (level.server.globalGameRules.get(GameRules.ADVANCE_TIME)) own.tick()
+        if (level.gameRules.get(GameRules.ADVANCE_TIME)) own.tick()
     }
 
     override fun getInstance(definition: Holder<WorldClock>): ServerClockInstance =

@@ -73,6 +73,9 @@ test.runtimeClasspath += main.compileClasspath + main.runtimeClasspath + main.ou
 
 tasks.named<Test>("test") {
     useJUnitPlatform()
+    // Minecraft's joml reads memory through `sun.misc.Unsafe`, which Java 24 and on warn of on its first use; the warning
+    // is joml's to answer, and allowing the access is the JDK's own way to say it was seen.
+    jvmArgs("--sun-misc-unsafe-memory-access=allow")
     testLogging {
         events("failed")
         exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL

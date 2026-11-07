@@ -388,7 +388,7 @@ object Blaze3dSkyCanvas : SkyCanvas {
      */
     private const val CURTAINS_APART = 2.1
 
-    /** The rates the curtains swell at. Coprime over [AURORA_FOLD_PERIOD], and both hundredths — see it. */
+    /** The rates the curtains swell at, in hundredths that share no factor, so the two seldom swell together. */
     private const val SLOW_SWELL = 0.03
     private const val SLOWER_SWELL = 0.07
 
@@ -1834,7 +1834,7 @@ object Blaze3dSkyCanvas : SkyCanvas {
     private const val BOW_RADIAL_STEPS = 6
 
     /**
-     * How much of its colour a bow adds — **the lever, exactly as [LUMINOUS_ADDS] is for a body**.
+     * How much of its colour a bow adds — **the lever, exactly as `SkyPainter.LUMINOUS_ADDS` is for a body**.
      *
      * Additive blending sums onto the sky rather than covering it, so a band at full alpha drives its
      * strongest channel to one while the sky's other two are already high, and the arc comes out white
