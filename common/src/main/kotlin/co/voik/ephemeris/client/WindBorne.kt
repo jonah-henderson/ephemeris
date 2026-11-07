@@ -49,7 +49,7 @@ object WindBorne {
     /**
      * Debris off the ground around the player, in a wind of at least [LIFTS_DEBRIS_FROM]: snow off snow, and off
      * anything else a dust of its own colour, so sand blows as sand and a canopy sheds green. Each is a falling-dust
-     * or snowflake particle, which [carry] then takes downwind.
+     * or snowflake particle kicked up from just over the ground, which [carry] then takes downwind as it settles.
      */
     @JvmStatic
     fun tick(minecraft: Minecraft) {
@@ -71,15 +71,17 @@ object WindBorne {
             if (ground.isAir) return@repeat
             val lifted: ParticleOptions = if (ground.`is`(BlockTags.SNOW)) ParticleTypes.SNOWFLAKE
             else BlockParticleOption(ParticleTypes.FALLING_DUST, ground)
-            level.addParticle(
+            val particle = minecraft.particleEngine.createParticle(
                 lifted,
                 x + random.nextDouble(),
-                open + random.nextDouble() * LIFTED_AS_HIGH_AS,
+                open + random.nextDouble() * LIFTED_FROM_AS_HIGH_AS,
                 z + random.nextDouble(),
                 0.0,
                 0.0,
                 0.0,
             )
+            val kick = KICKED_UP_AT_LEAST + random.nextDouble() * (KICKED_UP_AT_MOST - KICKED_UP_AT_LEAST)
+            particle?.setParticleSpeed(0.0, kick, 0.0)
         }
     }
 
@@ -105,7 +107,11 @@ object WindBorne {
     private const val LIFTS_DEBRIS_FROM = 0.5f
     private const val MOST_DEBRIS_A_TICK = 8
 
-    /** How far around the player debris lifts, and how high off the ground. */
+    /** How far around the player debris lifts, and how high off the ground it starts. */
     private const val AROUND = 16
-    private const val LIFTED_AS_HIGH_AS = 1.5
+    private const val LIFTED_FROM_AS_HIGH_AS = 0.2
+
+    /** How fast debris is kicked up, in blocks a tick: it rises a block or two before it settles. */
+    private const val KICKED_UP_AT_LEAST = 0.05
+    private const val KICKED_UP_AT_MOST = 0.12
 }

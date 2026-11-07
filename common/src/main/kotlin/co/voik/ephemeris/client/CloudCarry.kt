@@ -38,11 +38,20 @@ object CloudCarry {
             val step = (ticks - lastSeen).coerceIn(0.0, MOST_A_FRAME_MAY_CARRY)
             lastSeen = ticks
             val blowing = wind.at(ticks)
-            val blocks = step * VANILLA_BLOCKS_PER_TICK * pace * (1.0 + blowing.strength * HURRIED_AT_FULL_STRENGTH)
+            val blocks = step * VANILLA_BLOCKS_PER_TICK * pace * hurriedBy(blowing.strength)
             x = (x + blowing.x * blocks).mod(WRAP)
             z = (z + blowing.z * blocks).mod(WRAP)
             return Carried(x, z)
         }
+    }
+
+    /**
+     * How many times faster than vanilla's the clouds go in a wind of [strength]: barely faster in a breeze, much
+     * faster only near the strongest.
+     */
+    private fun hurriedBy(strength: Float): Double {
+        val blowing = strength.toDouble().coerceIn(0.0, 1.0)
+        return 1.0 + blowing * blowing * blowing * HURRIED_AT_FULL_STRENGTH
     }
 
     /** The most one frame may carry the clouds, in ticks — [SkyDrift]'s bound, for its reasons. */
@@ -51,8 +60,8 @@ object CloudCarry {
     /** Vanilla's clouds drift 0.6 blocks a second. */
     const val VANILLA_BLOCKS_PER_TICK = 0.6 / 20.0
 
-    /** How many times faster than vanilla's the clouds go in the strongest wind, over the pace already asked. */
-    private const val HURRIED_AT_FULL_STRENGTH = 4.0
+    /** How much faster than vanilla's the clouds go in the strongest wind, on top of their own: three times as fast. */
+    private const val HURRIED_AT_FULL_STRENGTH = 2.0
 
     /** A whole number of vanilla's cells across its whole picture, so the wrap lands where the picture repeats. */
     const val WRAP = 256.0 * 12.0
