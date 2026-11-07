@@ -21,8 +21,8 @@ import net.minecraft.tags.BlockTags
 import net.minecraft.world.level.levelgen.Heightmap
 
 /**
- * What a level's wind carries: the light particles, moved downwind after each of their own ticks, and in a strong
- * enough wind, debris lifted off the ground around the player.
+ * What a level's wind carries: the light particles, moved downwind after each of their own ticks, snow thrown past
+ * in falling snow ([WindDrivenSnow]), and in a strong enough wind, debris lifted off the ground around the player.
  *
  * **Carried after the particle has moved itself**, by the same `move` it uses, so a particle keeps everything its
  * own tick does — smoke still rises, leaves still flutter — and collides as it always did. Most of these override
@@ -57,6 +57,7 @@ object WindBorne {
         val player = minecraft.player ?: return
         if (minecraft.isPaused) return
         val blowing = blowingIn(level)
+        if (blowing.strength > 0.0f) WindDrivenSnow.throwPast(level, player, blowing)
         val overTheThreshold = (blowing.strength - LIFTS_DEBRIS_FROM) / (1.0f - LIFTS_DEBRIS_FROM)
         if (overTheThreshold <= 0.0f) return
         val random = level.random
