@@ -17,6 +17,8 @@ import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
+import java.util.function.BooleanSupplier;
+
 /**
  * Lets a level keep weather of its own — see {@link LevelWeather} for what that buys and why it is needed.
  *
@@ -99,6 +101,18 @@ public abstract class ServerLevelMixin {
         LevelClockManager own = LevelClocks.managerFor((ServerLevel) (Object) this);
         if (own != null) {
             callback.setReturnValue(own);
+        }
+    }
+
+    /**
+     * Skips the tick of a level closed since the tick loop began: the loop walks a copy of the levels on both
+     * loaders ({@code MinecraftServerMixin} on Fabric, NeoForge's own array), so it can still reach one.
+     */
+    @Inject(method = "tick", at = @At("HEAD"), cancellable = true)
+    private void ephemeris$notOnceClosed(BooleanSupplier haveTime, CallbackInfo callback) {
+        ServerLevel level = (ServerLevel) (Object) this;
+        if (level.getServer().getLevel(level.dimension()) != level) {
+            callback.cancel();
         }
     }
 

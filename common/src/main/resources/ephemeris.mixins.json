@@ -5,6 +5,7 @@
   "mixins": [
     "EnvironmentAttributesMixin",
     "LevelMixin",
+    "MinecraftServerMixin",
     "ServerLevelMixin",
     "TimeCommandMixin",
     "TimelineLayersMixin"
