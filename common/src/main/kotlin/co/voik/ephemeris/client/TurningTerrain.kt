@@ -67,8 +67,22 @@ object TurningTerrain {
             Std140Builder.intoBuffer(view.data()).putVec4(groundTurn, waterTurn, 0.0f, 0.0f)
         }
         pass.setUniform(UNIFORM, turning.currentBuffer())
+        boundThisFrame = true
+    }
+
+    /**
+     * Moves the turns on to the ring's next buffer, once a frame and outside any pass: rotating makes a fence, which may
+     * not be made while a pass is open, and [bindTo] is called from inside one. Every pass in a frame writes the same
+     * turns, so the passes sharing one buffer agree.
+     */
+    @JvmStatic
+    fun endFrame() {
+        if (!boundThisFrame) return
+        boundThisFrame = false
         turning.rotate()
     }
+
+    private var boundThisFrame = false
 
     private fun cyclesNow(): ColourCycles? {
         val level = Minecraft.getInstance().level ?: return null
