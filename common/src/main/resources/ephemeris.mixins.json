@@ -18,6 +18,7 @@
     "client.CloudRendererMixin",
     "client.EntityRenderDispatcherMixin",
     "client.GameRendererMixin",
+    "client.LeafParticleAccessor",
     "client.ParticleAccessor",
     "client.ParticleGroupMixin",
     "client.SkyRendererMixin",

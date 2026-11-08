@@ -1,7 +1,11 @@
 package co.voik.ephemeris.client
 
+import co.voik.ephemeris.mixin.client.LeafParticleAccessor
+import co.voik.ephemeris.mixin.client.ParticleAccessor
 import co.voik.ephemeris.sky.LevelWind
 import co.voik.ephemeris.sky.Wind
+import java.util.Collections
+import java.util.WeakHashMap
 import net.minecraft.client.Minecraft
 import net.minecraft.client.multiplayer.ClientLevel
 import net.minecraft.client.particle.BaseAshSmokeParticle
@@ -15,9 +19,14 @@ import net.minecraft.client.particle.SuspendedTownParticle
 import net.minecraft.client.particle.WhiteSmokeParticle
 import net.minecraft.core.BlockPos
 import net.minecraft.core.particles.BlockParticleOption
+import net.minecraft.core.particles.ColorParticleOption
 import net.minecraft.core.particles.ParticleOptions
 import net.minecraft.core.particles.ParticleTypes
 import net.minecraft.tags.BlockTags
+import net.minecraft.world.level.block.Blocks
+import net.minecraft.world.level.block.LeavesBlock
+import net.minecraft.world.level.block.UntintedParticleLeavesBlock
+import net.minecraft.world.level.block.state.BlockState
 import net.minecraft.world.level.levelgen.Heightmap
 
 /**
@@ -44,12 +53,30 @@ object WindBorne {
         if (blowing.strength <= 0.0f) return
         val carried = blowing.strength * CARRIED_AT_FULL_STRENGTH
         particle.move(blowing.x * carried, 0.0, blowing.z * carried)
+        if (particle in debris) (particle as ParticleAccessor).`ephemeris$setRising`(liftOf(particle, blowing.strength))
     }
 
     /**
-     * Debris off the ground around the player, in a wind of at least [LIFTS_DEBRIS_FROM]: snow off snow, and off
-     * anything else a dust of its own colour, so sand blows as sand and a canopy sheds green. Each is a falling-dust
-     * or snowflake particle kicked up from just over the ground, which [carry] then takes downwind as it settles.
+     * How fast debris rises this tick: climbing gently off the ground for most of its flight, then taken up off it
+     * towards the end, the harder the wind the higher. Set outright each tick, so its own gravity never builds an arc; a leaf keeps
+     * its own flutter across.
+     */
+    private fun liftOf(particle: Particle, strength: Float): Double {
+        val lifetime = particle.lifetime.coerceAtLeast(1)
+        val through = ((particle as ParticleAccessor).`ephemeris$age`().toDouble() / lifetime).coerceIn(0.0, 1.0)
+        val rising = ((through - SKIMS_FOR) / (1.0 - SKIMS_FOR)).coerceIn(0.0, 1.0)
+        val eased = rising * rising * (3.0 - 2.0 * rising)
+        return strength * (eased * RISES_AT_MOST + (1.0 - eased) * RISES_WHILE_SKIMMING)
+    }
+
+    /** The debris this lifted, which [carry] flies differently from the particles the wind only carries. */
+    private val debris: MutableSet<Particle> = Collections.newSetFromMap(WeakHashMap())
+
+    /**
+     * Debris off the ground around the player, in a wind of at least [LIFTS_DEBRIS_FROM]: snow off snow, leaves off a
+     * canopy as the leaves themselves let fall, and sand and leaf litter as dust of their own colour; nothing off any
+     * other ground. Each starts at rest just over the ground and [carry] flies it: downwind along the ground, then up
+     * off it.
      */
     @JvmStatic
     fun tick(minecraft: Minecraft) {
@@ -68,10 +95,10 @@ object WindBorne {
             val open = level.getHeight(Heightmap.Types.MOTION_BLOCKING, x, z)
             cursor.set(x, open, z)
             if (!level.canSeeSky(cursor)) return@repeat
-            val ground = level.getBlockState(cursor.set(x, open - 1, z))
-            if (ground.isAir) return@repeat
-            val lifted: ParticleOptions = if (ground.`is`(BlockTags.SNOW)) ParticleTypes.SNOWFLAKE
-            else BlockParticleOption(ParticleTypes.FALLING_DUST, ground)
+            // Leaf litter and a thin snow layer lie in the open block itself, over whatever holds them up.
+            val lying = level.getBlockState(cursor.set(x, open, z))
+            val ground = if (isLoose(lying)) lying else level.getBlockState(cursor.set(x, open - 1, z))
+            val lifted = liftedOff(ground, level, cursor) ?: return@repeat
             val particle = minecraft.particleEngine.createParticle(
                 lifted,
                 x + random.nextDouble(),
@@ -81,8 +108,24 @@ object WindBorne {
                 0.0,
                 0.0,
             )
-            val kick = KICKED_UP_AT_LEAST + random.nextDouble() * (KICKED_UP_AT_MOST - KICKED_UP_AT_LEAST)
-            particle?.setParticleSpeed(0.0, kick, 0.0)
+            if (particle == null) return@repeat
+            particle.lifetime = SHORTEST_FLIGHT + random.nextInt(LONGEST_FLIGHT - SHORTEST_FLIGHT + 1)
+            debris += particle
+        }
+    }
+
+    /** Whether [ground] lies loose in the open block over the ground: leaf litter or a thin snow layer. */
+    private fun isLoose(ground: BlockState): Boolean = ground.`is`(Blocks.LEAF_LITTER) || ground.`is`(BlockTags.SNOW)
+
+    /** What the wind lifts off [ground] at [at], or null where it lifts nothing: sand, snow, leaves and leaf litter. */
+    private fun liftedOff(ground: BlockState, level: ClientLevel, at: BlockPos): ParticleOptions? {
+        val block = ground.block
+        return when {
+            ground.`is`(BlockTags.SNOW) -> ParticleTypes.SNOWFLAKE
+            block is UntintedParticleLeavesBlock -> (block as LeafParticleAccessor).`ephemeris$leafParticle`()
+            block is LeavesBlock -> ColorParticleOption.create(ParticleTypes.TINTED_LEAVES, level.getClientLeafTintColor(at))
+            ground.`is`(BlockTags.SAND) || ground.`is`(Blocks.LEAF_LITTER) -> BlockParticleOption(ParticleTypes.FALLING_DUST, ground)
+            else -> null
         }
     }
 
@@ -112,7 +155,17 @@ object WindBorne {
     private const val AROUND = 16
     private const val LIFTED_FROM_AS_HIGH_AS = 0.2
 
-    /** How fast debris is kicked up, in blocks a tick: it rises a block or two before it settles. */
-    private const val KICKED_UP_AT_LEAST = 0.05
-    private const val KICKED_UP_AT_MOST = 0.12
+    /** How many ticks debris flies, at the least and the most: two to four and a half seconds. */
+    private const val SHORTEST_FLIGHT = 40
+    private const val LONGEST_FLIGHT = 90
+
+    /** How much of its flight debris skims the ground before the wind takes it up. */
+    private const val SKIMS_FOR = 0.55
+
+    /**
+     * How fast debris rises at the end of its flight in the strongest wind, and while it skims, a tick: enough while
+     * skimming to stay off the ground, about half a block over the skim.
+     */
+    private const val RISES_AT_MOST = 0.08
+    private const val RISES_WHILE_SKIMMING = 0.02
 }
