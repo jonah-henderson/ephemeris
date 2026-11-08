@@ -23,8 +23,9 @@ object LevelDaylight {
      * What [level]'s sky darkening should be, or **null** to leave vanilla's alone.
      *
      * Null covers every case where we have nothing better to say: a level with no appearance, an ordinary
-     * sky, a sky with no suns at all, and [Daylight.VANILLA_CLOCK] — which is a consumer saying explicitly
-     * that the visuals may disagree with the rules.
+     * sky, and [Daylight.VANILLA_CLOCK] — which is a consumer saying explicitly that the visuals may disagree
+     * with the rules. **A sky with no sun is night**, as its look is held at midnight: left to vanilla's clock,
+     * the land was lit by day under a midnight sky. A glaring moon still lifts it.
      */
     fun skyDarkenFor(level: Level): Int? {
         val look = LevelLooks.anywhere(level) ?: return null
@@ -32,7 +33,7 @@ object LevelDaylight {
         if (look.rules.daylight == Daylight.VANILLA_CLOCK) return null
 
         val reading = look.readAt(level.defaultClockTime)
-        val deciding = decidingSun(reading, look.rules) ?: return null
+        val deciding = decidingSun(reading, look.rules) ?: return moonlit(NIGHT_DARKENING, reading)
         return moonlit(darkeningUnder(look.sky, deciding, reading.dayTime), reading)
     }
 
@@ -191,9 +192,8 @@ object LevelDaylight {
      * the [sky] the reading was taken of, an eclipse brings the stars out too.
      *
      * **A sky with no sun in it is never lit**, whatever hour the clock says, and that is the one case
-     * that cannot be read off an altitude because there is none to read. [skyDarkenFor] answers null to
-     * the same absence because it is asking a different question: what the *world* should do, where
-     * leaving vanilla's own curve alone is the safer silence.
+     * that cannot be read off an altitude because there is none to read. [skyDarkenFor] holds the world at
+     * night for the same absence.
      */
     fun starlitnessOf(reading: SkyReading, rules: SkyRules, sky: SkySpec? = null): Float {
         val deciding = decidingSun(reading, rules) ?: return FULLY_STARLIT
