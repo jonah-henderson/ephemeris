@@ -360,8 +360,8 @@ object SkyPainter {
      * How strong the halo round a moon at full [CelestialBody.glare] is, and how many times farther than an eclipse's
      * corona it spreads: a moon is looked at full on, so its halo must be wider and stronger than a sun's to show.
      */
-    private const val MOON_HALO = 1.3f
-    private const val MOON_HALO_REACH = 2.0f
+    private const val MOON_HALO = 2.0f
+    private const val MOON_HALO_REACH = 3.0f
 
     /** How much of its light a body at full [CelestialBody.dimming] loses from its disc. */
     private const val DIMMEST_DISC = 0.65f

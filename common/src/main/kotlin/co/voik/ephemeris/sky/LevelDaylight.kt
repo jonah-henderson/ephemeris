@@ -47,6 +47,16 @@ object LevelDaylight {
         return minOf(darkening, NIGHT_DARKENING - Math.round(brightest * MOST_MOONLIGHT_LIFTS))
     }
 
+    /**
+     * How much the brightest moon in [look] lights the night at [dayTime], `0..1`: what lifts the light you see by night,
+     * as [moonlit] lifts the darkening the world's rules read.
+     */
+    fun moonlightOf(look: LevelLook, dayTime: Long): Float {
+        val reading = look.readAt(dayTime)
+        val sun = reading.suns.firstOrNull()?.body?.path
+        return (reading.moons.maxOfOrNull { moonlightOf(it, sun, reading.dayTime) } ?: 0.0f).coerceIn(0.0f, 1.0f)
+    }
+
     /** How much [moon] lights the night, `0..1`: by its glare, how full it shows and how high it stands. */
     private fun moonlightOf(moon: BodyReading, sun: CelestialPath?, dayTime: Long): Float {
         val glare = moon.body.glare
