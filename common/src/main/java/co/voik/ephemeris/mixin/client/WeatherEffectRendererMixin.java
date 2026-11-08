@@ -1,6 +1,7 @@
 package co.voik.ephemeris.mixin.client;
 
 import co.voik.ephemeris.client.LevelRain;
+import co.voik.ephemeris.sky.LevelWind;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import java.util.List;
 import net.minecraft.client.multiplayer.ClientLevel;
@@ -22,6 +23,9 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  * {@code createRainColumnInstance}, which is handed no level. So the level's pace is read once as the columns
  * are extracted, and every column's speed scaled by it. Neither loader has a weather-render event.
  *
+ * <p>Where the wind blows, vanilla's snow columns are not drawn at all: {@code WindDrivenSnow} throws the level's snow
+ * past instead, and a column of flakes drifting lazily under a leaning texture read as a fault beside it.
+ *
  * <p>A column is one quad from its top down to where it lands, built in {@code prepareInstances} for the rain's
  * columns and then the snow's. Its two top corners, the first two vertices, are moved upwind by the column's height
  * times the lean, so the streaks fall slanted and still land on their own column.
@@ -38,6 +42,10 @@ public abstract class WeatherEffectRendererMixin {
 
     @Unique
     private LevelRain.Lean ephemeris$lean = LevelRain.Lean.UPRIGHT;
+
+    /** Whether the level's wind blows this frame, and its snow is thrown rather than drawn in columns. */
+    @Unique
+    private boolean ephemeris$windBlows = false;
 
     /** The snow's columns this frame, to tell the snow's pass through {@code prepareInstances} from the rain's. */
     @Unique
@@ -58,6 +66,7 @@ public abstract class WeatherEffectRendererMixin {
             ClientLevel level, float partialTicks, Vec3 cameraPos, WeatherRenderState renderState, CallbackInfo info) {
         this.ephemeris$pace = LevelRain.of(level).getPace();
         this.ephemeris$lean = LevelRain.leanIn(level, partialTicks);
+        this.ephemeris$windBlows = LevelWind.INSTANCE.now(level, partialTicks).getStrength() > 0.0f;
     }
 
     /** The column's speed: the second float local, after {@code partialTicks}. */
@@ -68,6 +77,9 @@ public abstract class WeatherEffectRendererMixin {
 
     @Inject(method = "prepare", at = @At("HEAD"))
     private void ephemeris$noteTheSnow(Vec3 cameraPos, WeatherRenderState renderState, CallbackInfo info) {
+        if (this.ephemeris$windBlows) {
+            renderState.snowColumns.clear();
+        }
         this.ephemeris$snowColumns = renderState.snowColumns;
     }
 

@@ -3,6 +3,7 @@ package co.voik.ephemeris.client
 import co.voik.ephemeris.sky.LevelWind
 import co.voik.ephemeris.sky.Wind
 import net.minecraft.client.multiplayer.ClientLevel
+import kotlin.math.pow
 
 /**
  * How far a level's wind has carried its clouds, in blocks along X and Z.
@@ -46,13 +47,16 @@ object CloudCarry {
     }
 
     /**
-     * How many times faster than vanilla's the clouds go in a wind of [strength]: barely faster in a breeze, much
-     * faster only near the strongest.
+     * How many times faster than vanilla's the clouds go in a wind of [strength]: barely faster in a breeze, half again
+     * in a written wind, nearly twice in an ordinary gale, and three times only at the strongest.
      */
     private fun hurriedBy(strength: Float): Double {
         val blowing = strength.toDouble().coerceIn(0.0, 1.0)
-        return 1.0 + blowing * blowing * blowing * HURRIED_AT_FULL_STRENGTH
+        return 1.0 + blowing.pow(HURRY_POWER) * HURRIED_AT_FULL_STRENGTH
     }
+
+    /** How sharply the clouds' hurry rises with the wind: by its fourth power. */
+    private const val HURRY_POWER = 4.0
 
     /** The most one frame may carry the clouds, in ticks — [SkyDrift]'s bound, for its reasons. */
     private const val MOST_A_FRAME_MAY_CARRY = 4.0

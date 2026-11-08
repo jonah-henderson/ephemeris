@@ -10,15 +10,15 @@ import net.minecraft.world.level.biome.Biome
 
 /**
  * Snow thrown past on a level's wind: flakes around the player, more the harder it blows and the heavier it snows,
- * each sent along the wind and kept moving by [WindBorne.carry]. Vanilla's snow is a column of flakes drifting
- * straight down it, which leaning only tilts; these are what make the snow look driven.
+ * each sent along the wind and kept moving by [WindBorne.carry]. While the wind blows these are all the snow there is:
+ * vanilla's columns, flakes drifting lazily under a texture that leaning only tilts, are not drawn.
  */
 object WindDrivenSnow {
 
     /** This tick's flakes around [player] in [level], blowing as [blowing] says. */
     fun throwPast(level: ClientLevel, player: LocalPlayer, blowing: Wind.Blowing) {
         val snowing = level.getRainLevel(1.0f)
-        val expected = snowing * blowing.strength * MOST_FLAKES_A_TICK
+        val expected = snowing * (FLAKES_IN_ANY_WIND + blowing.strength * MORE_FLAKES_IN_THE_STRONGEST)
         if (expected <= 0.0f) return
         val random = level.random
         val cursor = BlockPos.MutableBlockPos()
@@ -48,8 +48,12 @@ object WindDrivenSnow {
         return whole + if (draw < expected - whole) 1 else 0
     }
 
-    /** How many flakes a tick in the heaviest snow and the strongest wind. */
-    private const val MOST_FLAKES_A_TICK = 50.0f
+    /**
+     * How many flakes a tick in the heaviest snow in any wind, and how many more in the strongest: vanilla's columns
+     * are not drawn while the wind blows, so these are all the snow there is.
+     */
+    private const val FLAKES_IN_ANY_WIND = 30.0f
+    private const val MORE_FLAKES_IN_THE_STRONGEST = 50.0f
 
     /** How fast a flake is thrown along the wind in the strongest, in blocks a tick, and how much of that it falls. */
     private const val THROWN_AT_FULL_STRENGTH = 0.7

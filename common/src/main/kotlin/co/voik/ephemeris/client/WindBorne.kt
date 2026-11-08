@@ -23,6 +23,7 @@ import net.minecraft.core.particles.ColorParticleOption
 import net.minecraft.core.particles.ParticleOptions
 import net.minecraft.core.particles.ParticleTypes
 import net.minecraft.tags.BlockTags
+import net.minecraft.tags.FluidTags
 import net.minecraft.world.level.block.Blocks
 import net.minecraft.world.level.block.LeavesBlock
 import net.minecraft.world.level.block.UntintedParticleLeavesBlock
@@ -51,6 +52,7 @@ object WindBorne {
         if (!particle.isAlive || !isLightEnough(particle)) return
         val blowing = blowingIn(level)
         if (blowing.strength <= 0.0f) return
+        if (isUnderWater(particle, level)) return
         val carried = blowing.strength * CARRIED_AT_FULL_STRENGTH
         particle.move(blowing.x * carried, 0.0, blowing.z * carried)
         if (particle in debris) (particle as ParticleAccessor).`ephemeris$setRising`(liftOf(particle, blowing.strength))
@@ -67,6 +69,13 @@ object WindBorne {
         val rising = ((through - SKIMS_FOR) / (1.0 - SKIMS_FOR)).coerceIn(0.0, 1.0)
         val eased = rising * rising * (3.0 - 2.0 * rising)
         return strength * (eased * RISES_AT_MOST + (1.0 - eased) * RISES_WHILE_SKIMMING)
+    }
+
+    /** Whether [particle] is in water, where no wind reaches it. */
+    private fun isUnderWater(particle: Particle, level: ClientLevel): Boolean {
+        val box = particle.boundingBox
+        val at = BlockPos.containing((box.minX + box.maxX) / 2, (box.minY + box.maxY) / 2, (box.minZ + box.maxZ) / 2)
+        return level.getFluidState(at).`is`(FluidTags.WATER)
     }
 
     /** The debris this lifted, which [carry] flies differently from the particles the wind only carries. */
