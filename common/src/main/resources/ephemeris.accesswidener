@@ -17,7 +17,7 @@ accessWidener v2 official
 #
 # **Do not reach for the NeoForge equivalents.** The patched jar carries `forgeGetWorldMap()` and
 # `markWorldsDirty()`, and `common` compiles against *vanilla* (NeoForm), where neither exists — code written
-# against them compiles and then dies on Fabric. See `notes/neoforge-dimensions-research.md`.
+# against them compiles and then dies on Fabric.
 accessible	field	net/minecraft/server/MinecraftServer	levels	Ljava/util/Map;
 accessible	field	net/minecraft/server/MinecraftServer	executor	Ljava/util/concurrent/Executor;
 accessible	field	net/minecraft/server/MinecraftServer	storageSource	Lnet/minecraft/world/level/storage/LevelStorageSource$LevelStorageAccess;
