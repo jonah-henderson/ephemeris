@@ -88,6 +88,15 @@ object LevelClocks {
         for (player in level.server.playerList.players) RuntimeLevelPlatform.of().sendToPlayer(player, telling)
     }
 
+    /**
+     * Tells [player] where [level]'s own clock stands now, where it keeps one — for a client about to draw a level it
+     * is not in, which would otherwise keep the overworld's hour until the next beat.
+     */
+    fun tell(player: ServerPlayer, level: ServerLevel) {
+        val manager = managers[level.dimension()] ?: return
+        RuntimeLevelPlatform.of().sendToPlayer(player, LevelClockPayload(level.dimension(), manager.state, level.gameTime))
+    }
+
     /** Tells a player who has just joined where every level's own clock stands. */
     fun joined(player: ServerPlayer) {
         val server = player.level().server
