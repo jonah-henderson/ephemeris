@@ -62,6 +62,12 @@ data class Aurora(
     val warmestGround: Float? = null,
     /** Which nights it takes and which way its folds lie. Two levels alike still differ. */
     val seed: Long = 0L,
+    /**
+     * Where in the sky it hangs, `-1..1`: nought where a display ordinarily rides, one drawn in overhead, and minus one
+     * lying low along the horizon. Its curtains stand nearer or further off, since distance is what sets how high an
+     * arc rides.
+     */
+    val elevation: Float = ORDINARY_ELEVATION,
 ) {
 
     /**
@@ -118,6 +124,8 @@ data class Aurora(
 
         const val ORDINARY_FREQUENCY = 0.35f
 
+        const val ORDINARY_ELEVATION = 0.0f
+
         /** How faint the least of its nights is. Above nothing, or a qualifying night would show nothing. */
         const val FAINTEST = 0.35f
 
@@ -135,8 +143,9 @@ data class Aurora(
                 Codec.FLOAT.optionalFieldOf("bearing", 0.0f).forGetter(Aurora::bearingDegrees),
                 Codec.FLOAT.optionalFieldOf("warmest_ground").forGetter { Optional.ofNullable(it.warmestGround) },
                 Codec.LONG.optionalFieldOf("seed", 0L).forGetter(Aurora::seed),
-            ).apply(instance) { colours, glow, breadth, height, curtains, frequency, bearing, warmest, seed ->
-                Aurora(colours, glow, breadth, height, curtains, frequency, bearing, warmest.orElse(null), seed)
+                Codec.FLOAT.optionalFieldOf("elevation", ORDINARY_ELEVATION).forGetter(Aurora::elevation),
+            ).apply(instance) { colours, glow, breadth, height, curtains, frequency, bearing, warmest, seed, elevation ->
+                Aurora(colours, glow, breadth, height, curtains, frequency, bearing, warmest.orElse(null), seed, elevation)
             }
         }
     }

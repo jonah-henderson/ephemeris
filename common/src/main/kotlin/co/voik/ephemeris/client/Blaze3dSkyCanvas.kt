@@ -9,6 +9,7 @@ import co.voik.ephemeris.sky.Corona
 import co.voik.ephemeris.sky.HorizonFan
 import co.voik.ephemeris.sky.Palette
 import co.voik.ephemeris.sky.Rainbow
+import kotlin.math.pow
 import kotlin.math.cos
 import kotlin.math.sin
 import com.mojang.renderpearl.api.pipeline.PrimitiveTopology
@@ -1592,7 +1593,7 @@ object Blaze3dSkyCanvas : SkyCanvas {
     private fun writeAuroraInfo(aurora: Aurora, curtain: Int, many: Int, showing: Float, drifted: Float, turned: Turned) {
         val phase = curtain * CURTAINS_APART.toFloat()
         val varied = 1.0f - CURTAIN_VARIANCE * ((curtain * CURTAIN_STRIDE) % 1.0f)
-        val away = standingOff(curtain, many)
+        val away = standingOff(curtain, many) * ELEVATION_REACH.pow(-aurora.elevation.coerceIn(-1.0f, 1.0f))
         // A taller display reaches higher rather than starting lower: where the light *begins* is where the
         // air stops the electrons, which is not a thing a writer moves. Never stubby — the floor is high
         // because a short curtain reads as a ribbon rather than as a modest aurora.
@@ -1621,6 +1622,12 @@ object Blaze3dSkyCanvas : SkyCanvas {
         // looks like. Inside, arcs run past you on both hands (Jonah, 2026-08-30, walked).
         return if (curtain % 2 == 0) away else -away
     }
+
+    /**
+     * How many times nearer an aurora drawn fully overhead stands, and further one lying fully along the horizon
+     * ([Aurora.elevation]).
+     */
+    private const val ELEVATION_REACH = 2.5f
 
     /** Where a lone curtain stands, as a multiple of the nearest — well up the sky but not overhead. */
     private const val MIDDLE_DISTANCE = 3.0f
