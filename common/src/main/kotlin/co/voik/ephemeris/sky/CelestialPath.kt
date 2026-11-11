@@ -328,6 +328,7 @@ sealed interface CelestialPath {
                 MOTIONS to Motions.MAP_CODEC,
                 NAMED to Named.MAP_CODEC,
                 HELD to Held.MAP_CODEC,
+                ELLIPSE to Ellipse.MAP_CODEC,
             )
         }
 
@@ -343,6 +344,7 @@ sealed interface CelestialPath {
         const val MOTIONS = "motions"
         const val NAMED = "named"
         const val HELD = "held"
+        const val ELLIPSE = "ellipse"
     }
 
     val kindKey: String
