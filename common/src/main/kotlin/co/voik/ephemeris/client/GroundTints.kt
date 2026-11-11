@@ -8,6 +8,7 @@ import co.voik.ephemeris.sky.Look
 import net.minecraft.client.multiplayer.ClientLevel
 import net.minecraft.client.color.block.BlockTintSource
 import net.minecraft.client.renderer.BiomeColors
+import net.minecraft.client.renderer.chunk.RenderSectionRegion
 import net.minecraft.client.renderer.block.BlockAndTintGetter
 import net.minecraft.core.BlockPos
 import net.minecraft.tags.BlockTags
@@ -193,17 +194,9 @@ object GroundTints {
      */
     fun leafTintIn(state: BlockState, level: BlockAndTintGetter, pos: BlockPos): Int? {
         if (!state.`is`(BlockTags.LEAVES)) return null
-        // **The level being rendered, because the region handed in is a view and not a level.** Sections
-        // compile off the render thread, so this can be a tick stale while a player changes dimension —
-        // and a stale answer is a leaf drawn the other level's colour until the section rebuilds, which it
-        // is about to do anyway.
-        //
-        // **[OffscreenLevelRender] cannot help here, and this is the one place it cannot.** That scope
-        // lives on the render thread for the length of one frame; section compilation happens on a worker
-        // and asks for colours whenever it likes. So a level rendered off-screen gets *the player's* leaf
-        // tint in its chunks. Fixing it properly wants the level threaded through section compilation,
-        // which is vanilla's to give and does not.
-        val here = net.minecraft.client.Minecraft.getInstance().level
+        // **The level the section compiles for**, read off the region it compiles from, so a level drawn off-screen —
+        // a panel looking into another — has its own leaves rather than the player's.
+        val here = levelBehind(level)
         if (here == null) return declined("nowhere", "a leaf asked, and there is no level to answer for")
         val look = LevelLooks.of(here.dimension())
         if (look == null) {
@@ -215,6 +208,18 @@ object GroundTints {
         val painted = BiomeColors.getAverageFoliageColor(level, pos)
         sayIt("painting", "painting leaves %06x in %s".format(painted and RGB, here.dimension().identifier()))
         return painted
+    }
+
+    /**
+     * The level a tint is being asked for through [getter]: the one a section compiles for, where [getter] is the
+     * region it compiles from (sections compile on a worker, with no level to hand but this); [getter] itself where
+     * it is a level; and the player's where neither says. For a block's own tint as much as for a leaf's.
+     */
+    @JvmStatic
+    fun levelBehind(getter: BlockAndTintGetter): ClientLevel? = when (getter) {
+        is RenderSectionRegion -> getter.level
+        is ClientLevel -> getter
+        else -> net.minecraft.client.Minecraft.getInstance().level
     }
 
     /**

@@ -68,3 +68,8 @@ accessible	field	net/minecraft/client/renderer/rendertype/RenderSetup	affectsCru
 accessible	field	net/minecraft/client/renderer/rendertype/RenderSetup	sortOnUpload	Z
 accessible	field	net/minecraft/client/renderer/rendertype/RenderSetup	layeringTransform	Lnet/minecraft/client/renderer/rendertype/LayeringTransform;
 accessible	field	net/minecraft/client/renderer/rendertype/RenderSetup	forceSolidModelPhase	Z
+
+# The level a section is compiling for, read off the region it compiles from (`GroundTints.levelBehind`): a tint
+# asked on a compile worker otherwise has only the player's level to go by, and a level drawn off-screen — a panel
+# looking into another — took the player's colours.
+accessible	field	net/minecraft/client/renderer/chunk/RenderSectionRegion	level	Lnet/minecraft/client/multiplayer/ClientLevel;
