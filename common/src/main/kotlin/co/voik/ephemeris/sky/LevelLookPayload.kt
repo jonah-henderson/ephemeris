@@ -1,5 +1,6 @@
 package co.voik.ephemeris.sky
 
+import co.voik.ephemeris.Rgba
 import com.mojang.serialization.Codec
 import io.netty.buffer.ByteBuf
 import net.minecraft.core.registries.Registries
@@ -74,8 +75,10 @@ data class LevelLookPayload(val looks: List<Entry>) : CustomPacketPayload {
             LevelLook::cycles,
             ByteBufCodecs.fromCodec(CreatureColours.CODEC),
             LevelLook::creatures,
-        ) { sky, air, corners, rules, airFrom, filters, rain, wind, cycles, creatures ->
-            LevelLook(sky, air, corners, rules, airFrom.orElse(null), filters, rain, wind, cycles, creatures)
+            ByteBufCodecs.fromCodec(Codec.unboundedMap(Identifier.CODEC, Rgba.CODEC)),
+            LevelLook::blocks,
+        ) { sky, air, corners, rules, airFrom, filters, rain, wind, cycles, creatures, blocks ->
+            LevelLook(sky, air, corners, rules, airFrom.orElse(null), filters, rain, wind, cycles, creatures, blocks)
         }
 
         private val ENTRY_STREAM_CODEC: StreamCodec<ByteBuf, Entry> = StreamCodec.composite(

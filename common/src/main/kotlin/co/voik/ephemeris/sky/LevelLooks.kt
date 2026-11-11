@@ -1,5 +1,6 @@
 package co.voik.ephemeris.sky
 
+import co.voik.ephemeris.Rgba
 import net.minecraft.resources.Identifier
 import net.minecraft.resources.ResourceKey
 import net.minecraft.world.level.Level
@@ -128,7 +129,15 @@ data class LevelLook(
     val cycles: ColourCycles = ColourCycles.NONE,
     /** The colours its creatures are drawn in. */
     val creatures: CreatureColours = CreatureColours.NONE,
+    /**
+     * A colour for a block, by its id, that this level paints it — for a block whose model takes a tint and whose tint
+     * asks ([blockTint]). A block's own tint stands wherever this says nothing about it.
+     */
+    val blocks: Map<Identifier, Rgba> = emptyMap(),
 ) {
+    /** The colour this level paints [block], or null where it leaves the block's own. */
+    fun blockTint(block: Identifier): Rgba? = blocks[block]
+
     /** Where everything stands at [dayTime]. Pure, so both sides get the same answer without asking. */
     fun readAt(dayTime: Long): SkyReading = SkyReading.of(sky, dayTime)
 
@@ -137,7 +146,7 @@ data class LevelLook(
         get() = sky.isOrdinary && air.saysNothing && corners.isEmpty() && sky.decks.isEmpty() && airFrom == null &&
             filters.isEmpty() && rain.isOrdinary && sky.cloudPace == SkySpec.ORDINARY_CLOUD_PACE && sky.cloudPattern == null &&
             wind.isStill &&
-            cycles.isNone && creatures.isNone
+            cycles.isNone && creatures.isNone && blocks.isEmpty()
 
     companion object {
         /** The filter this library ships: the level drained of colour, to its own brightness. */
