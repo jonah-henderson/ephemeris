@@ -56,6 +56,15 @@ class CloudPatternCheck : FunSpec({
         }
     }
 
+    test("a holed sheet is a full sheet less round holes, about the share asked for") {
+        val sheet = CloudPattern(cover = 1.0f, holes = 0.2f, seed = 9L).cells()
+        val clear = 1.0f - shareOf(sheet)
+        check(clear in 0.15f..0.2f) { "asked for a fifth holes, cut ${clear}" }
+        val gaps = clumpsIn(BooleanArray(sheet.size) { !sheet[it] })
+        check(gaps in 150..340) { "a fifth of the sheet in holes seven cells across, some meeting, came out as $gaps gaps" }
+        check(CloudPattern(cover = 1.0f, holes = 0.2f).drawsItsOwnPicture) { "a holed sheet drew vanilla's picture" }
+    }
+
     test("broad patches are fewer clumps than small bits at the same cover") {
         val bits = clumpsIn(CloudPattern(cover = 0.3f, clumping = -1.0f, seed = 5L).cells())
         val patches = clumpsIn(CloudPattern(cover = 0.3f, clumping = 1.0f, seed = 5L).cells())

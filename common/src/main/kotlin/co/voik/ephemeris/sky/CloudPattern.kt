@@ -9,8 +9,9 @@ import kotlin.random.Random
 /**
  * The shape of a level's vanilla clouds, which vanilla reads off one picture whose every pixel is a cell of cloud:
  * how much of the sky is cloud ([cover], a share, or null for vanilla's own picture), whether it lies in small bits or
- * broad patches ([clumping], -1 to 1), whether it is [torn] into rags streaming along the drift, and how large a cell is
- * against vanilla's twelve blocks ([cellScale]). The picture is generated here ([cells]), tiling as vanilla's does.
+ * broad patches ([clumping], -1 to 1), whether it is [torn] into rags streaming along the drift, how large a cell is
+ * against vanilla's twelve blocks ([cellScale]), and how much of it is cut away in round [holes]. The picture is
+ * generated here ([cells]), tiling as vanilla's does.
  */
 data class CloudPattern(
     val cover: Float? = null,
@@ -18,12 +19,34 @@ data class CloudPattern(
     val torn: Boolean = false,
     val cellScale: Float = 1.0f,
     val seed: Long = 0L,
+    /** The share of the picture cut away in round holes once it is drawn — an overcast sheet holed through. */
+    val holes: Float = 0.0f,
 ) {
     /** Whether this asks for a picture of its own, rather than vanilla's at some size. */
-    val drawsItsOwnPicture: Boolean get() = cover != null || clumping != 0.0f || torn
+    val drawsItsOwnPicture: Boolean get() = cover != null || clumping != 0.0f || torn || holes > 0.0f
 
-    /** The picture, [SIDE] cells square, true where there is cloud: exactly [cover] of it, tiling at its edges. */
-    fun cells(): BooleanArray {
+    /** The picture, [SIDE] cells square, true where there is cloud: [cover] of it less its [holes], tiling at its edges. */
+    fun cells(): BooleanArray = holedThrough(drawn())
+
+    /** [picture] with round holes cut through it, about [holes] of it, each wrapping at the edges so the picture tiles. */
+    private fun holedThrough(picture: BooleanArray): BooleanArray {
+        val share = holes.coerceIn(0.0f, 1.0f)
+        if (share <= 0.0f) return picture
+        val random = Random(seed xor HOLES_SALT)
+        val count = (share * SIDE * SIDE / (Math.PI * HOLE_RADIUS * HOLE_RADIUS)).roundToInt().coerceAtLeast(1)
+        val reach = HOLE_RADIUS.toInt() + 1
+        repeat(count) {
+            val centreX = random.nextInt(SIDE)
+            val centreZ = random.nextInt(SIDE)
+            for (offsetZ in -reach..reach) for (offsetX in -reach..reach) {
+                val isInside = offsetX * offsetX + offsetZ * offsetZ <= HOLE_RADIUS * HOLE_RADIUS
+                if (isInside) picture[Math.floorMod(centreX + offsetX, SIDE) + Math.floorMod(centreZ + offsetZ, SIDE) * SIDE] = false
+            }
+        }
+        return picture
+    }
+
+    private fun drawn(): BooleanArray {
         val random = Random(seed)
         val blob = blobPeriod()
         var alongTheDrift = if (torn) (blob * STREAMED_OUT).coerceAtMost(SIDE) else blob
@@ -90,6 +113,10 @@ data class CloudPattern(
         private const val STREAMED_OUT = 4
         private const val TORN_THIN = 2
 
+        /** How far a hole reaches from its middle, in cells: a hole about seven cells across. */
+        private const val HOLE_RADIUS = 3.5
+        private const val HOLES_SALT = 0x484F_4C45L
+
         private const val OCTAVES = 3
         private const val ROUGHNESS = 0.45
         private const val TORN_ROUGHNESS = 0.7
@@ -101,7 +128,10 @@ data class CloudPattern(
                 Codec.BOOL.optionalFieldOf("torn", false).forGetter(CloudPattern::torn),
                 Codec.FLOAT.optionalFieldOf("cell_scale", 1.0f).forGetter(CloudPattern::cellScale),
                 Codec.LONG.optionalFieldOf("seed", 0L).forGetter(CloudPattern::seed),
-            ).apply(instance) { cover, clumping, torn, cellScale, seed -> CloudPattern(cover.orElse(null), clumping, torn, cellScale, seed) }
+                Codec.FLOAT.optionalFieldOf("holes", 0.0f).forGetter(CloudPattern::holes),
+            ).apply(instance) { cover, clumping, torn, cellScale, seed, holes ->
+                CloudPattern(cover.orElse(null), clumping, torn, cellScale, seed, holes)
+            }
         }
     }
 }
