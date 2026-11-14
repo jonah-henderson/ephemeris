@@ -13,8 +13,16 @@ import com.mojang.serialization.codecs.RecordCodecBuilder
  * Turning a hue does nothing to a grey, so a pale colour is also drawn up to [tinge] of the way toward a pastel of the
  * hue the turn stands at, by as much as it lacks colour of its own: a green leaf turns, a white cloud takes on a passing
  * pastel.
+ *
+ * **Or it turns [through] colours of its own**, each in turn and back to the first, in place of the wheel. Only [over]
+ * draws those; what turns a hue in a shader by [turnAt] alone cannot.
  */
-data class HueCycle(val periodTicks: Int, val offset: Float = 0.0f, val tinge: Float = 0.0f) {
+data class HueCycle(
+    val periodTicks: Int,
+    val offset: Float = 0.0f,
+    val tinge: Float = 0.0f,
+    val through: List<Rgba> = emptyList(),
+) {
 
     /** How far round the wheel this stands at [gameTime], `0..1`. */
     fun turnAt(gameTime: Long, partialTick: Float = 0.0f): Float {
@@ -23,8 +31,27 @@ data class HueCycle(val periodTicks: Int, val offset: Float = 0.0f, val tinge: F
         return (turned - kotlin.math.floor(turned)).toFloat()
     }
 
-    /** [colour] as it stands at [gameTime]: its hue turned, and tinged toward the turn's hue where it is pale. */
-    fun over(colour: Rgba, gameTime: Long, partialTick: Float = 0.0f): Rgba = at(colour, turnAt(gameTime, partialTick))
+    /**
+     * [colour] as it stands at [gameTime]: its hue turned, and tinged toward the turn's hue where it is pale — or, where
+     * the cycle turns [through] colours of its own, the one it stands at among them.
+     */
+    fun over(colour: Rgba, gameTime: Long, partialTick: Float = 0.0f): Rgba {
+        val turn = turnAt(gameTime, partialTick)
+        return if (through.isEmpty()) at(colour, turn) else among(turn, colour.alpha)
+    }
+
+    /**
+     * Where [turn] of the way round stands among [through]: each colour held a while and then eased into the next, so
+     * the colours are seen and not only the way between them.
+     */
+    fun among(turn: Float, alpha: Float = 1.0f): Rgba {
+        val along = turn * through.size
+        val from = along.toInt().coerceIn(0, through.lastIndex)
+        val between = along - from
+        val eased = between * between * (3.0f - 2.0f * between)
+        val next = through[(from + 1) % through.size]
+        return Oklch.of(through[from]).towards(Oklch.of(next), eased).toRgba(alpha)
+    }
 
     /**
      * [colour] at [turn] of the way round, in [Oklch] so it looks as light at every turn. A pale colour is drawn toward
@@ -56,6 +83,7 @@ data class HueCycle(val periodTicks: Int, val offset: Float = 0.0f, val tinge: F
                 Codec.INT.fieldOf("period_ticks").forGetter(HueCycle::periodTicks),
                 Codec.FLOAT.optionalFieldOf("offset", 0.0f).forGetter(HueCycle::offset),
                 Codec.FLOAT.optionalFieldOf("tinge", 0.0f).forGetter(HueCycle::tinge),
+                Rgba.CODEC.listOf().optionalFieldOf("through", emptyList()).forGetter(HueCycle::through),
             ).apply(instance, ::HueCycle)
         }
     }

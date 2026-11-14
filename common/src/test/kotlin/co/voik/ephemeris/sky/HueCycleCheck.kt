@@ -67,8 +67,20 @@ class HueCycleCheck : FunSpec({
         check(abs(lightnessOf(white) - 0.95f) < 0.02f) { "a white tinged half way stood at lightness ${lightnessOf(white)}" }
     }
 
+    test("a cycle through colours of its own holds each a while and comes back to the first") {
+        val blue = Rgba(0.0f, 0.0f, 1.0f)
+        val cycle = HueCycle(periodTicks = 2400, through = listOf(red, blue))
+        check(cycle.over(Rgba.WHITE, 0L).isNear(red)) { "it started at ${cycle.over(Rgba.WHITE, 0L)}" }
+        check(cycle.over(Rgba.WHITE, 1200L).isNear(blue)) { "half a period on it stood at ${cycle.over(Rgba.WHITE, 1200L)}" }
+        val held = cycle.over(Rgba.WHITE, 60L)
+        check(held.red > 0.9f && held.blue < 0.1f) { "a little way past red it had already gone to $held" }
+        val midway = cycle.over(Rgba.WHITE, 600L)
+        check(!midway.isNear(red) && !midway.isNear(blue)) { "half way between the two it stood at $midway" }
+        check(cycle.over(Rgba.WHITE, 2400L).isNear(red)) { "a whole period on it stood at ${cycle.over(Rgba.WHITE, 2400L)}" }
+    }
+
     test("the cycles survive the trip to a client") {
-        val cycles = ColourCycles(sky = HueCycle(3000), stars = HueCycle(4800, 0.2f, 0.6f), bodies = mapOf(1 to HueCycle(24000)))
+        val cycles = ColourCycles(sky = HueCycle(3000, through = listOf(red, Rgba.WHITE)), stars = HueCycle(4800, 0.2f, 0.6f), bodies = mapOf(1 to HueCycle(24000)))
         val arrived = ColourCycles.CODEC.parse(JsonOps.INSTANCE, ColourCycles.CODEC.encodeStart(JsonOps.INSTANCE, cycles).getOrThrow())
             .getOrThrow()
         check(arrived == cycles) { "the cycles arrived as $arrived" }
