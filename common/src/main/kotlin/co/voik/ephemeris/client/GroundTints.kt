@@ -165,14 +165,10 @@ object GroundTints {
         val minecraft = net.minecraft.client.Minecraft.getInstance()
         val level = minecraft.level ?: return
         if (level.dimension() != dimension) return
-        level.clearTintCaches()
-        // 26.2 renamed `allChanged` and made it ask for what it used to reach for itself.
-        minecraft.levelRenderer.invalidateCompiledGeometry(
-            level,
-            minecraft.options,
-            minecraft.gameRenderer.mainCamera(),
-            minecraft.blockColors,
-        )
+        // The extractor's, not the renderer's: it clears the tint caches and marks every section for compiling. The
+        // renderer's alone drops the meshes and leaves every section marked clean, so none is compiled again until
+        // a block beside it changes.
+        minecraft.levelExtractor.allChanged()
     }
 
     /**

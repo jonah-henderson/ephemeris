@@ -50,8 +50,9 @@ object LevelLooks {
      * registry is `putIfAbsent` with no removal.
      */
     fun remember(dimension: ResourceKey<Level>, look: LevelLook) {
-        looks[dimension] = look
-        whenTold(dimension)
+        val before = looks.put(dimension, look)
+        // The same answer again changes nothing a client baked, and rebuilding every chunk mesh for it is a blink.
+        if (before != look) whenTold(dimension)
     }
 
     /**
