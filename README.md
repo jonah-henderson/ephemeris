@@ -165,6 +165,19 @@ This rung exists because 26.1 closed every other one: `DimensionSpecialEffects` 
 `DimensionRenderingRegistry`, and a dimension type still cannot carry appearance to the client. Every mod
 that wants a sky of its own writes the same two Mixins, and two mods that do fight over the same seam.
 
+### Creatures wrapped in a swirl
+
+**Say which creatures are drawn in a charged creeper's swirl**, an entity at a time, and every living renderer
+draws it — a player's, a modded creature's — over the creature's own model:
+
+```kotlin
+EntitySwirls.drawWhere { entity -> entity.uuid in charged }
+```
+
+Each loader has half of this and neither the whole: a layer for every renderer is an event on both, but carrying a
+flag from an entity to its render state is an event on NeoForge only. One Mixin on `LivingEntityRenderer` does both
+on either.
+
 ### Rendering a level that is not the player's
 
 Portals, mirrors, camera feeds and preview panels all draw a level into a target that is not the window,

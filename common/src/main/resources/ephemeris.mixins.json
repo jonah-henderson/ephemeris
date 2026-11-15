@@ -19,6 +19,8 @@
     "client.EntityRenderDispatcherMixin",
     "client.GameRendererMixin",
     "client.LeafParticleAccessor",
+    "client.LivingEntityRendererMixin",
+    "client.LivingEntityRenderStateMixin",
     "client.ParticleAccessor",
     "client.ParticleGroupMixin",
     "client.SkyRendererMixin",
