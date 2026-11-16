@@ -178,6 +178,18 @@ Each loader has half of this and neither the whole: a layer for every renderer i
 flag from an entity to its render state is an event on NeoForge only. One Mixin on `LivingEntityRenderer` does both
 on either.
 
+### The view shaken
+
+**Say how hard the view shakes**, asked every frame, and the hardest of everything that says so shakes it — the
+picture only, never where the player looks or aims, and as much as the screen effects slider allows:
+
+```kotlin
+CameraShake.shakenBy { if (somethingLandedClose) 0.8f else 0.0f }
+```
+
+Neither loader has the whole of this: NeoForge's camera-angles event turns the player's own view, and Fabric has
+nothing. One injection at the end of vanilla's hurt tilt does it on either.
+
 ### Rendering a level that is not the player's
 
 Portals, mirrors, camera feeds and preview panels all draw a level into a target that is not the window,
