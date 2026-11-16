@@ -27,7 +27,7 @@ object CloudPainter {
         val look = LevelLooks.of(level.dimension()) ?: return
         val spec = look.sky
         val drifted = driftFor(level, timeTicks)
-        val carried = CloudCarry.of(level, drifted, spec.cloudPace)
+        val carried = CloudCarry.of(level, drifted, spec.cloudPace, vanillasDrift = drifted * CloudCarry.VANILLA_BLOCKS_PER_TICK)
         for (deck in decksNow(look, level)) canvas.readyCloudDeck(deck, eye, drifted, carried)
     }
 

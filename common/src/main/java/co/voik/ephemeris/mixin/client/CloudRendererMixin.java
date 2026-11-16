@@ -150,7 +150,10 @@ public class CloudRendererMixin {
     private long ephemeris$gameTime;
     @Unique
     private float ephemeris$partialTicks;
-    /** How far the wind has carried the clouds this frame, or null where the level's air is still. */
+    /** Vanilla's own drift this frame, in ticks of it, which a carry begins from. */
+    @Unique
+    private float ephemeris$cloudOffset;
+    /** How far the wind has carried the clouds this frame, or null where no wind has ever blown in the level. */
     @Unique
     private CloudCarry.@Nullable Carried ephemeris$carried;
 
@@ -185,11 +188,13 @@ public class CloudRendererMixin {
         float pace = LevelRendering.INSTANCE.cloudPace(OffscreenLevelRender.INSTANCE.levelBeingDrawn());
         CloudRenderer.TextureData drawn = this.texture;
         if (pace == SkySpec.ORDINARY_CLOUD_PACE || drawn == null) {
+            this.ephemeris$cloudOffset = cloudOffset;
             return cloudOffset;
         }
         double period = drawn.width() * TICKS_PER_CELL;
         double ticks = ((this.ephemeris$gameTime % period) + this.ephemeris$partialTicks) * pace;
-        return (float) (ticks % period);
+        this.ephemeris$cloudOffset = (float) (ticks % period);
+        return this.ephemeris$cloudOffset;
     }
 
     /**
@@ -203,7 +208,8 @@ public class CloudRendererMixin {
         this.ephemeris$carried = level == null ? null : CloudCarry.INSTANCE.of(
                 level,
                 this.ephemeris$gameTime + (double) this.ephemeris$partialTicks,
-                LevelRendering.INSTANCE.cloudPace(level));
+                LevelRendering.INSTANCE.cloudPace(level),
+                this.ephemeris$cloudOffset * CloudCarry.VANILLA_BLOCKS_PER_TICK);
         return this.ephemeris$carried == null ? cloudX : this.ephemeris$cameraPosition.x - this.ephemeris$carried.getX();
     }
 

@@ -2,6 +2,7 @@ package co.voik.ephemeris
 
 import co.voik.ephemeris.client.AuroraPainter
 import co.voik.ephemeris.client.Blaze3dSkyCanvas
+import co.voik.ephemeris.client.CloudCarry
 import co.voik.ephemeris.client.CloudPainter
 import co.voik.ephemeris.client.HorizonPainter
 import co.voik.ephemeris.client.CloudMoment
@@ -48,6 +49,7 @@ fun initClient() {
         LevelLooks.forgetAll()
         LevelClocks.forgetWhatWasTold()
         LevelWind.forgetTheClients()
+        CloudCarry.forget()
     }
 }
 
