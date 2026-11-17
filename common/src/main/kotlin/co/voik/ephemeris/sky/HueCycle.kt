@@ -106,10 +106,12 @@ data class ColourCycles(
     val bodies: Map<Int, HueCycle> = emptyMap(),
     val ground: HueCycle? = null,
     val water: HueCycle? = null,
+    /** A level's planetary rings ([PlanetaryRings]). */
+    val rings: HueCycle? = null,
 ) {
     val isNone: Boolean
         get() = sky == null && fog == null && cloud == null && light == null && waterFog == null &&
-            stars == null && aurora == null && bodies.isEmpty() && ground == null && water == null
+            stars == null && aurora == null && bodies.isEmpty() && ground == null && water == null && rings == null
 
     /** Whether anything in the sky itself turns, which vanilla's own sky cannot draw. */
     val turnsTheSky: Boolean get() = stars != null || bodies.isNotEmpty()
@@ -135,11 +137,12 @@ data class ColourCycles(
                     .forGetter(ColourCycles::bodies),
                 named("ground", ColourCycles::ground),
                 named("water", ColourCycles::water),
-            ).apply(instance) { sky, fog, cloud, light, waterFog, stars, aurora, bodies, ground, water ->
+                named("rings", ColourCycles::rings),
+            ).apply(instance) { sky, fog, cloud, light, waterFog, stars, aurora, bodies, ground, water, rings ->
                 ColourCycles(
                     sky.orElse(null), fog.orElse(null), cloud.orElse(null), light.orElse(null),
                     waterFog.orElse(null), stars.orElse(null), aurora.orElse(null), bodies,
-                    ground.orElse(null), water.orElse(null),
+                    ground.orElse(null), water.orElse(null), rings.orElse(null),
                 )
             }
         }

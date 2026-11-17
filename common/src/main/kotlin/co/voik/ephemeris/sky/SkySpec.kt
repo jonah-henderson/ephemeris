@@ -28,6 +28,8 @@ data class SkySpec(
     val cloudPace: Float = ORDINARY_CLOUD_PACE,
     /** The shape of its vanilla clouds — how much, in what clumps, how large — or null for vanilla's own. */
     val cloudPattern: CloudPattern? = null,
+    /** The level's own rings arching overhead, or null for the great majority that have none. */
+    val planetaryRings: PlanetaryRings? = null,
 ) {
 
     /**
@@ -39,7 +41,7 @@ data class SkySpec(
      * not something vanilla cannot draw. A star **reveal** is, so it counts — [decks] do not, because the
      * cloud renderer draws those and a level may have them over an otherwise unremarkable sky.
      *
-     * **[aurora] and [rainbow] do not count either, and that is the point of drawing them on an overlay.**
+     * **[aurora], [rainbow] and [planetaryRings] do not count either, and that is the point of drawing them on an overlay.**
      * Both are things vanilla cannot draw, and neither is a reason to take vanilla's sun and moon away from
      * a level that wanted neither changed: the overlay runs whether this renderer claimed the sky or
      * vanilla drew it, so an otherwise unremarkable sky keeps vanilla's own and gains a curtain or a bow.
@@ -128,6 +130,18 @@ data class SkySpec(
                 second,
             )
         },
+        planetaryRings?.let { rings ->
+            "planetary rings %08x glow %.2f from %.2f to %.2f radii at latitude %.0f density %.2f bearing %.0f, crown at %.0f°".format(
+                rings.colour.packed(),
+                rings.glow,
+                rings.innerRadius,
+                rings.outerRadius,
+                rings.latitudeDegrees,
+                rings.density,
+                rings.bearingDegrees,
+                rings.crownAltitudeDegrees(rings.outerRadius),
+            )
+        },
         "stars ${stars.count}" + (if (stars.glow == ORDINARY_STAR_GLOW) "" else
             " burning %.2f times vanilla's".format(stars.glow)) +
             (stars.tint?.let { " tinted %.2f %.2f %.2f".format(it.red, it.green, it.blue) } ?: ""),
@@ -173,8 +187,13 @@ data class SkySpec(
                     .forGetter { spec -> java.util.Optional.ofNullable(spec.rainbow) },
                 Codec.FLOAT.optionalFieldOf("cloud_pace", ORDINARY_CLOUD_PACE).forGetter(SkySpec::cloudPace),
                 CloudPattern.CODEC.optionalFieldOf("cloud_pattern").forGetter { java.util.Optional.ofNullable(it.cloudPattern) },
-            ).apply(instance) { bodies, stars, decks, aurora, rainbow, cloudPace, cloudPattern ->
-                SkySpec(bodies, stars, decks, aurora.orElse(null), rainbow.orElse(null), cloudPace, cloudPattern.orElse(null))
+                PlanetaryRings.CODEC.optionalFieldOf("planetary_rings")
+                    .forGetter { spec -> java.util.Optional.ofNullable(spec.planetaryRings) },
+            ).apply(instance) { bodies, stars, decks, aurora, rainbow, cloudPace, cloudPattern, rings ->
+                SkySpec(
+                    bodies, stars, decks, aurora.orElse(null), rainbow.orElse(null), cloudPace, cloudPattern.orElse(null),
+                    rings.orElse(null),
+                )
             }
         }
 
