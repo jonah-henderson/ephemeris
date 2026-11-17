@@ -164,7 +164,7 @@ data class PlanetaryRings(
         const val ORDINARY_GLOW = 1.0f
         const val ORDINARY_INNER = 1.35f
         const val ORDINARY_OUTER = 2.25f
-        const val ORDINARY_LATITUDE = 28.0f
+        const val ORDINARY_LATITUDE = 18.0f
         const val ORDINARY_DENSITY = 0.6f
         const val ORDINARY_BEARING = 180.0f
 
