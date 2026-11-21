@@ -6,6 +6,7 @@
     "EnvironmentAttributesMixin",
     "LevelMixin",
     "MinecraftServerMixin",
+    "SavedDataStorageMixin",
     "ServerLevelMixin",
     "TimeCommandMixin",
     "TimelineLayersMixin"

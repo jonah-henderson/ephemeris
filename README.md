@@ -26,6 +26,11 @@ dimension folder inside the world it was given.
 boot, and that is the right place for the decision: whatever decided a level should exist knows how to
 describe it. Re-opening is `open` again with the same id.
 
+**A runtime level's saved data is written on threads of Ephemeris's own** (`RuntimeLevelSaving`). Vanilla's I/O
+pool starts a thread on the server thread for each write that finds none idle, which with a couple of hundred
+levels held every save for seconds. Levels Ephemeris did not open keep vanilla's pool, so their saves never
+wait behind a runtime level's.
+
 ### How it works, and why that matters
 
 Vanilla already builds levels exactly this way — just earlier. `MinecraftServer` constructs every
