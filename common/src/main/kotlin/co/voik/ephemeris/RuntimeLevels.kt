@@ -76,6 +76,7 @@ object RuntimeLevels {
         server.levels[dimension] = level
         LevelClocks.opened(level)
         RuntimeLevelSaving.manage(level.dataStorage)
+        RuntimeLevelResting.opened(level)
         // Vanilla does both of these to every level it builds, and a level without them has no border and
         // never tells a joining player where the border is.
         level.worldBorder.setAbsoluteMaxSize(server.absoluteMaxWorldSize)
@@ -158,6 +159,7 @@ object RuntimeLevels {
         server.levels.remove(dimension)
         RuntimeLevelSeeds.forget(dimension)
         LevelClocks.forget(dimension)
+        RuntimeLevelResting.forget(dimension)
         RuntimeLevelPlatform.of().levelClosing(server, level)
         runCatching { level.close() }.onFailure {
             RuntimeLevelLog.warn("Could not close ${dimension.identifier()} cleanly; its files are left alone", it)

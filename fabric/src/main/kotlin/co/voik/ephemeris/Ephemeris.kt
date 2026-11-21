@@ -38,5 +38,6 @@ fun init() {
     ServerLifecycleEvents.SERVER_STOPPED.register { _ ->
         LevelAppearance.forgetAll()
         LevelClocks.forgetAll()
+        RuntimeLevelResting.forgetAll()
     }
 }

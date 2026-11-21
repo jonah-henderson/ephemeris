@@ -70,6 +70,7 @@ class Ephemeris(eventBus: IEventBus) {
     private fun onServerStopped(event: ServerStoppedEvent) {
         LevelAppearance.forgetAll()
         LevelClocks.forgetAll()
+        RuntimeLevelResting.forgetAll()
     }
 
     private companion object {

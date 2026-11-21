@@ -3,6 +3,7 @@ package co.voik.ephemeris.mixin;
 import co.voik.ephemeris.LevelClockManager;
 import co.voik.ephemeris.LevelClocks;
 import co.voik.ephemeris.LevelWeather;
+import co.voik.ephemeris.RuntimeLevelResting;
 import co.voik.ephemeris.RuntimeLevelSeeds;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.server.MinecraftServer;
@@ -112,6 +113,19 @@ public abstract class ServerLevelMixin {
     private void ephemeris$notOnceClosed(BooleanSupplier haveTime, CallbackInfo callback) {
         ServerLevel level = (ServerLevel) (Object) this;
         if (level.getServer().getLevel(level.dimension()) != level) {
+            callback.cancel();
+        }
+    }
+
+    /**
+     * Skips the tick of a runtime level that is resting — see {@link RuntimeLevelResting} for which and why.
+     *
+     * <p>At the head, so nothing of the tick happens, Fabric's level-tick events included. NeoForge fires its own
+     * around the call to this, outside it, so a NeoForge listener still hears a resting level tick.
+     */
+    @Inject(method = "tick", at = @At("HEAD"), cancellable = true)
+    private void ephemeris$notWhileResting(BooleanSupplier haveTime, CallbackInfo callback) {
+        if (RuntimeLevelResting.rests((ServerLevel) (Object) this)) {
             callback.cancel();
         }
     }

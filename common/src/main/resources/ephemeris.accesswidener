@@ -73,3 +73,8 @@ accessible	field	net/minecraft/client/renderer/rendertype/RenderSetup	forceSolid
 # asked on a compile worker otherwise has only the player's level to go by, and a level drawn off-screen — a panel
 # looking into another — took the player's colours.
 accessible	field	net/minecraft/client/renderer/chunk/RenderSectionRegion	level	Lnet/minecraft/client/multiplayer/ClientLevel;
+
+# Whether a runtime level has any ticket at all (`RuntimeLevelResting.isInUse`). The chunk cache answers only whether
+# it has one that keeps the dimension active, and a level resting with a ticket of any other kind would never load
+# the chunk it is for: only a ticking level goes on to.
+accessible	field	net/minecraft/server/level/ServerChunkCache	ticketStorage	Lnet/minecraft/world/level/TicketStorage;

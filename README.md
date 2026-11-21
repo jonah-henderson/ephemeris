@@ -31,6 +31,12 @@ pool starts a thread on the server thread for each write that finds none idle, w
 levels held every save for seconds. Levels Ephemeris did not open keep vanilla's pool, so their saves never
 wait behind a runtime level's.
 
+**A runtime level nothing is using can rest** (`RuntimeLevelResting`): it is not ticked at all, and its clock,
+weather and everything else wait where they were. One rests only once it has had no player, no chunk ticket and
+no chunk loaded for ten seconds, and only past the `keepAwake` most recently used, which a caller sets from its
+own config and which keeps every level awake by default. Asking for a chunk in a resting level wakes it on the
+next tick. `isResting` lets a caller skip its own per-level work for one.
+
 ### How it works, and why that matters
 
 Vanilla already builds levels exactly this way — just earlier. `MinecraftServer` constructs every
