@@ -47,7 +47,10 @@ object RuntimeLevelSaving {
 
     private val WRITERS: TracingExecutor = run {
         val counted = AtomicInteger()
-        val named = ThreadFactory { work -> Thread(work, "Ephemeris-Level-Saving-${counted.incrementAndGet()}") }
+        // Daemons, so an idle writer never holds the JVM open after a stop; closing a level joins its writes first.
+        val named = ThreadFactory { work ->
+            Thread(work, "Ephemeris-Level-Saving-${counted.incrementAndGet()}").apply { isDaemon = true }
+        }
         val pool = ThreadPoolExecutor(
             WRITER_THREADS, WRITER_THREADS, IDLE_SECONDS, TimeUnit.SECONDS, LinkedBlockingQueue(), named,
         )
